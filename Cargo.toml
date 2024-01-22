@@ -1,0 +1,17 @@
+[package]
+name = "solar_dawn_server"
+version = "0.1.0"
+authors = ["Justin Hu <justin.hu@alumni.ubc.ca>"]
+edition = "2021"
+description = "A simultaneous turn resolution 4X inspired by Triplanetary."
+homepage = "https://github.com/JustinHuPrime/SolarDawn#readme"
+repository = "https://github.com/JustinHuPrime/SolarDawn"
+license = "AGPL-3.0-or-later"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = "0.8.5"
+tokio-tungstenite = "0.21.0"
+regex = "1.10.3"
+serde_json = "1.0.111"
