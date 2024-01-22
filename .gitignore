@@ -1,1 +1,4 @@
 /target
+/*.p12
+/*.pem
+/*.json

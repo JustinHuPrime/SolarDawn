@@ -1,3 +1,22 @@
+// Copyright 2023 Justin Hu
+//
+// This file is part of the Solar Dawn Server.
+//
+// The Solar Dawn Server is free software: you can redistribute it and/or
+// modify it under the terms of the GNU Affero General Public License as
+// published by the Free Software Foundation, either version 3 of the License,
+// or (at your option) any later version.
+//
+// The Solar Dawn Server is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero
+// General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with the Solar Dawn Server. If not, see <https://www.gnu.org/licenses/>.
+//
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
 use std::{collections::HashMap, fs};
 
 use serde::{Deserialize, Serialize};
@@ -68,6 +87,7 @@ impl From<Owner> for u8 {
 
 #[derive(Serialize, Deserialize)]
 pub struct GameState {
+    pub num_players: u8,
     id_generator: IdGenerator,
     stacks: HashMap<Id, Stack>,
     ordnance: HashMap<Id, Ordnance>,
@@ -101,6 +121,7 @@ impl GameState {
         // TODO
 
         Ok(GameState {
+            num_players,
             id_generator,
             stacks: HashMap::default(),
             ordnance: HashMap::default(),
