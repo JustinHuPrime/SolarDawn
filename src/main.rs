@@ -18,20 +18,20 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::{
+    collections::HashMap,
     env, fs,
     net::{TcpListener, TcpStream},
     process::ExitCode,
-    sync::Arc,
+    sync::{Arc, Mutex},
     thread::spawn,
 };
 
 use game::state::GameState;
 use native_tls::{Identity, TlsAcceptor, TlsStream};
-use rand::{
-    distributions::{Alphanumeric, DistString},
-    thread_rng,
-};
-use tungstenite::{accept, Error, Message, WebSocket};
+use rand::distributions::{Alphanumeric, DistString};
+use tungstenite::{accept, WebSocket};
+
+use crate::game::{order::Order, state::Owner};
 
 pub mod game;
 pub mod vec2;
@@ -40,6 +40,14 @@ fn display_usage(name: &str) {
     eprintln!("usage:");
     eprintln!("  {name} new <filename> <player_count>");
     eprintln!("  {name} load <filename>");
+}
+
+fn display_cert_hint() {
+    eprintln!("info: try running `openssl req -x509 -keyout key.pem -out cert.pem -sha256 -days 365 -noenc`");
+    eprintln!(
+        "info:    and then `openssl pkcs12 -export -out cert.p12 -inkey key.pem -in cert.pem`"
+    );
+    eprintln!("info: and using an empty password");
 }
 
 fn main() -> ExitCode {
@@ -60,7 +68,7 @@ fn main() -> ExitCode {
     }
 
     // setup game state
-    let (mut gameState, filename) = match args[1].as_str() {
+    let (mut game_state, filename) = match args[1].as_str() {
         "new" => {
             if args.len() != 4 {
                 display_usage(&args[0]);
@@ -73,13 +81,13 @@ fn main() -> ExitCode {
                     (initial_state, &args[2])
                 } else {
                     eprintln!(
-                        "invalid number of players - expected a number between 2 and 6, but got {}",
+                        "error: invalid number of players - expected a number between 2 and 6, but got {}",
                         &args[3]
                     );
                     return ExitCode::FAILURE;
                 }
             } else {
-                eprintln!("could not parse number of players - expected a number between 2 and 6, but got {}", &args[3]);
+                eprintln!("error: could not parse number of players - expected a number between 2 and 6, but got {}", &args[3]);
                 return ExitCode::FAILURE;
             }
         }
@@ -92,7 +100,7 @@ fn main() -> ExitCode {
             match GameState::load_from_file(&args[2]) {
                 Ok(state) => (state, &args[2]),
                 Err(message) => {
-                    eprintln!("could not parse save file: {message}");
+                    eprintln!("error: could not parse save file: {message}");
                     return ExitCode::FAILURE;
                 }
             }
@@ -111,6 +119,7 @@ fn main() -> ExitCode {
         Ok(identity) => identity,
         Err(err) => {
             eprintln!("error: could not read certificate: {err}");
+            display_cert_hint();
             return ExitCode::FAILURE;
         }
     };
@@ -118,6 +127,7 @@ fn main() -> ExitCode {
         Ok(identity) => identity,
         Err(err) => {
             eprintln!("error: could not read certificate: {err}");
+            display_cert_hint();
             return ExitCode::FAILURE;
         }
     };
@@ -132,34 +142,52 @@ fn main() -> ExitCode {
         Ok(acceptor) => Arc::new(acceptor),
         Err(err) => {
             eprintln!("error: could not use certificate: {err}");
+            display_cert_hint();
             return ExitCode::FAILURE;
         }
     };
 
-    let mut clients = vec![];
+    type TlsWebSocket = WebSocket<TlsStream<TcpStream>>;
+
+    let mut threads = vec![];
+    let mut clients: Arc<Mutex<HashMap<Owner, (TlsWebSocket, &str, Option<Vec<Order>>)>>> =
+        Arc::new(Mutex::new(HashMap::new()));
     for stream in listener.incoming() {
+        // TODO: make listener nonblocking
         match stream {
             Ok(stream) => {
                 let acceptor = acceptor.clone();
-                clients.push(spawn(move || {
+                threads.push(spawn(move || -> ExitCode {
                     let stream = match acceptor.accept(stream) {
                         Ok(stream) => stream,
                         Err(err) => {
                             eprintln!("error: tls connection failed: {err}");
-                            return;
+                            return ExitCode::FAILURE;
                         }
                     };
                     let mut websocket = match accept(stream) {
                         Ok(websocket) => websocket,
                         Err(err) => {
                             eprintln!("error: websocket connection failed: {err}");
-                            return;
+                            return ExitCode::FAILURE;
                         }
                     };
 
-                    let _ = websocket.send(Message::Text("Hello, world!".to_owned()));
+                    // read login packet - expect a username and a password
 
-                    // get the first message
+                    // if logged in successfully
+
+                    // send assigned player id
+
+                    // while game isn't over
+
+                    // send game state
+
+                    // get orders
+
+                    // maybe update game state
+
+                    ExitCode::SUCCESS
                 }));
             }
             Err(err) => {

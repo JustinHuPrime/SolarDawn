@@ -17,119 +17,491 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::collections::HashMap;
+
+use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
-use crate::vec2::{Displacement, Position};
+use crate::vec2::{AxialDisplacement, AxialPosition};
 
-use super::{Id, Owner};
+use super::{Id, IdGenerator, InventoryList, Owner};
 
-#[derive(Serialize, Deserialize)]
+pub trait Positionable {
+    fn get_position(&self) -> &AxialPosition;
+}
+
+#[derive(Serialize, Deserialize, Copy, Clone)]
 pub enum OrdnanceType {
     Mine,
     Torpedo,
     Nuke,
 }
-impl TryFrom<&str> for OrdnanceType {
-    type Error = &'static str;
+impl OrdnanceType {
+    pub fn max_boost(&self) -> u64 {
+        match self {
+            OrdnanceType::Mine => 0,
+            OrdnanceType::Torpedo => 2,
+            OrdnanceType::Nuke => 0,
+        }
+    }
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "mine" => Ok(OrdnanceType::Mine),
-            "torpedo" => Ok(OrdnanceType::Torpedo),
-            "nuke" => Ok(OrdnanceType::Nuke),
-            _ => Err("invalid ordnance type"),
+    pub fn damage_amount(&self) -> u64 {
+        match self {
+            OrdnanceType::Mine => 0,    // TODO: set a value
+            OrdnanceType::Torpedo => 2, // TODO: set a value
+            OrdnanceType::Nuke => panic!("shouldn't ask for damage from nukes"),
         }
     }
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Ordnance {
-    id: Id,
+    pub id: Id,
     owner: Owner,
-    ordnance_type: OrdnanceType,
-    position: Position,
-    velocity: Displacement,
+    pub ordnance_type: OrdnanceType,
+    pub position: AxialPosition,
+    pub velocity: AxialDisplacement,
+}
+impl Ordnance {
+    pub fn new(
+        id_generator: &mut IdGenerator,
+        owner: Owner,
+        ordnance_type: OrdnanceType,
+        position: AxialPosition,
+        velocity: AxialDisplacement,
+    ) -> Self {
+        Self {
+            id: id_generator.generate(),
+            owner,
+            ordnance_type,
+            position,
+            velocity,
+        }
+    }
+}
+impl Positionable for Ordnance {
+    fn get_position(&self) -> &AxialPosition {
+        &self.position
+    }
+}
+
+pub trait Component: IdAble {
+    fn damage(&mut self) -> bool;
+    fn repair(&mut self);
+}
+pub trait IdAble {
+    fn get_id(&self) -> Id;
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct Stack {
     pub id: Id,
-    owner: Owner,
-    name: String,
-    position: Position,
-    velocity: Displacement,
-    fuel_tanks: Vec<FuelTank>,
-    cargo_holds: Vec<CargoHold>,
-    engines: Vec<Engine>,
-    guns: Vec<Gun>,
-    launch_tubes: Vec<LaunchClamp>,
-    habitat: Vec<Habitat>,
-    miners: Vec<Miner>,
-    factories: Vec<Factory>,
-    armour_plates: Vec<ArmourPlate>,
+    pub owner: Owner,
+    pub name: String,
+    pub position: AxialPosition,
+    pub velocity: AxialDisplacement,
+    pub fuel_tanks: HashMap<Id, FuelTank>,
+    pub cargo_holds: HashMap<Id, CargoHold>,
+    pub engines: HashMap<Id, Engine>,
+    pub guns: HashMap<Id, Gun>,
+    pub launch_clamps: HashMap<Id, LaunchClamp>,
+    pub habitats: HashMap<Id, Habitat>,
+    pub miners: HashMap<Id, Miner>,
+    pub factories: HashMap<Id, Factory>,
+    pub armour_plates: HashMap<Id, ArmourPlate>,
+}
+impl Stack {
+    pub fn get_random_component(&mut self) -> &mut dyn Component {
+        let num_components = self.fuel_tanks.len()
+            + self.cargo_holds.len()
+            + self.engines.len()
+            + self.guns.len()
+            + self.launch_clamps.len()
+            + self.habitats.len()
+            + self.miners.len()
+            + self.factories.len()
+            + self.armour_plates.len();
+        if num_components == 0 {
+            panic!("should not have empty stack")
+        }
+        let mut selected_component_index = thread_rng().gen_range(0..num_components);
+
+        if selected_component_index < self.cargo_holds.len() {
+            return self
+                .cargo_holds
+                .iter_mut()
+                .nth(selected_component_index)
+                .expect("index should be in range")
+                .1;
+        } else {
+            selected_component_index -= self.cargo_holds.len();
+        }
+
+        if selected_component_index < self.cargo_holds.len() {
+            return self
+                .cargo_holds
+                .iter_mut()
+                .nth(selected_component_index)
+                .expect("index should be in range")
+                .1;
+        } else {
+            selected_component_index -= self.cargo_holds.len();
+        }
+
+        if selected_component_index < self.engines.len() {
+            return self
+                .cargo_holds
+                .iter_mut()
+                .nth(selected_component_index)
+                .expect("index should be in range")
+                .1;
+        } else {
+            selected_component_index -= self.engines.len();
+        }
+
+        if selected_component_index < self.guns.len() {
+            return self
+                .cargo_holds
+                .iter_mut()
+                .nth(selected_component_index)
+                .expect("index should be in range")
+                .1;
+        } else {
+            selected_component_index -= self.guns.len();
+        }
+
+        if selected_component_index < self.launch_clamps.len() {
+            return self
+                .cargo_holds
+                .iter_mut()
+                .nth(selected_component_index)
+                .expect("index should be in range")
+                .1;
+        } else {
+            selected_component_index -= self.launch_clamps.len();
+        }
+
+        if selected_component_index < self.habitats.len() {
+            return self
+                .cargo_holds
+                .iter_mut()
+                .nth(selected_component_index)
+                .expect("index should be in range")
+                .1;
+        } else {
+            selected_component_index -= self.habitats.len();
+        }
+
+        if selected_component_index < self.miners.len() {
+            return self
+                .cargo_holds
+                .iter_mut()
+                .nth(selected_component_index)
+                .expect("index should be in range")
+                .1;
+        } else {
+            selected_component_index -= self.miners.len();
+        }
+
+        if selected_component_index < self.factories.len() {
+            return self
+                .cargo_holds
+                .iter_mut()
+                .nth(selected_component_index)
+                .expect("index should be in range")
+                .1;
+        } else {
+            selected_component_index -= self.factories.len();
+        }
+
+        if selected_component_index < self.armour_plates.len() {
+            return self
+                .cargo_holds
+                .iter_mut()
+                .nth(selected_component_index)
+                .expect("index should be in range")
+                .1;
+        } else {
+            selected_component_index -= self.armour_plates.len();
+        }
+
+        panic!(
+            "selected component index was out of range - it ended up as {}",
+            selected_component_index
+        );
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.fuel_tanks.is_empty()
+            && self.cargo_holds.is_empty()
+            && self.engines.is_empty()
+            && self.guns.is_empty()
+            && self.launch_clamps.is_empty()
+            && self.habitats.is_empty()
+            && self.miners.is_empty()
+            && self.factories.is_empty()
+            && self.armour_plates.is_empty()
+    }
+
+    pub fn remove_component(&mut self, component: Id) -> Result<(), ()> {
+        if self.fuel_tanks.remove(&component).is_some()
+            || self.cargo_holds.remove(&component).is_some()
+            || self.engines.remove(&component).is_some()
+            || self.guns.remove(&component).is_some()
+            || self.launch_clamps.remove(&component).is_some()
+            || self.habitats.remove(&component).is_some()
+            || self.miners.remove(&component).is_some()
+            || self.factories.remove(&component).is_some()
+            || self.armour_plates.remove(&component).is_some()
+        {
+            Ok(())
+        } else {
+            Err(())
+        }
+    }
+
+    /// try to insert as much cargo from the source list as possible, reporting leftover amount if failed
+    /// TODO: how to prioritize leftovers
+    pub fn insert_cargo(&mut self, cargo: &InventoryList<u64>) -> Result<(), InventoryList<u64>> {
+        for (_, cargo_hold) in self.cargo_holds.iter_mut() {
+            todo!();
+        }
+        todo!();
+    }
+}
+impl Positionable for Stack {
+    fn get_position(&self) -> &AxialPosition {
+        &self.position
+    }
 }
 
 #[derive(Serialize, Deserialize)]
-struct FuelTank {
+pub struct FuelTank {
     id: Id,
-    fuel: u64,
+    pub fuel: u64,
+    pub damaged: bool,
+}
+impl Component for FuelTank {
+    fn damage(&mut self) -> bool {
+        if !self.damaged {
+            self.damaged = true;
+            false
+        } else {
+            true
+        }
+    }
+
+    fn repair(&mut self) {
+        self.damaged = false;
+    }
+}
+impl IdAble for FuelTank {
+    fn get_id(&self) -> Id {
+        self.id
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct CargoHold {
+    id: Id,
+    inventory: InventoryList<u64>,
     damaged: bool,
 }
+impl Component for CargoHold {
+    fn damage(&mut self) -> bool {
+        if !self.damaged {
+            self.damaged = true;
+            false
+        } else {
+            true
+        }
+    }
 
-#[derive(Serialize, Deserialize)]
-struct CargoHold {
-    id: Id,
-    ore_amount: u64,
-    materials_amount: u64,
-    ice_amount: u64,
-    mines: u64,
-    torpedoes: u64,
-    nukes: u64,
-    damaged: bool,
+    fn repair(&mut self) {
+        self.damaged = false;
+    }
+}
+impl IdAble for CargoHold {
+    fn get_id(&self) -> Id {
+        self.id
+    }
 }
 
 #[derive(Serialize, Deserialize)]
-struct Engine {
-    id: Id,
+pub struct Engine {
+    pub id: Id,
     /// Has this engine overloaded? None = can't, Some(true) = ready to overload, Some(false) = not ready - needs overhaul
-    overload_state: Option<bool>,
-    damaged: bool,
+    pub overload_state: Option<bool>,
+    pub damaged: bool,
+}
+impl Component for Engine {
+    fn damage(&mut self) -> bool {
+        if !self.damaged {
+            self.damaged = true;
+            false
+        } else {
+            true
+        }
+    }
+
+    fn repair(&mut self) {
+        self.damaged = false;
+    }
+}
+impl IdAble for Engine {
+    fn get_id(&self) -> Id {
+        self.id
+    }
 }
 
 #[derive(Serialize, Deserialize)]
-struct Gun {
+pub struct Gun {
+    pub id: Id,
+    pub damaged: bool,
+}
+impl Component for Gun {
+    fn damage(&mut self) -> bool {
+        if !self.damaged {
+            self.damaged = true;
+            false
+        } else {
+            true
+        }
+    }
+
+    fn repair(&mut self) {
+        self.damaged = false;
+    }
+}
+impl IdAble for Gun {
+    fn get_id(&self) -> Id {
+        self.id
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct LaunchClamp {
     id: Id,
-    damaged: bool,
+    pub load: Option<OrdnanceType>,
+    pub damaged: bool,
+}
+impl Component for LaunchClamp {
+    fn damage(&mut self) -> bool {
+        if !self.damaged {
+            self.damaged = true;
+            false
+        } else {
+            true
+        }
+    }
+
+    fn repair(&mut self) {
+        self.damaged = false;
+    }
+}
+impl IdAble for LaunchClamp {
+    fn get_id(&self) -> Id {
+        self.id
+    }
 }
 
 #[derive(Serialize, Deserialize)]
-struct LaunchClamp {
-    id: Id,
-    load: Option<OrdnanceType>,
-    damaged: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-struct Habitat {
+pub struct Habitat {
     id: Id,
     owner: Owner,
     damaged: bool,
 }
+impl Component for Habitat {
+    fn damage(&mut self) -> bool {
+        if !self.damaged {
+            self.damaged = true;
+            false
+        } else {
+            true
+        }
+    }
 
-#[derive(Serialize, Deserialize)]
-struct Miner {
-    id: Id,
-    damaged: bool,
+    fn repair(&mut self) {
+        self.damaged = false;
+    }
+}
+impl IdAble for Habitat {
+    fn get_id(&self) -> Id {
+        self.id
+    }
 }
 
 #[derive(Serialize, Deserialize)]
-struct Factory {
+pub struct Miner {
     id: Id,
     damaged: bool,
 }
+impl Component for Miner {
+    fn damage(&mut self) -> bool {
+        if !self.damaged {
+            self.damaged = true;
+            false
+        } else {
+            true
+        }
+    }
+
+    fn repair(&mut self) {
+        self.damaged = false;
+    }
+}
+impl IdAble for Miner {
+    fn get_id(&self) -> Id {
+        self.id
+    }
+}
 
 #[derive(Serialize, Deserialize)]
-struct ArmourPlate {
+pub struct Factory {
     id: Id,
     damaged: bool,
+}
+impl Component for Factory {
+    fn damage(&mut self) -> bool {
+        if !self.damaged {
+            self.damaged = true;
+            false
+        } else {
+            true
+        }
+    }
+
+    fn repair(&mut self) {
+        self.damaged = false;
+    }
+}
+impl IdAble for Factory {
+    fn get_id(&self) -> Id {
+        self.id
+    }
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ArmourPlate {
+    id: Id,
+    damaged: bool,
+}
+impl Component for ArmourPlate {
+    fn damage(&mut self) -> bool {
+        if !self.damaged {
+            self.damaged = true;
+            false
+        } else {
+            true
+        }
+    }
+
+    fn repair(&mut self) {
+        self.damaged = false;
+    }
+}
+impl IdAble for ArmourPlate {
+    fn get_id(&self) -> Id {
+        self.id
+    }
 }

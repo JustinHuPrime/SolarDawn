@@ -1,15 +1,15 @@
 // Copyright 2023 Justin Hu
 //
-// This file is part of the Solar Dawn Server.
+// i64his file is part of the Solar Dawn Server.
 //
-// The Solar Dawn Server is free software: you can redistribute it and/or
+// i64he Solar Dawn Server is free software: you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public License as
 // published by the Free Software Foundation, either version 3 of the License,
 // or (at your option) any later version.
 //
-// The Solar Dawn Server is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero
+// i64he Solar Dawn Server is distributed in the hope that it will be useful,
+// but WIi64HOUi64 ANY WARRANi64Y; without even the implied warranty of
+// MERCHANi64ABILIi64Y or FIi64NESS FOR A PARi64ICULAR PURPOSE. See the GNU Affero
 // General Public License for more details.
 //
 // You should have received a copy of the GNU Affero General Public License
@@ -21,166 +21,214 @@ use std::ops::*;
 
 use serde::{Deserialize, Serialize};
 
-pub type Position = AxialPosition<i64>;
-pub type Displacement = AxialDisplacement<i64>;
+pub type Cartesian = (f64, f64);
 
-#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct AxialPosition<T> {
-    pub q: T,
-    pub r: T,
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AxialPosition {
+    pub q: i64,
+    pub r: i64,
 }
-impl<T> AxialPosition<T> {
-    pub fn new(q: T, r: T) -> Self {
+impl AxialPosition {
+    pub fn new(q: i64, r: i64) -> Self {
         Self { q, r }
     }
+
+    pub fn is_zero(&self) -> bool {
+        self.q == 0 && self.r == 0
+    }
+
+    pub fn cartesian(&self) -> (f64, f64) {
+        let q = self.q as f64;
+        let r = self.r as f64;
+        let x = 1.5 * q;
+        let y = 3.0_f64.sqrt() / 2.0 * q + 3.0_f64.sqrt() * r;
+        (x, y)
+    }
 }
-impl<T: Copy + Add<Output = T>> AddAssign<AxialDisplacement<T>> for AxialPosition<T> {
-    fn add_assign(&mut self, rhs: AxialDisplacement<T>) {
+impl AddAssign<&AxialDisplacement> for AxialPosition {
+    fn add_assign(&mut self, rhs: &AxialDisplacement) {
         *self = Self {
             q: self.q + rhs.q,
             r: self.r + rhs.r,
         }
     }
 }
-impl<T: Copy + Add<Output = T>> Add<AxialDisplacement<T>> for AxialPosition<T> {
-    type Output = Self;
+impl Add<&AxialDisplacement> for &AxialPosition {
+    type Output = AxialPosition;
 
-    fn add(self, rhs: AxialDisplacement<T>) -> Self::Output {
-        let mut copy = self;
+    fn add(self, rhs: &AxialDisplacement) -> Self::Output {
+        let mut copy = self.clone();
         copy += rhs;
         copy
     }
 }
-impl<T: Copy + Sub<Output = T>> Sub<Self> for AxialPosition<T> {
-    type Output = AxialDisplacement<T>;
+impl Sub<&AxialPosition> for &AxialPosition {
+    type Output = AxialDisplacement;
 
-    fn sub(self, rhs: Self) -> Self::Output {
+    fn sub(self, rhs: &AxialPosition) -> Self::Output {
         AxialDisplacement {
             q: self.q - rhs.q,
             r: self.r - rhs.r,
         }
     }
 }
-impl<T: Copy + Sub<Output = T>> SubAssign<AxialDisplacement<T>> for AxialPosition<T> {
-    fn sub_assign(&mut self, rhs: AxialDisplacement<T>) {
+impl SubAssign<&AxialDisplacement> for AxialPosition {
+    fn sub_assign(&mut self, rhs: &AxialDisplacement) {
         *self = Self {
             q: self.q - rhs.q,
             r: self.r - rhs.r,
         }
     }
 }
-impl<T: Copy + Sub<Output = T>> Sub<AxialDisplacement<T>> for AxialPosition<T> {
-    type Output = Self;
+impl Sub<&AxialDisplacement> for &AxialPosition {
+    type Output = AxialPosition;
 
-    fn sub(self, rhs: AxialDisplacement<T>) -> Self::Output {
-        let mut copy = self;
+    fn sub(self, rhs: &AxialDisplacement) -> Self::Output {
+        let mut copy = self.clone();
         copy -= rhs;
         copy
     }
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
-pub struct AxialDisplacement<T> {
-    pub q: T,
-    pub r: T,
+#[derive(Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AxialDisplacement {
+    pub q: i64,
+    pub r: i64,
 }
-impl<T> AxialDisplacement<T> {
-    pub fn new(q: T, r: T) -> Self {
+impl AxialDisplacement {
+    pub fn new(q: i64, r: i64) -> Self {
         Self { q, r }
     }
+
+    pub fn norm(&self) -> i64 {
+        (self.q.abs() + (self.q + self.r).abs() + self.r.abs()) / 2
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.q == 0 && self.r == 0
+    }
+
+    pub fn to_rectangular(&self) -> Cartesian {
+        let q = self.q as f64;
+        let r = self.r as f64;
+        let x = 1.5 * q;
+        let y = 3.0_f64.sqrt() / 2.0 * q + 3.0_f64.sqrt() * r;
+        (x, y)
+    }
 }
-impl<T: Copy + Add<Output = T>> AddAssign<AxialDisplacement<T>> for AxialDisplacement<T> {
-    fn add_assign(&mut self, rhs: Self) {
+impl AddAssign<&AxialDisplacement> for AxialDisplacement {
+    fn add_assign(&mut self, rhs: &Self) {
         *self = Self {
             q: self.q + rhs.q,
             r: self.r + rhs.r,
         }
     }
 }
-impl<T: Copy + Add<Output = T>> Add<AxialDisplacement<T>> for AxialDisplacement<T> {
-    type Output = Self;
+impl Add<&AxialDisplacement> for &AxialDisplacement {
+    type Output = AxialDisplacement;
 
-    fn add(self, rhs: Self) -> Self {
-        let mut copy = self;
+    fn add(self, rhs: &AxialDisplacement) -> Self::Output {
+        let mut copy = self.clone();
         copy += rhs;
         copy
     }
 }
-impl<T: Copy + Add<Output = T>> Add<AxialPosition<T>> for AxialDisplacement<T> {
-    type Output = AxialPosition<T>;
+impl Add<&AxialPosition> for &AxialDisplacement {
+    type Output = AxialPosition;
 
-    fn add(self, rhs: AxialPosition<T>) -> AxialPosition<T> {
+    fn add(self, rhs: &AxialPosition) -> Self::Output {
         AxialPosition {
             q: self.q + rhs.q,
             r: self.r + rhs.r,
         }
     }
 }
-impl<T: Copy + Div<Output = T>> DivAssign<T> for AxialDisplacement<T> {
-    fn div_assign(&mut self, rhs: T) {
+impl DivAssign<i64> for AxialDisplacement {
+    fn div_assign(&mut self, rhs: i64) {
         *self = Self {
             q: self.q / rhs,
             r: self.r / rhs,
         }
     }
 }
-impl<T: Copy + Div<Output = T>> Div<T> for AxialDisplacement<T> {
-    type Output = Self;
+impl Div<i64> for &AxialDisplacement {
+    type Output = AxialDisplacement;
 
-    fn div(self, rhs: T) -> Self {
-        let mut copy = self;
+    fn div(self, rhs: i64) -> Self::Output {
+        let mut copy = self.clone();
         copy /= rhs;
         copy
     }
 }
-impl<T: Copy + Mul<Output = T>> MulAssign<T> for AxialDisplacement<T> {
-    fn mul_assign(&mut self, rhs: T) {
+impl MulAssign<i64> for AxialDisplacement {
+    fn mul_assign(&mut self, rhs: i64) {
         *self = Self {
             q: self.q * rhs,
             r: self.r * rhs,
         }
     }
 }
-impl<T: Copy + Mul<Output = T>> Mul<T> for AxialDisplacement<T> {
-    type Output = Self;
+impl Mul<i64> for &AxialDisplacement {
+    type Output = AxialDisplacement;
 
-    fn mul(self, rhs: T) -> Self {
-        let mut copy = self;
+    fn mul(self, rhs: i64) -> Self::Output {
+        let mut copy = self.clone();
         copy *= rhs;
         copy
     }
 }
-impl<T: Copy + Rem<Output = T>> RemAssign<T> for AxialDisplacement<T> {
-    fn rem_assign(&mut self, rhs: T) {
+impl RemAssign<i64> for AxialDisplacement {
+    fn rem_assign(&mut self, rhs: i64) {
         *self = Self {
             q: self.q % rhs,
             r: self.r % rhs,
         }
     }
 }
-impl<T: Copy + Rem<Output = T>> Rem<T> for AxialDisplacement<T> {
-    type Output = Self;
+impl Rem<i64> for &AxialDisplacement {
+    type Output = AxialDisplacement;
 
-    fn rem(self, rhs: T) -> Self {
-        let mut copy = self;
+    fn rem(self, rhs: i64) -> Self::Output {
+        let mut copy = self.clone();
         copy %= rhs;
         copy
     }
 }
-impl<T: Copy + Sub<Output = T>> SubAssign<Self> for AxialDisplacement<T> {
-    fn sub_assign(&mut self, rhs: Self) {
+impl SubAssign<&Self> for AxialDisplacement {
+    fn sub_assign(&mut self, rhs: &Self) {
         *self = Self {
             q: self.q - rhs.q,
             r: self.r - rhs.r,
         }
     }
 }
-impl<T: Copy + Sub<Output = T>> Sub<Self> for AxialDisplacement<T> {
-    type Output = Self;
+impl Sub<&AxialDisplacement> for &AxialDisplacement {
+    type Output = AxialDisplacement;
 
-    fn sub(self, rhs: Self) -> Self {
-        let mut copy = self;
+    fn sub(self, rhs: &AxialDisplacement) -> Self::Output {
+        let mut copy = self.clone();
         copy -= rhs;
         copy
     }
+}
+
+/// How far along the line from start to end does it come within radius of point, if at all
+pub fn intercept_static(
+    start: Cartesian,
+    end: Cartesian,
+    point: Cartesian,
+    radius: f64,
+) -> Option<f64> {
+    todo!();
+}
+
+/// Does the first line and the second line approach within distance, and if so, how far along the first line is it
+pub fn intercept_dynamic(
+    first_start: Cartesian,
+    first_end: Cartesian,
+    second_start: Cartesian,
+    second_end: Cartesian,
+    distance: f64,
+) -> Option<f64> {
+    todo!();
 }
