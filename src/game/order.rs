@@ -141,3 +141,7 @@ pub struct Burn {
     pub fuel_tank: Id,
     pub direction: AxialDisplacement,
 }
+
+pub fn parse_orders(orders: &String) -> Result<Vec<Order>, &'static str> {
+    todo!();
+}

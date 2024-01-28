@@ -20,20 +20,37 @@
 use std::{
     collections::HashMap,
     env, fs,
+    mem::take,
     net::{TcpListener, TcpStream},
     process::ExitCode,
-    sync::{Arc, Mutex},
+    sync::{
+        mpsc::{channel, Sender},
+        Arc, Mutex,
+    },
     thread::spawn,
 };
 
 use game::state::GameState;
 use native_tls::{Identity, TlsAcceptor, TlsStream};
 use rand::distributions::{Alphanumeric, DistString};
-use tungstenite::{accept, WebSocket};
+use tungstenite::{
+    accept,
+    protocol::{frame::coding::CloseCode, CloseFrame},
+    Error, Message, WebSocket,
+};
 
-use crate::game::{order::Order, state::Owner};
+use crate::{
+    game::{
+        order::{parse_orders, Order},
+        state::Owner,
+    },
+    semaphore::Semaphore,
+};
+
+type TlsWebSocket = WebSocket<TlsStream<TcpStream>>;
 
 pub mod game;
+pub mod semaphore;
 pub mod vec2;
 
 fn display_usage(name: &str) {
@@ -68,7 +85,7 @@ fn main() -> ExitCode {
     }
 
     // setup game state
-    let (mut game_state, filename) = match args[1].as_str() {
+    let (game_state, filename) = match args[1].as_str() {
         "new" => {
             if args.len() != 4 {
                 display_usage(&args[0]);
@@ -113,7 +130,7 @@ fn main() -> ExitCode {
 
     // set up websocket server
     let password = Alphanumeric.sample_string(&mut rand::thread_rng(), 16);
-    println!("password is {password}");
+    println!("info: password is {password}");
 
     let identity = match fs::read("cert.p12") {
         Ok(identity) => identity,
@@ -147,51 +164,264 @@ fn main() -> ExitCode {
         }
     };
 
-    type TlsWebSocket = WebSocket<TlsStream<TcpStream>>;
-
-    let mut threads = vec![];
-    let mut clients: Arc<Mutex<HashMap<Owner, (TlsWebSocket, &str, Option<Vec<Order>>)>>> =
-        Arc::new(Mutex::new(HashMap::new()));
-    for stream in listener.incoming() {
-        // TODO: make listener nonblocking
+    let num_players = game_state.num_players();
+    let mut num_threads: u8 = 0;
+    let orders_semaphore = Arc::new(Semaphore::new(0));
+    let (termination_sender, termination_receiver) = channel();
+    struct ServerState {
+        game_state: GameState,
+        orders: HashMap<Owner, Vec<Order>>,
+    }
+    let game_state: Arc<Mutex<ServerState>> = Arc::new(Mutex::new(ServerState {
+        game_state,
+        orders: HashMap::new(),
+    }));
+    'acceptor: for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
                 let acceptor = acceptor.clone();
-                threads.push(spawn(move || -> ExitCode {
+                let termination_sender = termination_sender.clone();
+                let password = password.clone();
+                let game_state = game_state.clone();
+                let orders_semaphore = orders_semaphore.clone();
+                let filename = filename.clone();
+                spawn(move || {
+                    fn terminated(termination_sender: &Sender<Result<(), ()>>) {
+                        termination_sender.send(Err(())).expect(
+                            "main thread should always outlive this thread up to this point",
+                        );
+                    }
+
+                    fn recv(websocket: &mut TlsWebSocket) -> Result<String, &'static str> {
+                        match websocket.read() {
+                            Ok(Message::Text(str)) => Ok(str),
+                            Ok(Message::Ping(content)) => {
+                                let _ = websocket.send(Message::Pong(content)); // try to send a pong
+                                recv(websocket)
+                            }
+                            Ok(Message::Close(_))
+                            | Err(Error::ConnectionClosed)
+                            | Err(Error::AlreadyClosed) => Err("websocket closed"),
+                            Ok(_) => Err("unexpected message type"),
+                            Err(_) => Err("websocket errored"),
+                        }
+                    }
+
+                    fn try_send(websocket: &mut TlsWebSocket, message: String) {
+                        let _ = websocket.send(Message::Text(message));
+                    }
+                    fn try_close(mut websocket: TlsWebSocket, close_frame: Option<CloseFrame<'_>>) {
+                        let _ = websocket.close(close_frame);
+                    }
+                    fn send_message(
+                        websocket: &mut TlsWebSocket,
+                        message: String,
+                    ) -> Result<(), &'static str> {
+                        match websocket.send(Message::Text(message)) {
+                            Err(Error::ConnectionClosed) | Err(Error::AlreadyClosed) => {
+                                Err("websocket closed")
+                            }
+                            Err(_) => Err("websocket errored"),
+                            _ => Ok(()),
+                        }
+                    }
+
                     let stream = match acceptor.accept(stream) {
                         Ok(stream) => stream,
                         Err(err) => {
-                            eprintln!("error: tls connection failed: {err}");
-                            return ExitCode::FAILURE;
+                            eprintln!("warning: tls connection failed: {err}");
+                            terminated(&termination_sender);
+                            return;
                         }
                     };
                     let mut websocket = match accept(stream) {
                         Ok(websocket) => websocket,
                         Err(err) => {
-                            eprintln!("error: websocket connection failed: {err}");
-                            return ExitCode::FAILURE;
+                            eprintln!("warning: websocket connection failed: {err}");
+                            terminated(&termination_sender);
+                            return;
                         }
                     };
 
                     // read login packet - expect a username and a password
+                    match recv(&mut websocket) {
+                        Ok(login) => {
+                            let parts: Vec<&str> = login.split('\n').collect();
+                            if parts.len() != 2 {
+                                try_close(
+                                    websocket,
+                                    Some(CloseFrame {
+                                        code: CloseCode::Protocol,
+                                        reason: std::borrow::Cow::Borrowed(
+                                            "invalid login packet format",
+                                        ),
+                                    }),
+                                );
+                                eprintln!(
+                                    "info: connection rejected - invalid login packet format"
+                                );
+                                terminated(&termination_sender);
+                                return;
+                            }
 
-                    // if logged in successfully
+                            if parts[0] != password {
+                                try_send(&mut websocket, "incorrect password".to_owned());
+                                try_close(websocket, None);
+                                eprintln!("info: connection rejected - incorrect password");
+                                terminated(&termination_sender);
+                                return;
+                            }
 
-                    // send assigned player id
+                            // if logged in successfully
+                            let username = parts[1];
 
-                    // while game isn't over
+                            // send assigned player id
+                            let mut game_state_locked =
+                                game_state.lock().expect("workers should not panic");
+                            let assigned = game_state_locked.game_state.assign_player(username);
+                            drop(game_state_locked);
+                            match assigned {
+                                Some(player) => {
+                                    if let Err(message) =
+                                        send_message(&mut websocket, format!("ok\n{player}"))
+                                    {
+                                        eprintln!("warning: connection interrupted: {message}");
+                                        terminated(&termination_sender);
+                                    }
 
-                    // send game state
+                                    // while game isn't over
+                                    loop {
+                                        // send game state
+                                        let game_state_locked =
+                                            game_state.lock().expect("workers should not panic");
 
-                    // get orders
+                                        let serialized_state = game_state_locked
+                                            .game_state
+                                            .serialize_for_player(player);
 
-                    // maybe update game state
+                                        drop(game_state_locked);
 
-                    ExitCode::SUCCESS
-                }));
+                                        if let Err(message) =
+                                            send_message(&mut websocket, (&serialized_state).into())
+                                        {
+                                            eprintln!("warning: connection interrupted: {message}");
+                                            terminated(&termination_sender);
+                                        }
+
+                                        if serialized_state.is_terminal() {
+                                            break;
+                                        }
+
+                                        // get orders
+                                        match recv(&mut websocket) {
+                                            Ok(player_orders) => {
+                                                match parse_orders(&player_orders) {
+                                                    Ok(player_orders) => {
+                                                        let mut game_state_locked = game_state
+                                                            .lock()
+                                                            .expect("workers should not panic");
+                                                        game_state_locked
+                                                            .orders
+                                                            .insert(player, player_orders);
+
+                                                        // maybe update game state
+                                                        if game_state_locked.orders.len()
+                                                            == num_players as usize
+                                                        {
+                                                            debug_assert!(
+                                                                orders_semaphore.get().expect(
+                                                                    "workers should not panic"
+                                                                ) == 0
+                                                            );
+                                                            let orders =
+                                                                take(&mut game_state_locked.orders);
+                                                            game_state_locked
+                                                                .game_state
+                                                                .process_orders(&orders);
+                                                            game_state_locked
+                                                                .game_state
+                                                                .save_to_file(&filename);
+                                                            orders_semaphore
+                                                                .up_n(num_players as u64)
+                                                                .expect("workers should not panic");
+                                                        }
+
+                                                        drop(game_state_locked);
+
+                                                        // wait for updated game state
+                                                        orders_semaphore
+                                                            .down()
+                                                            .expect("workers should not panic");
+                                                    }
+                                                    Err(message) => {
+                                                        try_close(
+                                                            websocket,
+                                                            Some(CloseFrame {
+                                                                code: CloseCode::Protocol,
+                                                                reason: std::borrow::Cow::Borrowed(
+                                                                    message,
+                                                                ),
+                                                            }),
+                                                        );
+                                                        eprintln!("warning: could not parse orders: {message}");
+                                                        terminated(&termination_sender);
+                                                        return;
+                                                    }
+                                                }
+                                            }
+                                            Err(message) => {
+                                                eprintln!(
+                                                    "warning: connection interrupted: {message}"
+                                                );
+                                                terminated(&termination_sender);
+                                                return;
+                                            }
+                                        }
+                                    }
+                                }
+                                None => {
+                                    try_send(&mut websocket, "game full".to_owned());
+                                    try_close(websocket, None);
+                                    eprintln!("info: connection rejected - game full");
+                                    terminated(&termination_sender);
+                                    return;
+                                }
+                            }
+                        }
+                        Err(message) => {
+                            eprintln!("warning: connection interrupted: {message}");
+                            terminated(&termination_sender);
+                            return;
+                        }
+                    }
+
+                    termination_sender
+                        .send(Ok(()))
+                        .expect("main thread should always outlive this thread up to this point");
+                });
+                num_threads += 1;
             }
             Err(err) => {
                 eprintln!("info: got invalid connection: {err}");
+            }
+        }
+
+        // if we have num_players threads, wait until one is done
+        if num_threads == num_players {
+            num_threads -= 1;
+
+            // if it joined after sending a terminal state, wait for the rest and break
+            if termination_receiver
+                .recv()
+                .expect("original sender should never be dropped")
+                .is_ok()
+            {
+                for _ in 0..num_threads {
+                    let _ = termination_receiver
+                        .recv()
+                        .expect("original sender should never be dropped");
+                }
+                break 'acceptor;
             }
         }
     }

@@ -19,6 +19,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    fmt::Display,
     fs,
     ops::Mul,
 };
@@ -81,6 +82,11 @@ impl From<Owner> for u8 {
         value.0
     }
 }
+impl Display for Owner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Serialize, Deserialize, Eq, PartialEq)]
 pub enum TurnPhase {
@@ -111,6 +117,26 @@ impl Turn {
                 self.phase = TurnPhase::Economic;
                 self.number += 1;
             }
+        }
+    }
+}
+
+pub enum SerializedState {
+    MutualLoss,
+    Winner(Owner),
+    Continues(String),
+}
+impl SerializedState {
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, Self::MutualLoss | Self::Winner(_))
+    }
+}
+impl From<&SerializedState> for String {
+    fn from(value: &SerializedState) -> Self {
+        match value {
+            SerializedState::MutualLoss => "mutual loss".to_owned(),
+            SerializedState::Winner(winner) => format!("winner\n{winner}"),
+            SerializedState::Continues(state) => state.clone(),
         }
     }
 }
@@ -185,12 +211,6 @@ impl Mul<u64> for InventoryList {
     }
 }
 
-pub enum VictoryState {
-    None,
-    MutualLoss,
-    Winner(Owner),
-}
-
 #[derive(Serialize, Deserialize)]
 pub struct GameState {
     /// maps between player id and username
@@ -253,6 +273,10 @@ impl GameState {
         })
     }
 
+    pub fn num_players(&self) -> u8 {
+        self.players.len() as u8
+    }
+
     pub fn load_from_file(filename: &str) -> Result<Self, &'static str> {
         if let Ok(file) = fs::read_to_string(filename) {
             serde_json::from_str(&file).map_err(|_| "could not parse save file")
@@ -308,7 +332,18 @@ impl GameState {
         None
     }
 
-    pub fn serialize_for_player(&self, player: Owner) -> String {
+    pub fn serialize_for_player(&self, player: Owner) -> SerializedState {
+        // check for victory
+        if self.stacks.is_empty() {
+            return SerializedState::MutualLoss;
+        }
+
+        for (owner, _) in self.players.iter() {
+            if self.stacks.iter().all(|(_, stack)| stack.owner == *owner) {
+                return SerializedState::Winner(*owner);
+            }
+        }
+
         todo!();
     }
 
@@ -620,6 +655,7 @@ impl GameState {
     fn process_movement_orders(&mut self, orders: &HashMap<Owner, Vec<Order>>) {
         let mut burned_engines: HashSet<Id> = HashSet::new();
 
+        // burn
         for (owner, orders) in orders.iter() {
             for order in orders.iter() {
                 match order {
@@ -753,7 +789,7 @@ impl GameState {
                     ordnance_end,
                     stack.position.cartesian(),
                     (&stack.position + &stack.velocity).cartesian(),
-                    1.0,
+                    3.0_f64.sqrt() * 2.0,
                 );
                 match candidate_hit_distance {
                     Some(candidate_hit_distance_value)
@@ -827,6 +863,7 @@ impl GameState {
         }
 
         // tick movement and miners
+        // TODO: gravity
         for (_, ordnance) in self.ordnance.iter_mut() {
             // note: celestial body impact check already done above
             ordnance.position += &ordnance.velocity;
@@ -868,26 +905,13 @@ impl GameState {
         }
     }
 
-    pub fn process_orders(&mut self, orders: &HashMap<Owner, Vec<Order>>) -> VictoryState {
+    pub fn process_orders(&mut self, orders: &HashMap<Owner, Vec<Order>>) {
         match self.turn.phase {
             TurnPhase::Economic => self.process_economic_orders(orders),
             TurnPhase::Ordnance => self.process_ordnance_orders(orders),
             TurnPhase::Combat => self.process_combat_orders(orders),
             TurnPhase::Movement => self.process_movement_orders(orders),
         }
-
-        // check for victory
-        if self.stacks.is_empty() {
-            return VictoryState::MutualLoss;
-        }
-
-        for (owner, _) in self.players.iter() {
-            if self.stacks.iter().all(|(_, stack)| stack.owner == *owner) {
-                return VictoryState::Winner(*owner);
-            }
-        }
-
         self.turn.next();
-        VictoryState::None
     }
 }
