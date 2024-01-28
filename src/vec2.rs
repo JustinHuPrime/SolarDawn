@@ -219,7 +219,33 @@ pub fn intercept_static(
     point: Cartesian,
     radius: f64,
 ) -> Option<f64> {
-    todo!();
+    // see intercept calculation notes, section 1
+    let (ox, oy) = start;
+    let (fx, fy) = end;
+    let (sx, sy) = point;
+    let (dx, dy) = (fx - ox, fy - oy);
+    let (ox, oy) = (ox - sx, oy - sy);
+
+    let a = dx.powi(2) + dy.powi(2);
+    let b = 2.0 * (dx * ox + dy * oy);
+    let c = ox.powi(2) + oy.powi(2) - radius.powi(2);
+
+    if c <= 0.0 {
+        Some(0.0)
+    } else {
+        let t1 = (-b - (b.powi(2) - 4.0 * a * c).sqrt()) / (2.0 * a);
+        let t2 = (-b + (b.powi(2) - 4.0 * a * c).sqrt()) / (2.0 * a);
+
+        if (0.0..=1.0).contains(&t1) && (0.0..=1.0).contains(&t2) {
+            Some(f64::min(t1, t2))
+        } else if (0.0..=1.0).contains(&t1) {
+            Some(t1)
+        } else if (0.0..=1.0).contains(&t2) {
+            Some(t2)
+        } else {
+            None
+        }
+    }
 }
 
 /// Does the first line and the second line approach within distance, and if so, how far along the first line is it
@@ -230,5 +256,34 @@ pub fn intercept_dynamic(
     second_end: Cartesian,
     distance: f64,
 ) -> Option<f64> {
-    todo!();
+    // see intercept calculation notes, section 2
+    let (o1x, o1y) = first_start;
+    let (f1x, f1y) = first_end;
+    let (o2x, o2y) = second_start;
+    let (f2x, f2y) = second_end;
+    let (d1x, d1y) = (f1x - o1x, f1y - o1y);
+    let (d2x, d2y) = (f2x - o2x, f2y - o2y);
+    let (odx, ody) = (o1x - o2x, o1y - o2y);
+    let (ddx, ddy) = (d1x - d2x, d1y - d2y);
+
+    let a = ddx.powi(2) + ddy.powi(2);
+    let b = 2.0 * (ddx * odx + ddy + ody);
+    let c = odx.powi(2) + ody.powi(2) - distance.powi(2);
+
+    if c <= 0.0 {
+        Some(0.0)
+    } else {
+        let t1 = (-b - (b.powi(2) - 4.0 * a * c).sqrt()) / (2.0 * a);
+        let t2 = (-b + (b.powi(2) - 4.0 * a * c).sqrt()) / (2.0 * a);
+
+        if (0.0..=1.0).contains(&t1) && (0.0..=1.0).contains(&t2) {
+            Some(f64::min(t1, t2))
+        } else if (0.0..=1.0).contains(&t1) {
+            Some(t1)
+        } else if (0.0..=1.0).contains(&t2) {
+            Some(t2)
+        } else {
+            None
+        }
+    }
 }

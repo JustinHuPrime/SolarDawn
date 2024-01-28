@@ -1,0 +1,64 @@
+\documentclass[letterpaper,12pt]{article}
+
+\usepackage{mathtools}
+
+\begin{document}
+\title{Vector Intercepts}
+\author{Justin Hu}
+\maketitle
+
+\section{Vector-Point}
+
+Given a vector defined by two points, how far along the vector need we travel before we are within some radius of a third, static point?
+
+\begin{align}
+\textrm{let } O &= \textrm{the starting point}\\
+\textrm{let } F &= \textrm{the ending point}\\
+\textrm{let } S &= \textrm{the static point}\\
+\textrm{let } r &= \textrm{the radius to find}\\
+D &= F - O
+\end{align}
+
+The vector \(\overline{OF}\) can be rewritten in parameterized form as \(O + tD\), where \(0 \leq t \leq 1\).
+
+\begin{align}
+||O + tD - S|| &\leq r\\
+\sqrt{(O_x + tD_x - S_x)^2 + (O_y + tD_y - S_y)^2} &\leq r\\
+(O_x + tD_x - S_x)^2 + (O_y + tD_y - S_y)^2 &\leq r^2\\
+(tD_x + O_x - S_x)^2 + (tD_y + O_y - S_y)^2 &\leq r^2\\
+t^2D_x^2 + 2tD_x(O_x - S_x) + (O_x - S_x)^2 + t^2D_y^2 + 2tD_y(O_y - S_y) + (O_y - S_y)^2 &\leq r^2\\
+t^2D_x^2 + 2tD_x(O_x - S_x) + (O_x - S_x)^2 + t^2D_y^2 + 2tD_y(O_y - S_y) + (O_y - S_y)^2 - r^2 &\leq 0\\
+(D_x^2 + D_y^2)t^2 + 2(D_x(O_x - S_x) + D_y(O_y - S_y))t + (O_x - S_x)^2 + (O_y - S_y)^2 - r^2 &\leq 0
+\end{align}
+
+There are three cases - when, at \(t = 0\), the inequality is already satisfied, there is nothing further to do. When, at \(t = 0\), then inequality is not satisfied, but it becomes satisfied at some point, and when, at \(t = 0\) the inequality is not satisfied and never becomes satisfied.
+
+\section{Vector-Vector}
+
+Given two vectors, each defined by two points, how far along both vectors need we travel before the points are within some radius of each other?
+
+\begin{align}
+\textrm{let } O_1 &= \textrm{the start of the first vector}\\
+\textrm{let } F_1 &= \textrm{the end of the first vector}\\
+\textrm{let } O_2 &= \textrm{the start of the first vector}\\
+\textrm{let } F_2 &= \textrm{the end of the first vector}\\
+\textrm{let } r &= \textrm{the radius to find}\\
+D_1 &= F_1 - O_1\\
+D_2 &= F_2 - O_2
+\end{align}
+
+Parameterize both as \(O_1 + tD_1\) and \(O_2 + tD_2\)
+
+\begin{align}
+||O_1 + tD_1 - O_2 - tD_2|| &\leq r\\
+O_d &= O_1 - O_2\\
+D_d &= D_1 - D_2\\
+||O_d + tD_d|| &\leq r\\
+\sqrt{(D_{dx}t + O_{dx})^2 + (D_{dy}t + O_{dy})^2} &\leq r\\
+(D_{dx}t + O_{dx})^2 + (D_{dy}t + O_{dy})^2 &\leq r^2\\
+D_{dx}^2t^2 + 2D_{dx}O_{dx}t + O_{dx}^2 + D_{dy}^2t^2 + 2D_{dy}O_{dy}t + O_{dy}^2 - r^2 &\leq 0\\
+(D_{dx}^2 + D_{dy}^2)t^2 + 2(D_{dx}O_{dx} + D_{dy}O_{dy})t + O_{dx}^2 + O_{dy}^2 - r^2 &\leq 0
+\end{align}
+
+As before, there are three cases - the inequality is satisfied at \(t = 0\), the inequality is satisfied sometime after, and the inequality is never satisfied.
+\end{document}
