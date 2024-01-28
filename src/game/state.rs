@@ -385,6 +385,28 @@ impl GameState {
                     Order::FactoryRepair(order) => {
                         todo!();
                     }
+                    Order::Abort(order) => {
+                        // order requires valid, owned ordnance
+                        if let Some(ordnance) = self.ordnance.get(&order.ordnance) {
+                            if ordnance.owner != *owner {
+                                eprintln!(
+                                    "warning: invalid abort order from {} - invalid owner",
+                                    self.owner_to_username(*owner)
+                                );
+                                continue;
+                            }
+
+                            self.ordnance
+                                .remove(&order.ordnance)
+                                .expect("previously seen ordnance should still be in map");
+                        } else {
+                            eprintln!(
+                                "warning: invalid abort order from {} - invalid ordnance",
+                                self.owner_to_username(*owner)
+                            );
+                            continue;
+                        }
+                    }
                     _ => {
                         self.display_invalid_phase_warning(*owner);
                         continue;

@@ -28,6 +28,7 @@ pub enum Order {
     Reload(Reload),
     HabitatRepair(HabitatRepair),
     FactoryRepair(FactoryRepair),
+    Abort(Abort),
     Launch(Launch),
     Shoot(Shoot),
     Burn(Burn),
@@ -115,6 +116,10 @@ pub struct FactoryRepair {
     cargo_hold: Option<Id>,
     repaired_stack: Id,
     component: Id,
+}
+
+pub struct Abort {
+    pub ordnance: Id,
 }
 
 pub struct Launch {
