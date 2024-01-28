@@ -724,6 +724,11 @@ impl GameState {
             let mut stack_hit_distance: Option<f64> = None;
             let mut stacks_hit = Vec::new();
             for (stack_id, stack) in self.stacks.iter() {
+                // no friendly fire
+                if ordnance.owner == stack.owner {
+                    continue;
+                }
+
                 let candidate_hit_distance = intercept_dynamic(
                     ordnance_start,
                     ordnance_end,
@@ -763,32 +768,37 @@ impl GameState {
                 }
             }
 
+            // apply hits, if relevant
             if celestial_impact.is_some() || stack_hit_distance.is_some() {
                 to_remove.push(*ordnance_id);
             }
-
-            if stacks_hit.is_empty() {
-                continue;
-            }
-
             if let Some(hit) = stacks_hit.choose(&mut thread_rng()) {
                 hit_records.push((*hit, ordnance.ordnance_type));
             }
         }
+        // apply hits
         for id in to_remove.iter() {
             self.ordnance
                 .remove(id)
                 .expect("previously seen ordnance should still be in map");
         }
         for (hit, ordnance_type) in hit_records.iter() {
+            // stack may have been previously destroyed - punt
             if !self.stacks.contains_key(hit) {
                 continue;
             }
 
             match ordnance_type {
-                stack::OrdnanceType::Mine | stack::OrdnanceType::Torpedo => {
-                    self.apply_damage(*hit, ordnance_type.damage_amount())
-                }
+                stack::OrdnanceType::Mine | stack::OrdnanceType::Torpedo => self.apply_damage(
+                    *hit,
+                    (self
+                        .stacks
+                        .get(hit)
+                        .expect("previously seen stack should still be in map")
+                        .num_components() as f64
+                        * ordnance_type.damage_fraction())
+                    .round() as u64,
+                ),
                 stack::OrdnanceType::Nuke => {
                     self.stacks
                         .remove(hit)

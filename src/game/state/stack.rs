@@ -45,10 +45,11 @@ impl OrdnanceType {
         }
     }
 
-    pub fn damage_amount(&self) -> u64 {
+    /// returns the fraction of a ship's total components that should be damaged
+    pub fn damage_fraction(&self) -> f64 {
         match self {
-            OrdnanceType::Mine => 0,    // TODO: set a value
-            OrdnanceType::Torpedo => 2, // TODO: set a value
+            OrdnanceType::Mine => 1.0 / 3.0,
+            OrdnanceType::Torpedo => 2.0 / 3.0,
             OrdnanceType::Nuke => panic!("shouldn't ask for damage from nukes"),
         }
     }
@@ -57,7 +58,7 @@ impl OrdnanceType {
 #[derive(Serialize, Deserialize)]
 pub struct Ordnance {
     pub id: Id,
-    owner: Owner,
+    pub owner: Owner,
     pub ordnance_type: OrdnanceType,
     pub position: AxialPosition,
     pub velocity: AxialDisplacement,
@@ -111,8 +112,8 @@ pub struct Stack {
     pub armour_plates: HashMap<Id, ArmourPlate>,
 }
 impl Stack {
-    pub fn get_random_component(&mut self) -> &mut dyn Component {
-        let num_components = self.fuel_tanks.len()
+    pub fn num_components(&self) -> usize {
+        self.fuel_tanks.len()
             + self.cargo_holds.len()
             + self.engines.len()
             + self.guns.len()
@@ -120,7 +121,11 @@ impl Stack {
             + self.habitats.len()
             + self.miners.len()
             + self.factories.len()
-            + self.armour_plates.len();
+            + self.armour_plates.len()
+    }
+
+    pub fn get_random_component(&mut self) -> &mut dyn Component {
+        let num_components = self.num_components();
         if num_components == 0 {
             panic!("should not have empty stack")
         }
