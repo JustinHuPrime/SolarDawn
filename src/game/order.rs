@@ -52,7 +52,7 @@ pub enum ProductionRecipe {
     ArmourPlate,
 }
 impl ProductionRecipe {
-    fn cost(&self) -> InventoryList<u64> {
+    fn cost(&self) -> InventoryList {
         match self {
             ProductionRecipe::OreToMaterials => InventoryList::ore(1),
             ProductionRecipe::IceToFuel => InventoryList::ice(2),
@@ -76,6 +76,7 @@ impl ProductionRecipe {
 pub struct Production {
     stack: Id,
     recipe: ProductionRecipe,
+    to_cargo_hold: Option<Id>,
     amount: u64,
 }
 
@@ -84,7 +85,7 @@ pub struct CargoTransfer {
     from_cargo_hold: Option<Id>,
     to_stack: Id,
     to_cargo_hold: Option<Id>,
-    delta: InventoryList<u64>,
+    delta: InventoryList,
 }
 
 pub enum StackTransferTarget {
@@ -99,7 +100,7 @@ pub struct StackTransfer {
 
 pub struct Reload {
     from_stack: Id,
-    from_cargo_hold: Option<Id>,
+    from_cargo_holds: Vec<Id>,
     to_stack: Id,
     to_launch_clamp: Id,
 }

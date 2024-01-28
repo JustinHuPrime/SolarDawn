@@ -17,7 +17,6 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use num_traits::Num;
 use rand::{
     distributions::{Distribution, Standard},
     thread_rng, Rng,
@@ -27,7 +26,7 @@ use serde::{de::Error, Deserialize, Deserializer, Serialize};
 
 use crate::vec2::AxialPosition;
 
-use super::{stack::Stack, Id, IdGenerator, InventoryList};
+use super::{Id, IdGenerator, InventoryList};
 
 type Colour = String;
 
@@ -46,11 +45,11 @@ impl Distribution<AsteroidResource> for Standard {
         }
     }
 }
-impl<T: Num + From<u8>> From<AsteroidResource> for InventoryList<T> {
+impl From<AsteroidResource> for InventoryList {
     fn from(value: AsteroidResource) -> Self {
         match value {
-            AsteroidResource::Ice => InventoryList::ice(2.into()),
-            AsteroidResource::Ore => InventoryList::ore(2.into()),
+            AsteroidResource::Ice => InventoryList::ice(2),
+            AsteroidResource::Ore => InventoryList::ore(2),
             AsteroidResource::None => InventoryList::default(),
         }
     }

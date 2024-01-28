@@ -23,7 +23,6 @@ use std::{
     ops::Mul,
 };
 
-use num_traits::Num;
 use rand::{seq::SliceRandom, thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
@@ -116,77 +115,64 @@ impl Turn {
     }
 }
 
-#[derive(Serialize, Deserialize)]
-pub struct InventoryList<T: Num> {
-    ore: T,
-    materials: T,
-    ice: T,
-    fuel: T,
-    mines: T,
-    torpedoes: T,
-    nukes: T,
+#[derive(Serialize, Deserialize, Default)]
+pub struct InventoryList {
+    ore: u64,
+    materials: u64,
+    ice: u64,
+    fuel: u64,
+    mines: u64,
+    torpedoes: u64,
+    nukes: u64,
 }
-impl<T: Num + From<u8>> InventoryList<T> {
-    pub fn ore(ore: T) -> Self {
+impl InventoryList {
+    pub fn ore(ore: u64) -> Self {
         Self {
             ore,
             ..Self::default()
         }
     }
-    pub fn materials(materials: T) -> Self {
+    pub fn materials(materials: u64) -> Self {
         Self {
             materials,
             ..Self::default()
         }
     }
-    pub fn ice(ice: T) -> Self {
+    pub fn ice(ice: u64) -> Self {
         Self {
             ice,
             ..Self::default()
         }
     }
-    pub fn fuel(fuel: T) -> Self {
+    pub fn fuel(fuel: u64) -> Self {
         Self {
             fuel,
             ..Self::default()
         }
     }
-    pub fn mines(mines: T) -> Self {
+    pub fn mines(mines: u64) -> Self {
         Self {
             mines,
             ..Self::default()
         }
     }
-    pub fn torpedoes(torpedoes: T) -> Self {
+    pub fn torpedoes(torpedoes: u64) -> Self {
         Self {
             torpedoes,
             ..Self::default()
         }
     }
-    pub fn nukes(nukes: T) -> Self {
+    pub fn nukes(nukes: u64) -> Self {
         Self {
             nukes,
             ..Self::default()
         }
     }
 }
-impl<T: Num + From<u8>> Default for InventoryList<T> {
-    fn default() -> Self {
-        Self {
-            ore: 0.into(),
-            materials: 0.into(),
-            ice: 0.into(),
-            fuel: 0.into(),
-            mines: 0.into(),
-            torpedoes: 0.into(),
-            nukes: 0.into(),
-        }
-    }
-}
-impl<T: Num + Copy> Mul<T> for InventoryList<T> {
+impl Mul<u64> for InventoryList {
     type Output = Self;
 
-    fn mul(self, rhs: T) -> Self::Output {
+    fn mul(self, rhs: u64) -> Self::Output {
         Self {
             ore: self.ore * rhs,
             materials: self.materials * rhs,
@@ -360,11 +346,14 @@ impl GameState {
     }
 
     fn process_economic_orders(&mut self, orders: &HashMap<Owner, Vec<Order>>) {
-        let mut foreign_cargo_deltas: HashMap<Owner, HashMap<(Id, Id), InventoryList<u64>>> =
+        let mut foreign_cargo_deltas: HashMap<Owner, HashMap<(Id, Id), InventoryList>> =
             HashMap::new();
+        let mut repaired_habitats: HashSet<Id> = HashSet::new();
 
         // run orders
         for (owner, orders) in orders.iter() {
+            let mut new_stacks: HashMap<u64, Id> = HashMap::new();
+
             for order in orders.iter() {
                 match order {
                     Order::Production(order) => {
@@ -380,9 +369,17 @@ impl GameState {
                         todo!();
                     }
                     Order::HabitatRepair(order) => {
+                        // stack must be valid
+                        // habitat must be in stack and have not repaired before
+                        // repaired component must be valid and must be damaged
+                        // cargo hold must have one material
                         todo!();
                     }
                     Order::FactoryRepair(order) => {
+                        // factory stack must be valid and contain at least one factory
+                        // repaired stack must be valid, and component must be damaged
+                        // repaired stack and factory stack must be rendezvoused
+                        // cargo hold must have one material
                         todo!();
                     }
                     Order::Abort(order) => {
@@ -858,7 +855,7 @@ impl GameState {
                     .iter()
                     .find(|(_, asteroids)| asteroids.position == stack.position)
                 {
-                    let to_add: InventoryList<u64> = asteroids.resource.into();
+                    let to_add: InventoryList = asteroids.resource.into();
                     // don't care about overflow
                     let _ = stack.insert_cargo(&(to_add * stack.miners.len() as u64));
                 }

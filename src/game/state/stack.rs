@@ -267,7 +267,7 @@ impl Stack {
 
     /// try to insert as much cargo from the source list as possible, reporting leftover amount if failed
     /// TODO: how to prioritize leftovers
-    pub fn insert_cargo(&mut self, cargo: &InventoryList<u64>) -> Result<(), InventoryList<u64>> {
+    pub fn insert_cargo(&mut self, cargo: &InventoryList) -> Result<(), InventoryList> {
         for (_, cargo_hold) in self.cargo_holds.iter_mut() {
             todo!();
         }
@@ -309,7 +309,7 @@ impl IdAble for FuelTank {
 #[derive(Serialize, Deserialize)]
 pub struct CargoHold {
     id: Id,
-    inventory: InventoryList<u64>,
+    inventory: InventoryList,
     damaged: bool,
 }
 impl Component for CargoHold {
