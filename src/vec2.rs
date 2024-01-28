@@ -212,6 +212,30 @@ impl Sub<&AxialDisplacement> for &AxialDisplacement {
     }
 }
 
+fn solve_intercept_quadratic(a: f64, b: f64, c: f64) -> Option<f64> {
+    if c <= 0.0 {
+        Some(0.0)
+    } else {
+        let discriminant = b.powi(2) - 4.0 * a * c;
+        if discriminant < 0.0 {
+            return None;
+        }
+
+        let t1 = (-b - discriminant.sqrt()) / (2.0 * a);
+        let t2 = (-b + discriminant.sqrt()) / (2.0 * a);
+
+        if (0.0..=1.0).contains(&t1) && (0.0..=1.0).contains(&t2) {
+            Some(f64::min(t1, t2))
+        } else if (0.0..=1.0).contains(&t1) {
+            Some(t1)
+        } else if (0.0..=1.0).contains(&t2) {
+            Some(t2)
+        } else {
+            None
+        }
+    }
+}
+
 /// How far along the line from start to end does it come within radius of point, if at all
 pub fn intercept_static(
     start: Cartesian,
@@ -230,22 +254,7 @@ pub fn intercept_static(
     let b = 2.0 * (dx * ox + dy * oy);
     let c = ox.powi(2) + oy.powi(2) - radius.powi(2);
 
-    if c <= 0.0 {
-        Some(0.0)
-    } else {
-        let t1 = (-b - (b.powi(2) - 4.0 * a * c).sqrt()) / (2.0 * a);
-        let t2 = (-b + (b.powi(2) - 4.0 * a * c).sqrt()) / (2.0 * a);
-
-        if (0.0..=1.0).contains(&t1) && (0.0..=1.0).contains(&t2) {
-            Some(f64::min(t1, t2))
-        } else if (0.0..=1.0).contains(&t1) {
-            Some(t1)
-        } else if (0.0..=1.0).contains(&t2) {
-            Some(t2)
-        } else {
-            None
-        }
-    }
+    solve_intercept_quadratic(a, b, c)
 }
 
 /// Does the first line and the second line approach within distance, and if so, how far along the first line is it
@@ -270,20 +279,5 @@ pub fn intercept_dynamic(
     let b = 2.0 * (ddx * odx + ddy + ody);
     let c = odx.powi(2) + ody.powi(2) - distance.powi(2);
 
-    if c <= 0.0 {
-        Some(0.0)
-    } else {
-        let t1 = (-b - (b.powi(2) - 4.0 * a * c).sqrt()) / (2.0 * a);
-        let t2 = (-b + (b.powi(2) - 4.0 * a * c).sqrt()) / (2.0 * a);
-
-        if (0.0..=1.0).contains(&t1) && (0.0..=1.0).contains(&t2) {
-            Some(f64::min(t1, t2))
-        } else if (0.0..=1.0).contains(&t1) {
-            Some(t1)
-        } else if (0.0..=1.0).contains(&t2) {
-            Some(t2)
-        } else {
-            None
-        }
-    }
+    solve_intercept_quadratic(a, b, c)
 }
