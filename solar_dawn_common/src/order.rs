@@ -19,7 +19,6 @@
 
 //! Orders that may be given to stacks
 
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -28,8 +27,9 @@ use crate::{
 };
 
 /// An order that can be given
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub enum Order {
+    NameStack(NameStack),
     ModuleTransfer(ModuleTransfer),
     Board(Board),
     Isru(Isru),
@@ -43,17 +43,25 @@ pub enum Order {
     Burn(Burn),
 }
 
+/// Name a stack
+///
+/// Always valid
+#[derive(Serialize, Deserialize)]
+struct NameStack {
+    name: String,
+}
+
 /// Transfer modules from this stack to another
 ///
 /// Logistics phase
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ModuleTransfer {
+#[derive(Serialize, Deserialize)]
+struct ModuleTransfer {
     module: ModuleId,
     to: ModuleTransferTarget,
 }
 
 /// Where a transferred module should go
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 enum ModuleTransferTarget {
     /// An existing stack
     Existing(StackId),
@@ -68,8 +76,8 @@ enum ModuleTransferTarget {
 /// Interrupts any orders the target might have been given
 ///
 /// Logistics phase
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Board {
+#[derive(Serialize, Deserialize)]
+struct Board {
     target: StackId,
 }
 
@@ -80,8 +88,8 @@ pub struct Board {
 /// Puts resources into floating resource pool
 ///
 /// Logistics phase
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Isru {
+#[derive(Serialize, Deserialize)]
+struct Isru {
     ore: u8,
     water: u8,
     fuel: u8,
@@ -90,8 +98,8 @@ pub struct Isru {
 /// Transfer resources
 ///
 /// Logistics phase
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ResourceTransfer {
+#[derive(Serialize, Deserialize)]
+struct ResourceTransfer {
     /// If None, indicates that this a transfer from the floating pool
     from: Option<ModuleId>,
     to_module: ResourceTransferTarget,
@@ -102,7 +110,7 @@ pub struct ResourceTransfer {
 }
 
 /// Where a resource transfer should go
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 enum ResourceTransferTarget {
     /// This stack's floating pool
     FloatingPool,
@@ -117,8 +125,8 @@ enum ResourceTransferTarget {
 /// Repair another module
 ///
 /// Logistics phase
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Repair {
+#[derive(Serialize, Deserialize)]
+struct Repair {
     repairer: ModuleId,
     target_stack: StackId,
     target_module: ModuleId,
@@ -131,8 +139,8 @@ pub struct Repair {
 /// A stack may not refine more resources than it has refinery capacity
 ///
 /// Logistics phase
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Refine {
+#[derive(Serialize, Deserialize)]
+struct Refine {
     materials: u8,
     fuel: u8,
 }
@@ -142,12 +150,12 @@ pub struct Refine {
 /// Aggregate order
 ///
 /// Logistics phase
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Build {
+#[derive(Serialize, Deserialize)]
+struct Build {
     module: ModuleType,
 }
 
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 enum ModuleType {
     Miner,
     FuelSkimmer,
@@ -165,16 +173,16 @@ enum ModuleType {
 /// Salvage a module
 ///
 /// Logistics phase
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Salvage {
+#[derive(Serialize, Deserialize)]
+struct Salvage {
     salvaged: ModuleId,
 }
 
 /// Shoot some target
 ///
 /// Combat phase
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Shoot {
+#[derive(Serialize, Deserialize)]
+struct Shoot {
     gun: ModuleId,
     target: StackId,
 }
@@ -184,8 +192,8 @@ pub struct Shoot {
 /// Fails if the warhead is on a stack with a habitat
 ///
 /// Combat phase
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Arm {
+#[derive(Serialize, Deserialize)]
+struct Arm {
     warhead: ModuleId,
     armed: bool,
 }
@@ -201,8 +209,8 @@ pub struct Arm {
 /// Fuel tanks must have enough fuel to cover the fuel consumption
 ///
 /// Movement phase
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Burn {
+#[derive(Serialize, Deserialize)]
+struct Burn {
     delta_v: Vec2<i32>,
     fuel_from: Vec<(ModuleId, u8)>,
 }

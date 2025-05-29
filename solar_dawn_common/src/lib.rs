@@ -26,7 +26,6 @@
 use std::collections::HashMap;
 
 use celestial::{Celestial, CelestialId};
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 use stack::{Stack, StackId};
 
@@ -35,7 +34,7 @@ pub mod order;
 mod stack;
 
 /// The game state
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Serialize, Deserialize)]
 pub struct GameState {
     phase: Phase,
     players: HashMap<PlayerId, String>,
@@ -44,8 +43,8 @@ pub struct GameState {
 }
 
 /// The phase of the turn; determines which orders are allowed
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Phase {
+#[derive(Serialize, Deserialize)]
+enum Phase {
     /// Logistics orders only
     Logistics,
     /// Shoot and arm orders only
@@ -58,15 +57,13 @@ impl GameState {}
 
 /// Refers to a player
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PlayerId(u8);
 
 /// A hex-grid axial vector
 ///
 /// +q = down-right, +r = down
-#[derive(Debug, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 struct Vec2<T> {
     q: T,
     r: T,

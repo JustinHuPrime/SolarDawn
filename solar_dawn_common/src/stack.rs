@@ -19,13 +19,11 @@
 
 use std::collections::HashMap;
 
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::{PlayerId, Vec2};
 
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Stack {
     position: Vec2<i32>,
     velocity: Vec2<i32>,
@@ -37,19 +35,16 @@ pub struct Stack {
 }
 
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StackId(u32);
 
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize)]
 struct Module {
     health: Health,
     detauls: ModuleDetails,
 }
 
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize)]
 enum Health {
     /// Operating normally
     Intact,
@@ -59,8 +54,7 @@ enum Health {
     Destroyed,
 }
 
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize)]
 enum ModuleDetails {
     /// Miner - produces resources if landed on a body
     Miner,
@@ -149,8 +143,7 @@ impl ModuleDetails {
 
 /// Id used to reference a module in a stack; unique across stacks
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModuleId(u32);
 
 #[cfg(test)]

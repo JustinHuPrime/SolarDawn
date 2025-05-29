@@ -29,9 +29,3 @@ struct ServerState {
     game_state: GameState,
     orders: HashMap<PlayerId, Vec<Order>>,
 }
-
-impl ServerState {
-    pub fn new() -> Self {
-        todo!()
-    }
-}

@@ -17,13 +17,11 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::Vec2;
 
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Celestial {
     position: Vec2<i32>,
     name: String,
@@ -37,20 +35,17 @@ pub struct Celestial {
 }
 
 #[repr(transparent)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CelestialId(u8);
 
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize)]
 enum Gravity {
     High,
     Normal,
     None,
 }
 
-#[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Serialize, Deserialize)]
 enum Resources {
     MiningBoth,
     MiningIce,
@@ -60,7 +55,7 @@ enum Resources {
 }
 
 impl Celestial {
-    pub fn can_land(&self) -> bool {
+    fn can_land(&self) -> bool {
         !matches!(self.gravity, Gravity::High) && !matches!(self.resources, Resources::Skimming)
     }
 }
