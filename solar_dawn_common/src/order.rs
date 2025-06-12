@@ -41,6 +41,9 @@ pub enum Order {
     Shoot(Shoot),
     Arm(Arm),
     Burn(Burn),
+    Rendezvous(Rendezvous),
+    Land(Land),
+    TakeOff(TakeOff),
 }
 
 /// Name a stack
@@ -83,8 +86,6 @@ struct Board {
 
 /// Miner/skimmer activation
 ///
-/// Aggregate order
-///
 /// Puts resources into floating resource pool
 ///
 /// Logistics phase
@@ -95,7 +96,7 @@ struct Isru {
     fuel: u8,
 }
 
-/// Transfer resources
+/// Transfer resources - only between your stacks
 ///
 /// Logistics phase
 #[derive(Serialize, Deserialize)]
@@ -134,8 +135,6 @@ struct Repair {
 
 /// Refine some resources
 ///
-/// Aggregate order
-///
 /// A stack may not refine more resources than it has refinery capacity
 ///
 /// Logistics phase
@@ -146,8 +145,8 @@ struct Refine {
 }
 
 /// Build a module
-///
-/// Aggregate order
+/// 
+/// May only build habitats in orbit of Earth
 ///
 /// Logistics phase
 #[derive(Serialize, Deserialize)]
@@ -213,6 +212,30 @@ struct Arm {
 struct Burn {
     delta_v: Vec2<i32>,
     fuel_from: Vec<(ModuleId, u8)>,
+}
+
+/// Rendezvous with another stack orbiting the same body
+///
+/// Requires functional engine and one hex/turn of delta-v
+///
+/// Target must not have any move order
+#[derive(Serialize, Deserialize)]
+struct Rendezvous {
+    target: StackId,
+}
+
+/// Land on the body currently orbited
+///
+/// Requires enough thrust to cover the surface gravity and one hex/turn of delta-v
+#[derive(Serialize, Deserialize)]
+struct Land {}
+
+/// Take off from the body currently orbited
+///
+/// Requires enough thrust to cover the surface gravity and one hex/turn of delta-v
+#[derive(Serialize, Deserialize)]
+struct TakeOff {
+    destination: Vec2<i32>,
 }
 
 #[cfg(test)]

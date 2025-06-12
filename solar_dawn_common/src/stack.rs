@@ -34,6 +34,73 @@ pub struct Stack {
     modules: HashMap<ModuleId, Module>,
 }
 
+#[cfg(feature = "server")]
+impl Stack {
+    /// Create a starter stack for some player at some location with some velocity
+    ///
+    /// Contents = 2x hab, factory, refinery, miner, cargo hold (empty), tank (fuelled), 4x engine
+    pub fn starter_stack(
+        owner: PlayerId,
+        position: Vec2<i32>,
+        velocity: Vec2<i32>,
+        name: String,
+        module_id_generator: &mut impl Iterator<Item = ModuleId>,
+    ) -> Self {
+        Self {
+            position,
+            velocity,
+            owner,
+            name,
+            modules: HashMap::from([
+                (
+                    module_id_generator.next().expect("should be infinite"),
+                    Module::new_habitat(owner),
+                ),
+                (
+                    module_id_generator.next().expect("should be infinite"),
+                    Module::new_habitat(owner),
+                ),
+                (
+                    module_id_generator.next().expect("should be infinite"),
+                    Module::new_factory(),
+                ),
+                (
+                    module_id_generator.next().expect("should be infinite"),
+                    Module::new_refinery(),
+                ),
+                (
+                    module_id_generator.next().expect("should be infinite"),
+                    Module::new_miner(),
+                ),
+                (
+                    module_id_generator.next().expect("should be infinite"),
+                    Module::new_cargo_hold(),
+                ),
+                (
+                    module_id_generator.next().expect("should be infinite"),
+                    Module::new_fuel_tank(),
+                ),
+                (
+                    module_id_generator.next().expect("should be infinite"),
+                    Module::new_engine(),
+                ),
+                (
+                    module_id_generator.next().expect("should be infinite"),
+                    Module::new_engine(),
+                ),
+                (
+                    module_id_generator.next().expect("should be infinite"),
+                    Module::new_engine(),
+                ),
+                (
+                    module_id_generator.next().expect("should be infinite"),
+                    Module::new_engine(),
+                ),
+            ]),
+        }
+    }
+}
+
 #[repr(transparent)]
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StackId(u32);
@@ -41,7 +108,71 @@ pub struct StackId(u32);
 #[derive(Debug, Serialize, Deserialize)]
 struct Module {
     health: Health,
-    detauls: ModuleDetails,
+    details: ModuleDetails,
+}
+
+#[cfg(feature = "server")]
+impl Module {
+    fn new(details: ModuleDetails) -> Self {
+        Self {
+            health: Health::Intact,
+            details,
+        }
+    }
+
+    fn new_miner() -> Self {
+        Self::new(ModuleDetails::Miner)
+    }
+
+    fn new_fuel_skimmer() -> Self {
+        Self::new(ModuleDetails::FuelSkimmer)
+    }
+
+    fn new_cargo_hold() -> Self {
+        Self::new(ModuleDetails::CargoHold {
+            ore: 0,
+            materials: 0,
+        })
+    }
+
+    fn new_tank() -> Self {
+        Self::new(ModuleDetails::Tank { water: 0, fuel: 0 })
+    }
+
+    fn new_fuel_tank() -> Self {
+        Self::new(ModuleDetails::Tank {
+            water: 0,
+            fuel: ModuleDetails::TANK_CAPACITY,
+        })
+    }
+
+    fn new_engine() -> Self {
+        Self::new(ModuleDetails::Engine)
+    }
+
+    fn new_warhead() -> Self {
+        Self::new(ModuleDetails::Warhead { armed: false })
+    }
+
+    fn new_gun() -> Self {
+        Self::new(ModuleDetails::Gun)
+    }
+
+    fn new_habitat(owner: PlayerId) -> Self {
+        Self::new(ModuleDetails::Habitat { owner })
+    }
+
+    fn new_refinery() -> Self {
+        Self::new(ModuleDetails::Refinery)
+    }
+
+    fn new_factory() -> Self {
+        Self::new(ModuleDetails::Factory)
+    }
+
+    fn new_armour_plate() -> Self {
+        Self::new(ModuleDetails::ArmourPlate)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]

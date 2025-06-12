@@ -27,5 +27,6 @@ use solar_dawn_common::{GameState, PlayerId};
 #[derive(Serialize, Deserialize)]
 struct ServerState {
     game_state: GameState,
+    #[serde(skip)]
     orders: HashMap<PlayerId, Vec<Order>>,
 }

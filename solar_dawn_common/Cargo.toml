@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-serde = { version = "1.0.219", features = ["derive"] }
+num = "0.4.3"
+serde = { version = "1.0.219", features = ["derive", "rc"] }
 
 [features]
 server = []
