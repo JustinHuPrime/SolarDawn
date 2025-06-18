@@ -27,25 +27,30 @@ use crate::Vec2;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Celestial {
     pub position: Vec2<i32>,
-    name: String,
+    pub name: String,
     /// Are there gravity effects in the one-hex ring around this body (for orbits)
-    orbit_gravity: bool,
-    /// What is the surface gravity, in hex/turn^2 (aka 0.1 AU/day^2 aka m/s^2)
-    surface_gravity: f32,
+    pub orbit_gravity: bool,
+    /// What is the surface gravity, in m/s^2 (aka 0.05 AU/day^2 aka 0.5 hex/turn^2)
+    pub surface_gravity: f32,
     /// What resources can be obtained?
     ///
     /// - Mining(Both|Ice|Ore) = must land, if a body with gravity, with a
     ///   landing manoeuver, or rendezvoused for bodies without gravity
     /// - Skimming = if in orbit, may use a skimming manoeuver
-    resources: Resources,
+    pub resources: Resources,
+    /// What is the radius of this body, in units of hex major radii
+    ///
+    /// Note: the minor radius is √3/2, or 0.866...
+    pub radius: f32,
 }
 
 #[repr(transparent)]
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CelestialId(u8);
 
-#[derive(Debug, Serialize, Deserialize)]
-enum Resources {
+#[repr(u8)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+pub enum Resources {
     MiningBoth,
     MiningIce,
     MiningOre,
@@ -67,6 +72,7 @@ impl Celestial {
                 orbit_gravity: true,
                 surface_gravity: 274.0,
                 resources: Resources::None,
+                radius: 0.85,
             },
         );
         todo!()
@@ -75,12 +81,16 @@ impl Celestial {
     /// Can only land on bodies you can get resources from via mining
     ///
     /// So you can't land on Earth, the Sun, or gas giants
-    fn can_land(&self) -> bool {
-        !matches!(self.resources, Resources::Skimming)
+    pub fn can_land(&self) -> bool {
+        matches!(
+            self.resources,
+            Resources::MiningBoth | Resources::MiningIce | Resources::MiningOre
+        )
     }
 
     /// Generate orbital parameters; assumes body has gravity
     pub fn orbit_parameters(&self, clockwise: bool) -> [(Vec2<i32>, Vec2<i32>); 6] {
+        debug_assert!(self.orbit_gravity);
         self.position
             .neighbours()
             .iter()
@@ -97,12 +107,50 @@ impl Celestial {
             .try_into()
             .expect("base vector has exact number of args")
     }
+
+    /// Does the line from start to end collide with this celestial body
+    ///
+    /// Note bodies without gravity also have no collision
+    pub fn collides(&self, start: Vec2<i32>, end: Vec2<i32>) -> bool {
+        if !self.orbit_gravity {
+            return false;
+        }
+
+        let start = start.cartesian();
+        let end = end.cartesian();
+        let direction = (end.0 - start.0, end.1 - start.1);
+        // line is of the form start + t * direction
+        let center = self.position.cartesian();
+        let radius = self.radius;
+        // circle is of the form (x - center)^2 + (y - center)^2 = radius^2
+        let offset_start = (start.0 - center.0, start.1 - center.1);
+
+        // construct quadratic equation of intersections according to https://stackoverflow.com/a/1084899
+
+        let a = direction.0 * direction.0 + direction.1 + direction.1;
+        let b = 2.0 * (direction.0 * offset_start.0 + direction.1 + offset_start.1);
+        let c =
+            (offset_start.0 * offset_start.0 + offset_start.1 * offset_start.1) - (radius * radius);
+
+        let discriminant = b * b - 4.0 * a * c;
+
+        if discriminant < 0.0 {
+            // no collision
+            return false;
+        }
+
+        let intersect_1 = (-b - discriminant.sqrt()) / (2.0 * a);
+        let intersect_2 = (-b + discriminant.sqrt()) / (2.0 * a);
+
+        (0.0..=1.0).contains(&intersect_1) || (0.0..=1.0).contains(&intersect_2)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    #[cfg(feature = "server")]
     #[test]
     fn test_orbit_parameters() {
         let celestial = Celestial {
@@ -111,6 +159,7 @@ mod tests {
             orbit_gravity: true,
             surface_gravity: f32::NAN,
             resources: Resources::None,
+            radius: f32::NAN,
         };
 
         assert_eq!(
