@@ -1,7 +1,11 @@
 [package]
 name = "solar_dawn_common"
-version = "0.1.0"
+version = "0.5.0"
+authors = ["Justin Hu <justin.hu@alumni.ubc.ca>"]
 edition = "2021"
+description = "A simultaneous turn resolution 4X inspired by High Frontier and Triplanetary - common data library."
+homepage = "https://github.com/JustinHuPrime/SolarDawn#readme"
+repository = "https://github.com/JustinHuPrime/SolarDawn"
 
 [dependencies]
 rand = { version = "0.9.1" }

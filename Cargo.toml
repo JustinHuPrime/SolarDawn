@@ -1,3 +1,3 @@
 [workspace]
-members = ["solar_dawn_common", "solar_dawn_server"]
+members = ["solar_dawn_client", "solar_dawn_common", "solar_dawn_server"]
 resolver = "2"

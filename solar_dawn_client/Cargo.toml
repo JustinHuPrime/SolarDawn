@@ -1,0 +1,11 @@
+[package]
+name = "solar_dawn_client"
+version = "0.5.0"
+authors = ["Justin Hu <justin.hu@alumni.ubc.ca>"]
+edition = "2021"
+description = "A simultaneous turn resolution 4X inspired by High Frontier and Triplanetary - wasm client library."
+homepage = "https://github.com/JustinHuPrime/SolarDawn#readme"
+repository = "https://github.com/JustinHuPrime/SolarDawn"
+
+[dependencies]
+serde = { version = "1.0.219" }
