@@ -287,6 +287,20 @@ impl Stack {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StackId(u32);
 
+#[cfg(feature = "server")]
+impl From<u32> for StackId {
+    fn from(value: u32) -> Self {
+        StackId(value)
+    }
+}
+
+#[cfg(feature = "server")]
+impl From<StackId> for u32 {
+    fn from(value: StackId) -> Self {
+        value.0
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Module {
     pub health: Health,
@@ -522,6 +536,20 @@ impl ModuleDetails {
 #[repr(transparent)]
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ModuleId(u32);
+
+#[cfg(feature = "server")]
+impl From<u32> for ModuleId {
+    fn from(value: u32) -> Self {
+        ModuleId(value)
+    }
+}
+
+#[cfg(feature = "server")]
+impl From<ModuleId> for u32 {
+    fn from(value: ModuleId) -> Self {
+        value.0
+    }
+}
 
 #[cfg(test)]
 mod tests {

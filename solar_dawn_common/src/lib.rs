@@ -165,7 +165,8 @@ impl GameState {
                 let stack_ref = stacks.get_mut(&stack).expect("saved key");
 
                 let module_count = stack_ref.modules.len() as u32;
-                let damaged_count = module_count.div_ceil(ModuleDetails::WARHEAD_DAMAGE_FRACTION) * hits;
+                let damaged_count =
+                    module_count.div_ceil(ModuleDetails::WARHEAD_DAMAGE_FRACTION) * hits;
                 stack_ref.do_damage(damaged_count, rng);
             }
             // remove detonated stacks
@@ -276,6 +277,20 @@ impl PlayerId {
     }
 }
 
+#[cfg(feature = "server")]
+impl From<u8> for PlayerId {
+    fn from(value: u8) -> Self {
+        PlayerId(value)
+    }
+}
+
+#[cfg(feature = "server")]
+impl From<PlayerId> for u8 {
+    fn from(value: PlayerId) -> Self {
+        value.0
+    }
+}
+
 /// A hex-grid axial vector
 ///
 /// Flat-topped hexes
@@ -320,49 +335,63 @@ impl SubAssign for Vec2<i32> {
     }
 }
 impl Vec2<i32> {
-    fn zero() -> Self {
+    #[expect(missing_docs)]
+    pub fn zero() -> Self {
         Self { q: 0, r: 0 }
     }
 
-    fn unit_up() -> Self {
+    #[expect(missing_docs)]
+    pub fn unit_up() -> Self {
         Self { q: 0, r: -1 }
     }
-    fn unit_up_right() -> Self {
+    #[expect(missing_docs)]
+    pub fn unit_up_right() -> Self {
         Self { q: 1, r: -1 }
     }
-    fn unit_down_right() -> Self {
+    #[expect(missing_docs)]
+    pub fn unit_down_right() -> Self {
         Self { q: 1, r: 0 }
     }
-    fn unit_down() -> Self {
+    #[expect(missing_docs)]
+    pub fn unit_down() -> Self {
         Self { q: 0, r: 1 }
     }
-    fn unit_down_left() -> Self {
+    #[expect(missing_docs)]
+    pub fn unit_down_left() -> Self {
         Self { q: -1, r: 1 }
     }
-    fn unit_up_left() -> Self {
+    #[expect(missing_docs)]
+    pub fn unit_up_left() -> Self {
         Self { q: -1, r: 0 }
     }
 
-    fn up(&self) -> Self {
+    #[expect(missing_docs)]
+    pub fn up(&self) -> Self {
         *self + Self::unit_up()
     }
-    fn up_right(&self) -> Self {
+    #[expect(missing_docs)]
+    pub fn up_right(&self) -> Self {
         *self + Self::unit_up_right()
     }
-    fn down_right(&self) -> Self {
+    #[expect(missing_docs)]
+    pub fn down_right(&self) -> Self {
         *self + Self::unit_down_right()
     }
-    fn down(&self) -> Self {
+    #[expect(missing_docs)]
+    pub fn down(&self) -> Self {
         *self + Self::unit_down()
     }
-    fn down_left(&self) -> Self {
+    #[expect(missing_docs)]
+    pub fn down_left(&self) -> Self {
         *self + Self::unit_down_left()
     }
-    fn up_left(&self) -> Self {
+    #[expect(missing_docs)]
+    pub fn up_left(&self) -> Self {
         *self + Self::unit_up_left()
     }
 
-    fn neighbours(&self) -> [Self; 6] {
+    #[expect(missing_docs)]
+    pub fn neighbours(&self) -> [Self; 6] {
         [
             self.up(),
             self.up_right(),
@@ -373,14 +402,51 @@ impl Vec2<i32> {
         ]
     }
 
-    fn norm(&self) -> i32 {
+    #[expect(missing_docs)]
+    pub fn norm(&self) -> i32 {
         (self.q.abs() + (self.q + self.r).abs() + self.r.abs()) / 2
     }
 
-    fn cartesian(&self) -> (f32, f32) {
+    #[expect(missing_docs)]
+    pub fn cartesian(&self) -> (f32, f32) {
         let x: f32 = 1.5 * self.q as f32;
         let y: f32 = 3.0_f32.sqrt() / 2.0 * self.q as f32 + 3.0_f32.sqrt() * self.r as f32;
         (x, y)
+    }
+
+    #[expect(missing_docs)]
+    pub fn round(q: f32, r: f32) -> Self {
+        let s = -q - r;
+
+        let mut q_int = q.round_ties_even() as i32;
+        let mut r_int = r.round_ties_even() as i32;
+        let s_int = s.round_ties_even() as i32;
+
+        let dq = (q - q_int as f32).abs();
+        let dr = (r - r_int as f32).abs();
+        let ds = (s - s_int as f32).abs();
+
+        if dq > dr && dq > ds {
+            q_int = -r_int - s_int;
+        } else if dr > ds {
+            r_int = -q_int - s_int;
+        }
+        // don't care about s coordinate
+        Self { q: q_int, r: r_int }
+    }
+
+    #[expect(missing_docs)]
+    pub fn from_cartesian(x: f32, y: f32) -> Self {
+        let q = x * 2.0 / 3.0;
+        let r = x * -1.0 / 3.0 + y * 3.0_f32.sqrt() / 3.0;
+        Self::round(q, r)
+    }
+
+    #[expect(missing_docs)]
+    pub fn from_polar(r: f32, theta: f32) -> Self {
+        let x = r * theta.cos();
+        let y = r * -theta.sin();
+        Self::from_cartesian(x, y)
     }
 }
 

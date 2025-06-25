@@ -48,6 +48,20 @@ pub struct Celestial {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CelestialId(u8);
 
+#[cfg(feature = "server")]
+impl From<u8> for CelestialId {
+    fn from(value: u8) -> Self {
+        CelestialId(value)
+    }
+}
+
+#[cfg(feature = "server")]
+impl From<CelestialId> for u8 {
+    fn from(value: CelestialId) -> Self {
+        value.0
+    }
+}
+
 #[repr(u8)]
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum Resources {
@@ -60,14 +74,14 @@ pub enum Resources {
 
 #[cfg(feature = "server")]
 impl Celestial {
-    pub fn solar_system(
+    pub fn solar_system_balanced_positions(
         celestial_id_generator: &mut impl Iterator<Item = CelestialId>,
     ) -> (HashMap<CelestialId, Celestial>, CelestialId) {
         let mut map = HashMap::new();
         map.insert(
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
-                position: Vec2 { q: 0, r: 0 },
+                position: Vec2::zero(),
                 name: String::from("The Sun"),
                 orbit_gravity: true,
                 surface_gravity: 274.0,
@@ -75,7 +89,104 @@ impl Celestial {
                 radius: 0.85,
             },
         );
-        todo!()
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::from_polar(3.5, 170.0 * std::f32::consts::PI / 180.0),
+                name: String::from("Mercury"),
+                orbit_gravity: true,
+                surface_gravity: 3.7,
+                resources: Resources::MiningOre,
+                radius: 0.15,
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::from_polar(7.2, 70.0 * std::f32::consts::PI / 180.0),
+                name: String::from("Venus"),
+                orbit_gravity: true,
+                surface_gravity: 8.9,
+                resources: Resources::MiningOre,
+                radius: 0.25,
+            },
+        );
+        let earth_id = celestial_id_generator.next().expect("should be infinite");
+        map.insert(
+            earth_id,
+            Celestial {
+                position: Vec2::from_polar(10.0, 0.0 * std::f32::consts::PI / 180.0),
+                name: String::from("Earth"),
+                orbit_gravity: true,
+                surface_gravity: 9.8,
+                resources: Resources::None,
+                radius: 0.25,
+            },
+        );
+        // TODO: The Moon
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::from_polar(14.8, 280.0 * std::f32::consts::PI / 180.0),
+                name: String::from("Mars"),
+                orbit_gravity: true,
+                surface_gravity: 3.7,
+                resources: Resources::MiningBoth,
+                radius: 0.20,
+            },
+        );
+        // TODO: Phobos, Deimos
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::from_polar(54.3, 45.0 * std::f32::consts::PI / 180.0),
+                name: String::from("Jupiter"),
+                orbit_gravity: true,
+                surface_gravity: 24.8,
+                resources: Resources::Skimming,
+                radius: 0.75,
+            },
+        );
+        // TODO: Io, Europa, Ganymede, Calliston
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::from_polar(100.4, 125.0 * std::f32::consts::PI / 180.0),
+                name: String::from("Saturn"),
+                orbit_gravity: true,
+                surface_gravity: 10.4,
+                resources: Resources::Skimming,
+                radius: 0.70,
+            },
+        );
+        // TODO: Titan, Rhea, Iapetus, Dione, Tethys
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::from_polar(194.7, 305.0 * std::f32::consts::PI / 180.0),
+                name: String::from("Uranus"),
+                orbit_gravity: true,
+                surface_gravity: 8.9,
+                resources: Resources::Skimming,
+                radius: 0.45,
+            },
+        );
+        // TODO: Titania, Oberon, Umbriel, Ariel
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::from_polar(299.7, 235.0 * std::f32::consts::PI / 180.0),
+                name: String::from("Neptune"),
+                orbit_gravity: true,
+                surface_gravity: 11.1,
+                resources: Resources::Skimming,
+                radius: 0.50,
+            },
+        );
+        // TODO: Triton
+        // TODO: asteroid belt
+        // TODO: kuiper belt
+        (map, earth_id)
     }
 
     /// Can only land on bodies you can get resources from via mining
@@ -148,7 +259,31 @@ impl Celestial {
 
 #[cfg(test)]
 mod tests {
+    use std::marker::PhantomData;
+
     use super::*;
+
+    struct IdGen<T: From<u8>> {
+        next: u8,
+        _t: PhantomData<T>,
+    }
+    impl<T: From<u8>> IdGen<T> {
+        pub fn new() -> Self {
+            Self {
+                next: 0,
+                _t: PhantomData,
+            }
+        }
+    }
+    impl<T: From<u8>> Iterator for IdGen<T> {
+        type Item = T;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let result = Some(self.next.into());
+            self.next += 1;
+            result
+        }
+    }
 
     #[cfg(feature = "server")]
     #[test]
@@ -178,5 +313,13 @@ mod tests {
             celestial.orbit_parameters(false)[1],
             (celestial.position.up_right(), Vec2::unit_up_left())
         );
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn test_custom_solar_system() {
+        let mut id_gen = IdGen::<CelestialId>::new();
+        let (celestials, earth_id) = Celestial::solar_system_balanced_positions(&mut id_gen);
+        assert_eq!(celestials.get(&earth_id).unwrap().name, "Earth");
     }
 }
