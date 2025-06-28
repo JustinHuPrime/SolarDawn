@@ -420,12 +420,15 @@ pub enum Health {
 impl Health {
     /// Do damage to this module's health
     ///
-    /// Note: must not try to do damage to a destroyed module
+    /// Note: must not try to do damage to a destroyed module, panic in debug mode if you do so
     pub fn damage(&mut self) {
         match self {
             Health::Intact => *self = Health::Damaged,
             Health::Damaged => *self = Health::Destroyed,
-            Health::Destroyed => debug_assert!(false, "tried to damage destroyed module"),
+            Health::Destroyed => {
+                #[cfg(debug_assertions)]
+                panic!("tried to damage destroyed module");
+            }
         }
     }
 }
