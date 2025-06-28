@@ -17,6 +17,10 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Stacks - game pieces
+//! 
+//! A stack is an unordered collection of modules
+
 use std::collections::HashMap;
 
 #[cfg(feature = "server")]

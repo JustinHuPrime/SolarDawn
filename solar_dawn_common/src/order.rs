@@ -685,7 +685,7 @@ impl Order {
                     let miner_count = stack_ref
                         .modules
                         .iter()
-                        .filter(|(&id, module)| {
+                        .filter(|&(&id, module)| {
                             !disabled_modules.contains(&(stack, id))
                                 && matches!(
                                     module,
@@ -711,7 +711,7 @@ impl Order {
                     let skimmer_count = stack_ref
                         .modules
                         .iter()
-                        .filter(|(&id, module)| {
+                        .filter(|&(&id, module)| {
                             !disabled_modules.contains(&(stack, id))
                                 && matches!(
                                     module,
@@ -737,7 +737,7 @@ impl Order {
                     let refinery_count = stack_ref
                         .modules
                         .iter()
-                        .filter(|(&id, module)| {
+                        .filter(|&(&id, module)| {
                             !disabled_modules.contains(&(stack, id))
                                 && matches!(
                                     module,
@@ -763,7 +763,7 @@ impl Order {
                     let hab_and_factory_count = stack_ref
                         .modules
                         .iter()
-                        .filter(|(&id, module)| {
+                        .filter(|&(&id, module)| {
                             !disabled_modules.contains(&(stack, id))
                                 && matches!(
                                     module,
@@ -786,7 +786,7 @@ impl Order {
                     let factory_count = stack_ref
                         .modules
                         .iter()
-                        .filter(|(&id, module)| {
+                        .filter(|&(&id, module)| {
                             !disabled_modules.contains(&(stack, id))
                                 && matches!(
                                     module,

@@ -2,11 +2,17 @@
 name = "solar_dawn_server"
 version = "0.5.0"
 authors = ["Justin Hu <justin.hu@alumni.ubc.ca>"]
-edition = "2021"
+edition = "2024"
 description = "A simultaneous turn resolution 4X inspired by High Frontier and Triplanetary - server binary."
 homepage = "https://github.com/JustinHuPrime/SolarDawn#readme"
 repository = "https://github.com/JustinHuPrime/SolarDawn"
 
 [dependencies]
-serde = { version = "1.0.219", features = ["derive"] }
+anyhow = "1.0.98"
+axum = "0.8.4"
+num-traits = "0.2.19"
+rand = { workspace = true, features = ["serde"] }
+rand_pcg = { version = "0.9.0", features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
 solar_dawn_common = { path = "../solar_dawn_common", features = ["server"] }
+tokio = { version = "1.45.1", features = ["full"] }

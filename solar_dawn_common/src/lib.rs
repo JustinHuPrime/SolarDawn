@@ -42,9 +42,9 @@ use crate::{
     stack::{Health, Module, ModuleDetails},
 };
 
-mod celestial;
+pub mod celestial;
 pub mod order;
-mod stack;
+pub mod stack;
 
 /// The game state
 #[derive(Debug, Serialize, Deserialize)]
