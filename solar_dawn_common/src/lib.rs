@@ -129,7 +129,7 @@ impl GameState {
             let mut damaged: HashMap<StackId, u32> = HashMap::new();
             for (&missile, missile_ref) in stacks.iter() {
                 // for each stack with an armed warhead
-                if missile_ref.modules.values().any(|module| {
+                let warhead_count = missile_ref.modules.values().filter(|module| {
                     matches!(
                         module,
                         Module {
@@ -137,7 +137,8 @@ impl GameState {
                             details: ModuleDetails::Warhead { armed: true }
                         }
                     )
-                }) {
+                }).count() as u32;
+                if warhead_count > 0 {
                     // find the first point at which a non-owned stack comes into range, if any
                     if let Some(intercept) = stacks
                         .values()
@@ -153,7 +154,7 @@ impl GameState {
                                 None
                             }
                         }) {
-                            *damaged.entry(thing).or_default() += 1;
+                            *damaged.entry(thing).or_default() += warhead_count;
                         }
                         // mark the warhead as detonated
                         detonated.push(missile);
