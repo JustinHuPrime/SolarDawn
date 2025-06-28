@@ -26,9 +26,12 @@ use serde::{Deserialize, Serialize};
 
 use crate::Vec2;
 
+/// A celestial body
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Celestial {
+    /// Where this celestial body is positioned
     pub position: Vec2<i32>,
+    /// What its name is (English)
     pub name: String,
     /// Are there gravity effects in the one-hex ring around this body (for orbits)
     pub orbit_gravity: bool,
@@ -46,6 +49,7 @@ pub struct Celestial {
     pub radius: f32,
 }
 
+/// Key to refer to celestial bodies
 #[repr(transparent)]
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CelestialId(u8);
@@ -64,18 +68,25 @@ impl From<CelestialId> for u8 {
     }
 }
 
+/// What resources are present on a celestial body
 #[repr(u8)]
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum Resources {
+    /// Can mine for both ice and ore if landed
     MiningBoth,
+    /// Can mine for only ice if landed
     MiningIce,
+    /// Can mine for only ore if landed
     MiningOre,
+    /// Can't land, but can skim for fuel if in orbit
     Skimming,
+    /// Can't land and can't get any resources
     None,
 }
 
 #[cfg(feature = "server")]
 impl Celestial {
+    /// Create a map of the solar system but with curated phase angles for the planets
     pub fn solar_system_balanced_positions(
         celestial_id_generator: &mut impl Iterator<Item = CelestialId>,
     ) -> (HashMap<CelestialId, Celestial>, CelestialId) {

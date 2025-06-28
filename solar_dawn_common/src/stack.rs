@@ -18,7 +18,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Stacks - game pieces
-//! 
+//!
 //! A stack is an unordered collection of modules
 
 use std::collections::HashMap;
@@ -31,14 +31,18 @@ use serde::{Deserialize, Serialize};
 use crate::celestial::Celestial;
 use crate::{PlayerId, Vec2};
 
+/// A stack - a collection of modules docked to one another
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Stack {
+    /// Current position
     pub position: Vec2<i32>,
+    /// Change in position for next turn
     pub velocity: Vec2<i32>,
     /// Current owner; can be changed by docking a habitat
     pub owner: PlayerId,
     /// Name as assigned by owner - may be blank
     pub name: String,
+    /// Modules contained
     pub modules: HashMap<ModuleId, Module>,
 }
 
@@ -287,6 +291,7 @@ impl Stack {
     }
 }
 
+/// Id to refer to a stack
 #[repr(transparent)]
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct StackId(u32);
@@ -305,9 +310,12 @@ impl From<StackId> for u32 {
     }
 }
 
+/// A module, part of a stack
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Module {
+    /// Current health - only intact stacks can do things
     pub health: Health,
+    /// What type of stack is this, exactly, and what data does that involve
     pub details: ModuleDetails,
 }
 
@@ -320,14 +328,17 @@ impl Module {
         }
     }
 
+    /// Create a new miner module
     pub fn new_miner() -> Self {
         Self::new(ModuleDetails::Miner)
     }
 
+    /// Create a new fuel skimmer module
     pub fn new_fuel_skimmer() -> Self {
         Self::new(ModuleDetails::FuelSkimmer)
     }
 
+    /// Create a new (empty) cargo hold module
     pub fn new_cargo_hold() -> Self {
         Self::new(ModuleDetails::CargoHold {
             ore: 0,
@@ -335,10 +346,12 @@ impl Module {
         })
     }
 
+    /// Create a new (empty) tank module
     pub fn new_tank() -> Self {
         Self::new(ModuleDetails::Tank { water: 0, fuel: 0 })
     }
 
+    /// Create a tank full of fuel
     fn new_fuel_tank() -> Self {
         Self::new(ModuleDetails::Tank {
             water: 0,
@@ -346,43 +359,53 @@ impl Module {
         })
     }
 
+    /// Create a new engine module
     pub fn new_engine() -> Self {
         Self::new(ModuleDetails::Engine)
     }
 
+    /// Create a new warhead module (starts disarmed)
     pub fn new_warhead() -> Self {
         Self::new(ModuleDetails::Warhead { armed: false })
     }
 
+    /// Create a new gun module
     pub fn new_gun() -> Self {
         Self::new(ModuleDetails::Gun)
     }
 
+    /// Create a new habitat module
     pub fn new_habitat(owner: PlayerId) -> Self {
         Self::new(ModuleDetails::Habitat { owner })
     }
 
+    /// Create a new refinery module
     pub fn new_refinery() -> Self {
         Self::new(ModuleDetails::Refinery)
     }
 
+    /// Create a new factory module
     pub fn new_factory() -> Self {
         Self::new(ModuleDetails::Factory)
     }
 
+    /// Create a new armour plate module
     pub fn new_armour_plate() -> Self {
         Self::new(ModuleDetails::ArmourPlate)
     }
 
+    /// Get the mass of this module (only relevant for getting the mass of the stack)
     fn mass(&self) -> f32 {
         self.details.mass()
     }
 
+    /// Get the dry mass of this module (excludes module contents for containers)
     pub fn dry_mass(&self) -> u32 {
         self.details.dry_mass()
     }
 }
 
+/// The health of a module
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum Health {
     /// Operating normally
@@ -395,15 +418,19 @@ pub enum Health {
 
 #[cfg(feature = "server")]
 impl Health {
+    /// Do damage to this module's health
+    ///
+    /// Note: must not try to do damage to a destroyed module
     pub fn damage(&mut self) {
         match self {
             Health::Intact => *self = Health::Damaged,
             Health::Damaged => *self = Health::Destroyed,
-            Health::Destroyed => panic!("tried to damage destroyed module"),
+            Health::Destroyed => debug_assert!(false, "tried to damage destroyed module"),
         }
     }
 }
 
+/// Details about a module, like what type it is
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ModuleDetails {
     /// Miner - produces resources if landed on a body
@@ -413,21 +440,37 @@ pub enum ModuleDetails {
     /// Cargo hold - holds ore and materials
     ///
     /// One unit = 0.1 tonnes
-    CargoHold { ore: u8, materials: u8 },
+    CargoHold {
+        /// How much ore is held, in 0.1 tonnes
+        ore: u8,
+        /// How much materials are held, in 0.1 tonnes
+        materials: u8,
+    },
     /// Tank - holds water and fuel
     ///
     /// One unit = 0.1 tonnes
-    Tank { water: u8, fuel: u8 },
+    Tank {
+        /// How much water is held, in 0.1 tonnes
+        water: u8,
+        /// How much fuel is held, in 0.1 tonnes
+        fuel: u8,
+    },
     /// Engine - produces 20 kN of thrust using 1 tonne of fuel; 1 m/s^2 = 1 hex/turn/turn
     ///
     /// Can burn fractional points of fuel, down to the 0.1 tonne
     Engine,
     /// Warhead - deals explosive attack to stack if intersecting (unless attached to a hab or disarmed)
-    Warhead { armed: bool },
+    Warhead {
+        /// Should this warhead detonate
+        armed: bool,
+    },
     /// Gun - 1/2 chance at 1 hex to deal 1 point of damage, 1/4 at 2 hexes, 1/8 at 3, and so on; guaranteed to hit at zero range
     Gun,
     /// Habitat - source of control and can effect repairs; stacks retain control until docked to by another habitat. Two habitats of different players can't dock.
-    Habitat { owner: PlayerId },
+    Habitat {
+        /// Who owns this habitat (can't be changed in game)
+        owner: PlayerId,
+    },
     /// Refinery - turns water into fuel or ore into materials
     Refinery,
     /// Turns materials into modules, salvages modules, and effects repairs

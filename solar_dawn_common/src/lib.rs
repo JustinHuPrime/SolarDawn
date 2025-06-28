@@ -336,62 +336,62 @@ impl SubAssign for Vec2<i32> {
     }
 }
 impl Vec2<i32> {
-    #[expect(missing_docs)]
+    /// Create the zero vector
     pub fn zero() -> Self {
         Self { q: 0, r: 0 }
     }
 
-    #[expect(missing_docs)]
+    /// Create the unit vector going up
     pub fn unit_up() -> Self {
         Self { q: 0, r: -1 }
     }
-    #[expect(missing_docs)]
+    /// Create the unit vector going up and right
     pub fn unit_up_right() -> Self {
         Self { q: 1, r: -1 }
     }
-    #[expect(missing_docs)]
+    /// Create the unit vector going down and right
     pub fn unit_down_right() -> Self {
         Self { q: 1, r: 0 }
     }
-    #[expect(missing_docs)]
+    /// Create the unit vector going down
     pub fn unit_down() -> Self {
         Self { q: 0, r: 1 }
     }
-    #[expect(missing_docs)]
+    /// Create the unit vector going down and left
     pub fn unit_down_left() -> Self {
         Self { q: -1, r: 1 }
     }
-    #[expect(missing_docs)]
+    /// Create the unit vector going up and left
     pub fn unit_up_left() -> Self {
         Self { q: -1, r: 0 }
     }
 
-    #[expect(missing_docs)]
+    /// What's this vector but one step up
     pub fn up(&self) -> Self {
         *self + Self::unit_up()
     }
-    #[expect(missing_docs)]
+    /// What's this vector but one step up and right
     pub fn up_right(&self) -> Self {
         *self + Self::unit_up_right()
     }
-    #[expect(missing_docs)]
+    /// What's this vector but one step down and right
     pub fn down_right(&self) -> Self {
         *self + Self::unit_down_right()
     }
-    #[expect(missing_docs)]
+    /// What's this vector but one step down
     pub fn down(&self) -> Self {
         *self + Self::unit_down()
     }
-    #[expect(missing_docs)]
+    /// What's this vector but one step down and left
     pub fn down_left(&self) -> Self {
         *self + Self::unit_down_left()
     }
-    #[expect(missing_docs)]
+    /// What's this vector but one step up and left
     pub fn up_left(&self) -> Self {
         *self + Self::unit_up_left()
     }
 
-    #[expect(missing_docs)]
+    /// Get the neighbours of this position
     pub fn neighbours(&self) -> [Self; 6] {
         [
             self.up(),
@@ -403,19 +403,21 @@ impl Vec2<i32> {
         ]
     }
 
-    #[expect(missing_docs)]
+    /// Get the length of this vector, in cells
+    /// 
+    /// Note: not the cartesian length
     pub fn norm(&self) -> i32 {
         (self.q.abs() + (self.q + self.r).abs() + self.r.abs()) / 2
     }
 
-    #[expect(missing_docs)]
+    /// Convert this vector to cartesian
     pub fn cartesian(&self) -> (f32, f32) {
         let x: f32 = 1.5 * self.q as f32;
         let y: f32 = 3.0_f32.sqrt() / 2.0 * self.q as f32 + 3.0_f32.sqrt() * self.r as f32;
         (x, y)
     }
 
-    #[expect(missing_docs)]
+    /// Construct a vector from fractional q and r
     pub fn round(q: f32, r: f32) -> Self {
         let s = -q - r;
 
@@ -436,14 +438,14 @@ impl Vec2<i32> {
         Self { q: q_int, r: r_int }
     }
 
-    #[expect(missing_docs)]
+    /// Construct a vector from cartesian coordinates
     pub fn from_cartesian(x: f32, y: f32) -> Self {
         let q = x * 2.0 / 3.0;
         let r = x * -1.0 / 3.0 + y * 3.0_f32.sqrt() / 3.0;
         Self::round(q, r)
     }
 
-    #[expect(missing_docs)]
+    /// Construct a vector from polar coordinates
     pub fn from_polar(r: f32, theta: f32) -> Self {
         let x = r * theta.cos();
         let y = r * -theta.sin();
