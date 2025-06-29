@@ -6,6 +6,12 @@ edition = "2024"
 description = "A simultaneous turn resolution 4X inspired by High Frontier and Triplanetary - wasm client library."
 homepage = "https://github.com/JustinHuPrime/SolarDawn#readme"
 repository = "https://github.com/JustinHuPrime/SolarDawn"
+license = "AGPL-3.0-or-later"
+
+[lib]
+crate-type = ["cdylib"]
 
 [dependencies]
 serde = { workspace = true }
+wasm-bindgen = "0.2.100"
+web-sys = "0.3.77"

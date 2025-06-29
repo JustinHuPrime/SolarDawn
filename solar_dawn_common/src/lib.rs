@@ -52,9 +52,9 @@ pub struct GameState {
     /// The phase the game is in
     phase: Phase,
     /// Map from player id to username
-    players: Rc<HashMap<PlayerId, String>>,
+    players: HashMap<PlayerId, String>,
     /// Game board
-    celestials: Rc<HashMap<CelestialId, Celestial>>,
+    celestials: HashMap<CelestialId, Celestial>,
     /// Which celestial is Earth (starting planet and allows habitat builds in orbit)
     earth: CelestialId,
     /// Game pieces
@@ -95,8 +95,8 @@ impl GameState {
         }
         Self {
             phase: Phase::Logistics,
-            players: Rc::new(players),
-            celestials: Rc::new(celestials),
+            players,
+            celestials,
             earth: earth_id,
             stacks,
         }
@@ -109,7 +109,11 @@ impl GameState {
         stack_id_generator: &mut impl Iterator<Item = StackId>,
         module_id_generator: &mut impl Iterator<Item = ModuleId>,
         rng: &mut impl Rng,
-    ) -> (Self, HashMap<PlayerId, Vec<Option<OrderError>>>) {
+    ) -> (
+        Phase,
+        HashMap<StackId, Stack>,
+        HashMap<PlayerId, Vec<Option<OrderError>>>,
+    ) {
         // validate orders
         let (validated, errors) = Order::validate(self, orders);
 
@@ -129,15 +133,19 @@ impl GameState {
             let mut damaged: HashMap<StackId, u32> = HashMap::new();
             for (&missile, missile_ref) in stacks.iter() {
                 // for each stack with an armed warhead
-                let warhead_count = missile_ref.modules.values().filter(|module| {
-                    matches!(
-                        module,
-                        Module {
-                            health: Health::Intact,
-                            details: ModuleDetails::Warhead { armed: true }
-                        }
-                    )
-                }).count() as u32;
+                let warhead_count = missile_ref
+                    .modules
+                    .values()
+                    .filter(|module| {
+                        matches!(
+                            module,
+                            Module {
+                                health: Health::Intact,
+                                details: ModuleDetails::Warhead { armed: true }
+                            }
+                        )
+                    })
+                    .count() as u32;
                 if warhead_count > 0 {
                     // find the first point at which a non-owned stack comes into range, if any
                     if let Some(intercept) = stacks
@@ -219,23 +227,14 @@ impl GameState {
             }
         }
 
-        (
-            Self {
-                phase: self.phase.next(),
-                players: self.players.clone(),
-                celestials: self.celestials.clone(),
-                earth: self.earth,
-                stacks,
-            },
-            errors,
-        )
+        (self.phase.next(), stacks, errors)
     }
 }
 
 /// The phase of the turn; determines which orders are allowed
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-enum Phase {
+pub enum Phase {
     /// Logistics orders only
     Logistics,
     /// Shoot and arm orders only
@@ -404,7 +403,7 @@ impl Vec2<i32> {
     }
 
     /// Get the length of this vector, in cells
-    /// 
+    ///
     /// Note: not the cartesian length
     pub fn norm(&self) -> i32 {
         (self.q.abs() + (self.q + self.r).abs() + self.r.abs()) / 2
