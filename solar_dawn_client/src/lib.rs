@@ -32,8 +32,3 @@ fn main() -> Result<(), JsValue> {
 
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-}

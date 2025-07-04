@@ -473,6 +473,7 @@ impl Vec2<i32> {
     /// Construct a vector from cartesian coordinates
     pub fn from_cartesian(x: f32, y: f32) -> Self {
         let q = x * 2.0 / 3.0;
+        #[expect(clippy::neg_multiply)]
         let r = x * -1.0 / 3.0 + y * 3.0_f32.sqrt() / 3.0;
         Self::round(q, r)
     }

@@ -268,6 +268,7 @@ pub enum ResourceTransferTarget {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[expect(missing_docs)]
+/// Type of module to build
 pub enum ModuleType {
     Miner,
     FuelSkimmer,
