@@ -17,6 +17,13 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Client for Solar Dawn
+//!
+//! Expects to be loaded as the only module in an HTML file
+
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(start)]

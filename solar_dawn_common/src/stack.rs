@@ -56,7 +56,7 @@ impl Stack {
         position: Vec2<i32>,
         velocity: Vec2<i32>,
         name: String,
-        module_id_generator: &mut impl Iterator<Item = ModuleId>,
+        module_id_generator: &mut dyn Iterator<Item = ModuleId>,
     ) -> Self {
         Self {
             position,

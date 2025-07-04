@@ -29,13 +29,13 @@ use serde::{Deserialize, Serialize};
 use crate::celestial::CelestialId;
 #[cfg(feature = "server")]
 use crate::{
+    GameState, Phase, PlayerId, Vec2,
     celestial::{Celestial, Resources},
     stack::{Health, Module, ModuleDetails, ModuleId, Stack, StackId},
-    GameState, Phase, PlayerId, Vec2,
 };
 
 /// An order that can be given
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Order {
     /// Name a stack
     ///
@@ -245,7 +245,7 @@ pub enum Order {
 }
 
 /// Where a transferred module should go
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ModuleTransferTarget {
     /// An existing stack
     Existing(StackId),
@@ -254,7 +254,7 @@ pub enum ModuleTransferTarget {
 }
 
 /// Where a resource transfer should go
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ResourceTransferTarget {
     /// This stack's floating pool
     FloatingPool,
@@ -266,7 +266,7 @@ pub enum ResourceTransferTarget {
     Stack(StackId),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[expect(missing_docs)]
 pub enum ModuleType {
     Miner,
@@ -300,7 +300,7 @@ impl ModuleType {
 }
 
 /// Why an order could not be applied
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum OrderError {
     /// Order issued during invalid phase
     WrongPhase,
@@ -1977,7 +1977,7 @@ impl Order {
 }
 
 #[cfg(feature = "server")]
-/// A set of orders that can be applied to the reference game state
+/// A set of orders that can be applied to the referenced game state
 pub struct ValidatedOrders<'a> {
     orders: HashMap<PlayerId, Vec<&'a Order>>,
     game_state: &'a GameState,

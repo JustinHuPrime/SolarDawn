@@ -17,17 +17,16 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-#![forbid(unsafe_code)]
-#![warn(missing_docs)]
-
 //! Game state and game mechanics for Solar Dawn
 //!
 //! Should be platform agnostic (wasm32 vs x86_64)
 
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
 use std::{
     collections::HashMap,
     ops::{Add, AddAssign, Sub, SubAssign},
-    rc::Rc,
 };
 
 use celestial::{Celestial, CelestialId};
@@ -50,72 +49,93 @@ pub mod stack;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GameState {
     /// The phase the game is in
-    phase: Phase,
+    pub phase: Phase,
     /// Map from player id to username
-    players: HashMap<PlayerId, String>,
+    pub players: HashMap<PlayerId, String>,
     /// Game board
-    celestials: HashMap<CelestialId, Celestial>,
+    pub celestials: HashMap<CelestialId, Celestial>,
     /// Which celestial is Earth (starting planet and allows habitat builds in orbit)
-    earth: CelestialId,
+    pub earth: CelestialId,
     /// Game pieces
-    stacks: HashMap<StackId, Stack>,
+    pub stacks: HashMap<StackId, Stack>,
+}
+
+/// Constructor function for some starting game state
+pub type GameStateInitializer = fn(
+    players: HashMap<PlayerId, String>,
+    celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
+    stack_id_generator: &mut dyn Iterator<Item = StackId>,
+    module_id_generator: &mut dyn Iterator<Item = ModuleId>,
+) -> GameState;
+
+/// A game state delta
+#[derive(Debug, Serialize, Deserialize)]
+pub struct GameStateDelta {
+    /// The next phase it should be in
+    pub phase: Phase,
+    /// The new stacks
+    pub stacks: HashMap<StackId, Stack>,
+    /// All previous orders
+    pub orders: HashMap<PlayerId, Vec<Order>>,
+    /// The results of the previous orders
+    pub errors: HashMap<PlayerId, Vec<Option<OrderError>>>,
 }
 
 #[cfg(feature = "server")]
 impl GameState {
-    /// Construct a new game state
+    /// Constructs an initializer for a new game given a scenario identifier
     ///
-    /// Player map is expected to be determined by netcode or config
-    ///
-    /// Celestials are expected to be supplied from a constant
-    ///
-    /// Generates starter stacks from [`Stack::starter_stack`]
-    pub fn new(
-        players: HashMap<PlayerId, String>,
-        celestials: HashMap<CelestialId, Celestial>,
-        earth_id: CelestialId,
-        stack_id_generator: &mut impl Iterator<Item = StackId>,
-        module_id_generator: &mut impl Iterator<Item = ModuleId>,
-    ) -> Self {
-        use std::rc::Rc;
-
-        let earth = celestials.get(&earth_id).expect("earth id should be valid");
-        let mut stacks = HashMap::new();
-        for ((owner, _), (position, velocity)) in players.iter().zip(earth.orbit_parameters(true)) {
-            stacks.insert(
-                stack_id_generator.next().expect("should be infinite"),
-                Stack::starter_stack(
-                    *owner,
-                    position,
-                    velocity,
-                    owner.starting_stack_name(),
-                    module_id_generator,
-                ),
-            );
-        }
-        Self {
-            phase: Phase::Logistics,
-            players,
-            celestials,
-            earth: earth_id,
-            stacks,
+    /// Returns Err with the identifier if it does not correspond to a known scenario
+    pub fn new(scenario: &str) -> Result<GameStateInitializer, &str> {
+        match scenario {
+            "campaign" => Ok(
+                |players: HashMap<PlayerId, String>,
+                 celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
+                 stack_id_generator: &mut dyn Iterator<Item = StackId>,
+                 module_id_generator: &mut dyn Iterator<Item = ModuleId>| {
+                    {
+                        let (celestials, earth) =
+                            Celestial::solar_system_balanced_positions(celestial_id_generator);
+                        let earth_ref = celestials.get(&earth).expect("earth id should be valid");
+                        let mut stacks = HashMap::new();
+                        for ((owner, _), (position, velocity)) in
+                            players.iter().zip(earth_ref.orbit_parameters(true))
+                        {
+                            stacks.insert(
+                                stack_id_generator.next().expect("should be infinite"),
+                                Stack::starter_stack(
+                                    *owner,
+                                    position,
+                                    velocity,
+                                    owner.starting_stack_name(),
+                                    module_id_generator,
+                                ),
+                            );
+                        }
+                        Self {
+                            phase: Phase::Logistics,
+                            players,
+                            celestials,
+                            earth,
+                            stacks,
+                        }
+                    }
+                },
+            ),
+            _ => Err(scenario),
         }
     }
 
     /// Produce the next game state after resolving orders
     pub fn next(
         &self,
-        orders: &HashMap<PlayerId, Vec<Order>>,
+        orders: HashMap<PlayerId, Vec<Order>>,
         stack_id_generator: &mut impl Iterator<Item = StackId>,
         module_id_generator: &mut impl Iterator<Item = ModuleId>,
         rng: &mut impl Rng,
-    ) -> (
-        Phase,
-        HashMap<StackId, Stack>,
-        HashMap<PlayerId, Vec<Option<OrderError>>>,
-    ) {
+    ) -> GameStateDelta {
         // validate orders
-        let (validated, errors) = Order::validate(self, orders);
+        let (validated, errors) = Order::validate(self, &orders);
 
         // apply orders
         let mut stacks = validated.apply(stack_id_generator, module_id_generator, rng);
@@ -227,7 +247,20 @@ impl GameState {
             }
         }
 
-        (self.phase.next(), stacks, errors)
+        GameStateDelta {
+            phase: self.phase.next(),
+            stacks,
+            orders,
+            errors,
+        }
+    }
+}
+
+impl GameState {
+    /// Apply a delta
+    pub fn apply(&mut self, delta: GameStateDelta) {
+        self.phase = delta.phase;
+        self.stacks = delta.stacks;
     }
 }
 

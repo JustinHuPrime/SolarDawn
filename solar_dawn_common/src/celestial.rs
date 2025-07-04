@@ -88,7 +88,7 @@ pub enum Resources {
 impl Celestial {
     /// Create a map of the solar system but with curated phase angles for the planets
     pub fn solar_system_balanced_positions(
-        celestial_id_generator: &mut impl Iterator<Item = CelestialId>,
+        celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
     ) -> (HashMap<CelestialId, Celestial>, CelestialId) {
         let mut map = HashMap::new();
         map.insert(

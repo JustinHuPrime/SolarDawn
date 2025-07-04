@@ -9,9 +9,9 @@ repository = "https://github.com/JustinHuPrime/SolarDawn"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
-rand = { workspace = true }
+rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 
 [features]
-server = []
+server = ["rand"]
 client = []

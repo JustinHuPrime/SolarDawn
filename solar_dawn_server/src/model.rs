@@ -18,48 +18,42 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use std::collections::HashMap;
+use std::fs::read;
 use std::marker::PhantomData;
+use std::path::Path;
 
-use anyhow::{bail, Result};
+use anyhow::{Context, Result};
 use num_traits::PrimInt;
-use rand::{rng, Rng, SeedableRng};
+use rand::{Rng, SeedableRng, rng};
 use rand_pcg::Pcg64;
 use serde::{Deserialize, Serialize};
+use serde_cbor::from_slice;
+use solar_dawn_common::GameStateInitializer;
 use solar_dawn_common::order::Order;
 use solar_dawn_common::stack::{ModuleId, StackId};
-use solar_dawn_common::{
-    celestial::{Celestial, CelestialId},
-    GameState, PlayerId,
-};
+use solar_dawn_common::{GameState, PlayerId, celestial::CelestialId};
 
 /// Game state plus server information
 #[derive(Serialize, Deserialize)]
 pub struct GameServerState {
-    game_state: GameState,
+    pub game_state: GameState,
     #[serde(skip)]
-    orders: HashMap<PlayerId, Vec<Order>>,
-    celestial_id_generator: IdGenerator<CelestialId, u8>,
-    stack_id_generator: IdGenerator<StackId, u32>,
-    module_id_generator: IdGenerator<ModuleId, u32>,
+    pub orders: HashMap<PlayerId, Vec<Order>>,
+    pub celestial_id_generator: IdGenerator<CelestialId, u8>,
+    pub stack_id_generator: IdGenerator<StackId, u32>,
+    pub module_id_generator: IdGenerator<ModuleId, u32>,
     #[serde(skip, default = "GameServerState::new_rng")]
-    rng: Pcg64,
+    pub rng: Pcg64,
 }
 impl GameServerState {
-    pub fn new(players: HashMap<PlayerId, String>, map: &str) -> Result<Self> {
+    pub fn new(players: HashMap<PlayerId, String>, initializer: GameStateInitializer) -> Self {
         let mut celestial_id_generator = IdGenerator::default();
         let mut stack_id_generator = IdGenerator::default();
         let mut module_id_generator = IdGenerator::default();
-        let (celestials, earth_id) = match map {
-            "balanced" => Celestial::solar_system_balanced_positions(&mut celestial_id_generator),
-            _ => {
-                bail!("map name {} not recognized", map);
-            }
-        };
-        Ok(Self {
-            game_state: GameState::new(
+        Self {
+            game_state: initializer(
                 players,
-                celestials,
-                earth_id,
+                &mut celestial_id_generator,
                 &mut stack_id_generator,
                 &mut module_id_generator,
             ),
@@ -68,7 +62,14 @@ impl GameServerState {
             stack_id_generator,
             module_id_generator,
             rng: Self::new_rng(),
-        })
+        }
+    }
+
+    pub fn from_path(path: &Path) -> Result<Self> {
+        let file =
+            read(path).with_context(|| format!("while reading {}", path.to_string_lossy()))?;
+
+        from_slice(&file).with_context(|| format!("while deserializing {}", path.to_string_lossy()))
     }
 
     fn new_rng() -> Pcg64 {
@@ -77,7 +78,7 @@ impl GameServerState {
 }
 
 #[derive(Serialize, Deserialize)]
-struct IdGenerator<T: From<U>, U: PrimInt> {
+pub struct IdGenerator<T: From<U>, U: PrimInt> {
     next: U,
     _t: PhantomData<T>,
 }
