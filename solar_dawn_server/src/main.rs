@@ -23,6 +23,8 @@
 //!
 //! - ./assets/index.html is an appropriate HTML file to run the client in
 //! - ./assets/pkg/* is the client WASM pkg
+//! - ./cert.pem is a TLS certificate
+//! - ./key.pem is the private key for the certificate
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
@@ -51,6 +53,7 @@ use axum::{
     routing::any,
 };
 use axum_extra::{TypedHeader, headers};
+use axum_server::tls_rustls::RustlsConfig;
 use futures_util::{SinkExt, StreamExt, stream::SplitSink};
 use rand::{Rng, rng};
 use rand_distr::Alphanumeric;
@@ -365,20 +368,23 @@ async fn main() -> ExitCode {
         .route("/ws", any(ws_handler))
         .with_state(server_state);
 
-    let listener = match TcpListener::bind("127.0.0.1:80").await {
-        Ok(listener) => listener,
-        Err(e) => {
-            eprintln!("Couldn't start webserver: {e}");
+    let Ok(config) = RustlsConfig::from_pem_file("./cert.pem", "./key.pem").await else {
+        eprintln!("Couldn't set up TLS");
+        return ExitCode::FAILURE;
+    };
+    let addr = SocketAddr::from(([127, 0, 0, 1], 443));
+    match axum_server::bind_rustls(addr, config)
+        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
+        .await
+    {
+        Ok(()) => {
+            unreachable!("axum::serve should never return");
+        }
+        Err(err) => {
+            eprintln!("Couldn't start webserver: {err}");
             return ExitCode::FAILURE;
         }
-    };
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap();
-    unreachable!("axum::serve should never return");
+    }
 }
 
 async fn ws_handler(
