@@ -251,8 +251,8 @@ impl Celestial {
 
         // construct quadratic equation of intersections according to https://stackoverflow.com/a/1084899
 
-        let a = direction.0 * direction.0 + direction.1 + direction.1;
-        let b = 2.0 * (direction.0 * offset_start.0 + direction.1 + offset_start.1);
+        let a = direction.0 * direction.0 + direction.1 * direction.1;
+        let b = 2.0 * (direction.0 * offset_start.0 + direction.1 * offset_start.1);
         let c =
             (offset_start.0 * offset_start.0 + offset_start.1 * offset_start.1) - (radius * radius);
 
@@ -334,5 +334,133 @@ mod tests {
         let mut id_gen = IdGen::<CelestialId>::new();
         let (celestials, earth_id) = Celestial::solar_system_balanced_positions(&mut id_gen);
         assert_eq!(celestials.get(&earth_id).unwrap().name, "Earth");
+    }
+
+    #[test]
+    fn test_can_land() {
+        // Bodies with mining resources should allow landing
+        let mining_both_body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("Mining Both"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::MiningBoth,
+            radius: 0.5,
+        };
+        assert!(mining_both_body.can_land());
+
+        let mining_ice_body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("Mining Ice"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::MiningIce,
+            radius: 0.5,
+        };
+        assert!(mining_ice_body.can_land());
+
+        let mining_ore_body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("Mining Ore"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::MiningOre,
+            radius: 0.5,
+        };
+        assert!(mining_ore_body.can_land());
+
+        // Bodies with skimming or no resources should not allow landing
+        let skimming_body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("Gas Giant"),
+            orbit_gravity: true,
+            surface_gravity: 20.0,
+            resources: Resources::Skimming,
+            radius: 1.0,
+        };
+        assert!(!skimming_body.can_land());
+
+        let no_resources_body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("Earth"),
+            orbit_gravity: true,
+            surface_gravity: 9.8,
+            resources: Resources::None,
+            radius: 0.25,
+        };
+        assert!(!no_resources_body.can_land());
+    }
+
+    #[test]
+    fn test_collides() {
+        // Body with gravity at origin with radius 1.0
+        let body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("Test Body"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 1.0,
+        };
+
+        // Line passing through center should collide
+        assert!(body.collides(Vec2 { q: -3, r: 0 }, Vec2 { q: 3, r: 0 }));
+        
+        // Line passing through center hex but offset from exact center should collide
+        assert!(body.collides(Vec2 { q: -2, r: 1 }, Vec2 { q: 1, r: 0 }));
+        
+        // Line far from center should not collide
+        assert!(!body.collides(Vec2 { q: -2, r: 3 }, Vec2 { q: 2, r: 3 }));
+        
+        // Line segment starting at center should collide
+        assert!(body.collides(Vec2::zero(), Vec2 { q: 2, r: 0 }));
+        
+        // Line segment entirely far away should not collide
+        assert!(!body.collides(Vec2 { q: 5, r: 0 }, Vec2 { q: 6, r: 0 }));
+
+        // Body without gravity should never collide
+        let no_gravity_body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("No Gravity"),
+            orbit_gravity: false,
+            surface_gravity: 0.0,
+            resources: Resources::MiningIce,
+            radius: 1.0,
+        };
+        
+        // Even a line passing through should not collide if no gravity
+        assert!(!no_gravity_body.collides(Vec2 { q: -2, r: 0 }, Vec2 { q: 2, r: 0 }));
+
+        // Test with body at different position
+        let offset_body = Celestial {
+            position: Vec2 { q: 3, r: 2 },
+            name: String::from("Offset Body"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 0.5,
+        };
+        
+        // Line passing through offset body center should collide
+        assert!(offset_body.collides(Vec2 { q: 2, r: 2 }, Vec2 { q: 4, r: 2 }));
+        
+        // Line missing offset body should not collide
+        assert!(!offset_body.collides(Vec2 { q: 2, r: 5 }, Vec2 { q: 4, r: 5 }));
+
+        // Test edge case with very small body
+        let small_body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("Small Body"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 0.1,
+        };
+        
+        // Line passing very close to center should collide
+        assert!(small_body.collides(Vec2 { q: -1, r: 0 }, Vec2 { q: 1, r: 0 }));
+        
+        // Line passing farther away should not collide
+        assert!(!small_body.collides(Vec2 { q: -1, r: 1 }, Vec2 { q: 1, r: 1 }));
     }
 }

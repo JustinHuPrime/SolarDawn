@@ -180,7 +180,7 @@ impl Stack {
             self_velocity.1 - other_velocity.1,
         );
 
-        let a = delta_velocity.0 * delta_velocity.0 + delta_velocity.1 + delta_velocity.1;
+        let a = delta_velocity.0 * delta_velocity.0 + delta_velocity.1 * delta_velocity.1;
         let b = 2.0 * (delta_origin.0 * delta_velocity.0 + delta_origin.1 * delta_velocity.1);
         let c = delta_origin.0 * delta_origin.0 + delta_origin.1 * delta_origin.1
             - ModuleDetails::WARHEAD_RANGE * ModuleDetails::WARHEAD_RANGE;
