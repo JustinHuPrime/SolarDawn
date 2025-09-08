@@ -509,4 +509,268 @@ impl Vec2<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_vec2_arithmetic() {
+        let v1 = Vec2 { q: 3, r: 4 };
+        let v2 = Vec2 { q: 1, r: 2 };
+
+        // Test addition
+        let sum = v1 + v2;
+        assert_eq!(sum.q, 4);
+        assert_eq!(sum.r, 6);
+
+        // Test subtraction
+        let diff = v1 - v2;
+        assert_eq!(diff.q, 2);
+        assert_eq!(diff.r, 2);
+
+        // Test add_assign
+        let mut v3 = v1;
+        v3 += v2;
+        assert_eq!(v3.q, 4);
+        assert_eq!(v3.r, 6);
+
+        // Test sub_assign
+        let mut v4 = v1;
+        v4 -= v2;
+        assert_eq!(v4.q, 2);
+        assert_eq!(v4.r, 2);
+    }
+
+    #[test]
+    fn test_vec2_unit_vectors() {
+        assert_eq!(Vec2::zero(), Vec2 { q: 0, r: 0 });
+        assert_eq!(Vec2::unit_up(), Vec2 { q: 0, r: -1 });
+        assert_eq!(Vec2::unit_up_right(), Vec2 { q: 1, r: -1 });
+        assert_eq!(Vec2::unit_down_right(), Vec2 { q: 1, r: 0 });
+        assert_eq!(Vec2::unit_down(), Vec2 { q: 0, r: 1 });
+        assert_eq!(Vec2::unit_down_left(), Vec2 { q: -1, r: 1 });
+        assert_eq!(Vec2::unit_up_left(), Vec2 { q: -1, r: 0 });
+    }
+
+    #[test]
+    fn test_vec2_movement_methods() {
+        let origin = Vec2::zero();
+        
+        assert_eq!(origin.up(), Vec2 { q: 0, r: -1 });
+        assert_eq!(origin.up_right(), Vec2 { q: 1, r: -1 });
+        assert_eq!(origin.down_right(), Vec2 { q: 1, r: 0 });
+        assert_eq!(origin.down(), Vec2 { q: 0, r: 1 });
+        assert_eq!(origin.down_left(), Vec2 { q: -1, r: 1 });
+        assert_eq!(origin.up_left(), Vec2 { q: -1, r: 0 });
+
+        // Test from non-origin position
+        let pos = Vec2 { q: 2, r: 3 };
+        assert_eq!(pos.up(), Vec2 { q: 2, r: 2 });
+        assert_eq!(pos.down_right(), Vec2 { q: 3, r: 3 });
+    }
+
+    #[test]
+    fn test_vec2_neighbours() {
+        let origin = Vec2::zero();
+        let neighbours = origin.neighbours();
+        
+        assert_eq!(neighbours.len(), 6);
+        assert_eq!(neighbours[0], Vec2 { q: 0, r: -1 }); // up
+        assert_eq!(neighbours[1], Vec2 { q: 1, r: -1 }); // up_right
+        assert_eq!(neighbours[2], Vec2 { q: 1, r: 0 });  // down_right
+        assert_eq!(neighbours[3], Vec2 { q: 0, r: 1 });  // down
+        assert_eq!(neighbours[4], Vec2 { q: -1, r: 1 }); // down_left
+        assert_eq!(neighbours[5], Vec2 { q: -1, r: 0 }); // up_left
+    }
+
+    #[test]
+    fn test_vec2_norm() {
+        assert_eq!(Vec2::zero().norm(), 0);
+        assert_eq!(Vec2 { q: 1, r: 0 }.norm(), 1);
+        assert_eq!(Vec2 { q: 0, r: 1 }.norm(), 1);
+        assert_eq!(Vec2 { q: 1, r: 1 }.norm(), 2);
+        assert_eq!(Vec2 { q: 2, r: -1 }.norm(), 2);
+        assert_eq!(Vec2 { q: -2, r: 1 }.norm(), 2);
+        assert_eq!(Vec2 { q: 3, r: 0 }.norm(), 3);
+        assert_eq!(Vec2 { q: -3, r: 3 }.norm(), 3);
+    }
+
+    #[test]
+    fn test_vec2_cartesian() {
+        let origin = Vec2::zero();
+        let (x, y) = origin.cartesian();
+        assert!((x - 0.0).abs() < f32::EPSILON);
+        assert!((y - 0.0).abs() < f32::EPSILON);
+
+        let v = Vec2 { q: 1, r: 0 };
+        let (x, y) = v.cartesian();
+        assert!((x - 1.5).abs() < f32::EPSILON);
+        assert!((y - 3.0_f32.sqrt() / 2.0).abs() < f32::EPSILON);
+
+        let v = Vec2 { q: 0, r: 1 };
+        let (x, y) = v.cartesian();
+        assert!((x - 0.0).abs() < f32::EPSILON);
+        assert!((y - 3.0_f32.sqrt()).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn test_vec2_from_cartesian() {
+        // Test conversion from cartesian back to hex coordinates
+        let origin_cart = (0.0, 0.0);
+        assert_eq!(Vec2::from_cartesian(origin_cart.0, origin_cart.1), Vec2::zero());
+
+        let v1 = Vec2 { q: 1, r: 0 };
+        let (x, y) = v1.cartesian();
+        assert_eq!(Vec2::from_cartesian(x, y), v1);
+
+        let v2 = Vec2 { q: 0, r: 1 };
+        let (x, y) = v2.cartesian();
+        assert_eq!(Vec2::from_cartesian(x, y), v2);
+
+        let v3 = Vec2 { q: 2, r: -1 };
+        let (x, y) = v3.cartesian();
+        assert_eq!(Vec2::from_cartesian(x, y), v3);
+    }
+
+    #[test]
+    fn test_vec2_from_polar() {
+        // Test simple polar coordinate conversion
+        assert_eq!(Vec2::from_polar(0.0, 0.0), Vec2::zero());
+        
+        // Let's test by converting back and forth to verify consistency
+        let test_points = vec![
+            Vec2 { q: 1, r: 0 },
+            Vec2 { q: 0, r: 1 },
+            Vec2 { q: 2, r: -1 },
+        ];
+        
+        for point in test_points {
+            let (x, y) = point.cartesian();
+            let r = (x * x + y * y).sqrt();
+            let theta = (-y).atan2(x); // Note: y is negated in from_polar
+            let converted_back = Vec2::from_polar(r, theta);
+            assert_eq!(converted_back, point, "Round-trip conversion failed for {:?}", point);
+        }
+    }
+
+    #[test]
+    fn test_vec2_round() {
+        // Test basic rounding of fractional coordinates
+        assert_eq!(Vec2::round(0.0, 0.0), Vec2::zero());
+        assert_eq!(Vec2::round(1.0, 0.0), Vec2 { q: 1, r: 0 });
+        assert_eq!(Vec2::round(0.0, 1.0), Vec2 { q: 0, r: 1 });
+        
+        // Test that the rounding function works correctly for round-trip conversions
+        let test_points = vec![
+            Vec2 { q: 1, r: 0 },
+            Vec2 { q: 0, r: 1 },
+            Vec2 { q: 2, r: -1 },
+            Vec2 { q: -1, r: 2 },
+        ];
+        
+        for point in test_points {
+            let (x, y) = point.cartesian();
+            let q = x * 2.0 / 3.0;
+            let r = x * -1.0 / 3.0 + y * 3.0_f32.sqrt() / 3.0;
+            let rounded = Vec2::round(q, r);
+            assert_eq!(rounded, point, "Round failed for {:?} -> ({}, {})", point, q, r);
+        }
+    }
+
+    #[test]
+    fn test_phase_transitions() {
+        assert_eq!(Phase::Logistics.next(), Phase::Combat);
+        assert_eq!(Phase::Combat.next(), Phase::Movement);
+        assert_eq!(Phase::Movement.next(), Phase::Logistics);
+        
+        // Test complete cycle
+        let mut phase = Phase::Logistics;
+        phase = phase.next();
+        assert_eq!(phase, Phase::Combat);
+        phase = phase.next();
+        assert_eq!(phase, Phase::Movement);
+        phase = phase.next();
+        assert_eq!(phase, Phase::Logistics);
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn test_player_id_conversions() {
+        let id_val = 5u8;
+        let player_id = PlayerId::from(id_val);
+        let back_to_u8: u8 = player_id.into();
+        assert_eq!(id_val, back_to_u8);
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn test_player_id_starting_stack_names() {
+        assert_eq!(PlayerId::from(1u8).starting_stack_name(), "Washington Station");
+        assert_eq!(PlayerId::from(2u8).starting_stack_name(), "Moscow Orbital");
+        assert_eq!(PlayerId::from(3u8).starting_stack_name(), "Beijing Highport");
+        assert_eq!(PlayerId::from(4u8).starting_stack_name(), "Paris Terminal");
+        assert_eq!(PlayerId::from(5u8).starting_stack_name(), "London Spacedock");
+        assert_eq!(PlayerId::from(6u8).starting_stack_name(), "New Delhi Platform");
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    #[should_panic(expected = "Invalid player id")]
+    fn test_player_id_invalid_starting_stack_name() {
+        PlayerId::from(7u8).starting_stack_name();
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn test_game_state_new_scenarios() {
+        // Test valid scenario
+        let campaign_init = GameState::new("campaign");
+        assert!(campaign_init.is_ok());
+
+        // Test test scenario (only available in cfg(test))
+        let test_init = GameState::new("test");
+        assert!(test_init.is_ok());
+
+        // Test invalid scenario
+        let invalid_result = GameState::new("invalid_scenario");
+        assert!(invalid_result.is_err());
+        assert_eq!(invalid_result.err().unwrap(), "invalid_scenario");
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn test_game_state_apply() {
+        use std::collections::HashMap;
+
+        // Create a simple game state
+        let mut game_state = GameState {
+            phase: Phase::Logistics,
+            players: HashMap::new(),
+            celestials: HashMap::new(),
+            earth: CelestialId::from(0u8),
+            stacks: HashMap::new(),
+        };
+
+        // Create a delta to apply
+        let mut new_stacks = HashMap::new();
+        new_stacks.insert(StackId::from(1u32), Stack {
+            position: Vec2 { q: 1, r: 1 },
+            velocity: Vec2::zero(),
+            owner: PlayerId::from(1u8),
+            name: "Test Stack".to_string(),
+            modules: HashMap::new(),
+        });
+
+        let delta = GameStateDelta {
+            phase: Phase::Combat,
+            stacks: new_stacks.clone(),
+            orders: HashMap::new(),
+            errors: HashMap::new(),
+        };
+
+        // Apply the delta
+        game_state.apply(delta);
+
+        // Verify the changes
+        assert_eq!(game_state.phase, Phase::Combat);
+        assert_eq!(game_state.stacks.len(), 1);
+        assert!(game_state.stacks.contains_key(&StackId::from(1u32)));
+    }
 }

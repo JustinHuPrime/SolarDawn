@@ -411,10 +411,233 @@ mod tests {
 
     #[cfg(feature = "server")]
     #[test]
-    fn test_custom_solar_system() {
+    fn test_solar_system_for_testing() {
+        let mut id_gen = IdGen::<CelestialId>::new();
+        let (celestials, earth_id) = Celestial::solar_system_for_testing(&mut id_gen);
+        
+        // Should have 6 celestials: Sun, Earth, Moon, 2 asteroids, Jupiter
+        assert_eq!(celestials.len(), 6);
+        
+        // Earth should be found
+        let earth = celestials.get(&earth_id).expect("Earth should exist");
+        assert_eq!(earth.name, "Earth");
+        assert!(earth.orbit_gravity);
+        assert_eq!(earth.surface_gravity, 9.8);
+        assert!(matches!(earth.resources, Resources::None));
+        
+        // Sun should be at origin
+        let sun = celestials.values().find(|c| c.name == "The Sun").expect("Sun should exist");
+        assert_eq!(sun.position, Vec2::zero());
+        assert!(!sun.can_land()); // Sun has Resources::None
+        
+        // Moon should have ice mining
+        let moon = celestials.values().find(|c| c.name == "Moon").expect("Moon should exist");
+        assert!(matches!(moon.resources, Resources::MiningIce));
+        assert!(moon.can_land());
+        
+        // Check asteroids
+        let ceres = celestials.values().find(|c| c.name == "1 Ceres").expect("Ceres should exist");
+        assert!(!ceres.orbit_gravity); // Asteroids don't have orbit gravity
+        assert!(matches!(ceres.resources, Resources::MiningOre));
+        
+        let vesta = celestials.values().find(|c| c.name == "2 Vesta").expect("Vesta should exist");
+        assert!(matches!(vesta.resources, Resources::MiningBoth));
+        
+        // Jupiter should be a gas giant
+        let jupiter = celestials.values().find(|c| c.name == "Jupiter").expect("Jupiter should exist");
+        assert!(matches!(jupiter.resources, Resources::Skimming));
+        assert!(!jupiter.can_land()); // Gas giants can't be landed on
+    }
+
+    #[test]
+    fn test_resources_enum() {
+        // Test all resource types
+        let mining_both = Resources::MiningBoth;
+        let mining_ice = Resources::MiningIce;
+        let mining_ore = Resources::MiningOre;
+        let skimming = Resources::Skimming;
+        let none = Resources::None;
+        
+        // Create celestials with each resource type to test can_land
+        let mining_both_body = Celestial {
+            position: Vec2::zero(),
+            name: "Mining Both".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: mining_both,
+            radius: 0.5,
+        };
+        assert!(mining_both_body.can_land());
+        
+        let mining_ice_body = Celestial {
+            position: Vec2::zero(),
+            name: "Ice World".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: mining_ice,
+            radius: 0.5,
+        };
+        assert!(mining_ice_body.can_land());
+        
+        let mining_ore_body = Celestial {
+            position: Vec2::zero(),
+            name: "Ore World".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: mining_ore,
+            radius: 0.5,
+        };
+        assert!(mining_ore_body.can_land());
+        
+        let gas_giant = Celestial {
+            position: Vec2::zero(),
+            name: "Gas Giant".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 20.0,
+            resources: skimming,
+            radius: 1.0,
+        };
+        assert!(!gas_giant.can_land());
+        
+        let no_resources_body = Celestial {
+            position: Vec2::zero(),
+            name: "Barren".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: none,
+            radius: 0.5,
+        };
+        assert!(!no_resources_body.can_land());
+    }
+
+    #[test]  
+    fn test_celestial_id_conversions() {
+        let id_val = 42u8;
+        let celestial_id = CelestialId::from(id_val);
+        let back_to_u8: u8 = celestial_id.into();
+        assert_eq!(id_val, back_to_u8);
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn test_orbit_parameters_clockwise_counterclockwise() {
+        let celestial = Celestial {
+            position: Vec2 { q: 2, r: 3 },
+            name: "Test Body".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 5.0,
+            resources: Resources::None,
+            radius: 0.4,
+        };
+
+        let clockwise_params = celestial.orbit_parameters(true);
+        let counterclockwise_params = celestial.orbit_parameters(false);
+        
+        // Both should return 6 orbital positions
+        assert_eq!(clockwise_params.len(), 6);
+        assert_eq!(counterclockwise_params.len(), 6);
+        
+        // All positions should be neighbors of the celestial  
+        let neighbors = celestial.position.neighbours();
+        for (position, _velocity) in &clockwise_params {
+            assert!(neighbors.contains(position));
+        }
+        for (position, _velocity) in &counterclockwise_params {
+            assert!(neighbors.contains(position));
+        }
+        
+        // Velocities should have norm 1
+        for (_position, velocity) in &clockwise_params {
+            assert_eq!(velocity.norm(), 1);
+        }
+        for (_position, velocity) in &counterclockwise_params {
+            assert_eq!(velocity.norm(), 1);
+        }
+        
+        // Clockwise and counterclockwise should give different velocity patterns
+        assert_ne!(clockwise_params, counterclockwise_params);
+    }
+
+    #[test]
+    fn test_collision_edge_cases() {
+        let body = Celestial {
+            position: Vec2 { q: 5, r: 5 },
+            name: "Test Body".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 1.0,
+        };
+
+        // Line that starts and ends at the same point (zero length)
+        assert!(!body.collides(Vec2 { q: 10, r: 10 }, Vec2 { q: 10, r: 10 }));
+        
+        // Line that just touches the edge of the circle
+        // This is harder to test precisely due to floating point, so test approximate collision
+        let close_start = Vec2 { q: 5, r: 4 }; // Just outside
+        let close_end = Vec2 { q: 5, r: 6 }; // Just outside on other side
+        // This line passes very close to center and should collide
+        assert!(body.collides(close_start, close_end));
+        
+        // Line that starts inside (should collide)
+        assert!(body.collides(body.position, Vec2 { q: 10, r: 10 }));
+        
+        // Very short line segment entirely inside
+        let inside_start = Vec2::from_cartesian(body.position.cartesian().0 + 0.1, body.position.cartesian().1);
+        let inside_end = Vec2::from_cartesian(body.position.cartesian().0 + 0.2, body.position.cartesian().1);
+        assert!(body.collides(inside_start, inside_end));
+    }
+
+    #[test]
+    fn test_collision_with_zero_radius() {
+        let point_body = Celestial {
+            position: Vec2::zero(),
+            name: "Point".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 0.0,
+        };
+
+        // Only lines that pass exactly through the center should collide
+        assert!(point_body.collides(Vec2 { q: -1, r: 0 }, Vec2 { q: 1, r: 0 }));
+        assert!(!point_body.collides(Vec2 { q: -1, r: 1 }, Vec2 { q: 1, r: 1 }));
+    }
+
+    #[cfg(feature = "server")]
+    #[test]  
+    fn test_balanced_solar_system_properties() {
         let mut id_gen = IdGen::<CelestialId>::new();
         let (celestials, earth_id) = Celestial::solar_system_balanced_positions(&mut id_gen);
-        assert_eq!(celestials.get(&earth_id).unwrap().name, "Earth");
+        
+        // Should have at least 8 celestials (Sun through Neptune)
+        assert!(celestials.len() >= 8);
+        
+        // All celestials should have positive radius and reasonable properties
+        for celestial in celestials.values() {
+            assert!(celestial.radius > 0.0);
+            assert!(celestial.surface_gravity >= 0.0);
+            
+            // Gas giants should have skimming resources
+            if celestial.name.contains("Jupiter") || celestial.name.contains("Saturn") 
+                || celestial.name.contains("Uranus") || celestial.name.contains("Neptune") {
+                assert!(matches!(celestial.resources, Resources::Skimming));
+                assert!(!celestial.can_land());
+            }
+            
+            // Rocky planets should have mining or no resources
+            if celestial.name.contains("Mercury") || celestial.name.contains("Venus") 
+                || celestial.name.contains("Mars") {
+                assert!(matches!(celestial.resources, Resources::MiningOre | Resources::MiningBoth));
+                assert!(celestial.can_land());
+            }
+        }
+        
+        // Earth should exist and have expected properties  
+        let earth = celestials.get(&earth_id).expect("Earth should exist");
+        assert_eq!(earth.name, "Earth");
+        assert!(matches!(earth.resources, Resources::None));
+        assert!(!earth.can_land()); // Earth has no resources so can't land
     }
 
     #[test]
