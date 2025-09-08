@@ -2014,5 +2014,863 @@ impl ValidatedOrders<'_> {
 
 #[cfg(test)]
 mod tests {
+    use rand::{SeedableRng, rngs::StdRng};
+    use std::marker::PhantomData;
+
     use super::*;
+
+    struct ShortIdGen<T: From<u8>> {
+        next: u8,
+        _t: PhantomData<T>,
+    }
+    impl<T: From<u8>> ShortIdGen<T> {
+        pub fn new() -> Self {
+            Self {
+                next: 0,
+                _t: PhantomData,
+            }
+        }
+    }
+    impl<T: From<u8>> Iterator for ShortIdGen<T> {
+        type Item = T;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let result = Some(self.next.into());
+            self.next += 1;
+            result
+        }
+    }
+    struct LongIdGen<T: From<u32>> {
+        next: u32,
+        _t: PhantomData<T>,
+    }
+    impl<T: From<u32>> LongIdGen<T> {
+        pub fn new() -> Self {
+            Self {
+                next: 0,
+                _t: PhantomData,
+            }
+        }
+    }
+    impl<T: From<u32>> Iterator for LongIdGen<T> {
+        type Item = T;
+
+        fn next(&mut self) -> Option<Self::Item> {
+            let result = Some(self.next.into());
+            self.next += 1;
+            result
+        }
+    }
+
+    #[test]
+    fn test_rename_stack() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let player_2 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([
+                (player_1, String::from("player 1")),
+                (player_2, String::from("player 2")),
+            ]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+
+        let stack_1 = stack_id_generator.next().unwrap();
+        let stack_2 = stack_id_generator.next().unwrap();
+        let mut stack_1_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        stack_1_data.name = "original name".to_string();
+        game_state.stacks.insert(stack_1, stack_1_data);
+        game_state
+            .stacks
+            .insert(stack_2, Stack::new(Vec2::zero(), Vec2::zero(), player_2));
+
+        // Test 1: Valid rename order
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::NameStack {
+                stack: stack_1,
+                name: String::from("new name"),
+            }],
+        )]);
+
+        let (validated_orders, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none());
+
+        // Test order application
+        let mut rng = StdRng::seed_from_u64(42);
+        let new_stacks =
+            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+        assert_eq!(new_stacks[&stack_1].name, "new name");
+
+        // Test 2: Invalid stack id
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::NameStack {
+                stack: 999_u32.into(),
+                name: String::from("new name"),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::InvalidStackId(_)));
+
+        // Test 3: Wrong ownership (trying to rename another player's stack)
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::NameStack {
+                stack: stack_2,
+                name: String::from("hacked name"),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::BadOwnership(_)));
+
+        // Test 4: Empty name is allowed
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::NameStack {
+                stack: stack_1,
+                name: String::new(),
+            }],
+        )]);
+
+        let (validated_orders, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none());
+
+        let new_stacks =
+            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+        assert_eq!(new_stacks[&stack_1].name, "");
+
+        // Test 5: Very long name is allowed
+        let long_name = "a".repeat(1000);
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::NameStack {
+                stack: stack_1,
+                name: long_name.clone(),
+            }],
+        )]);
+
+        let (validated_orders, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none());
+
+        let new_stacks =
+            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+        assert_eq!(new_stacks[&stack_1].name, long_name);
+
+        // Test 6: Special characters in name are allowed
+        let special_name = "Stack-1_TEST!@#$%^&*(){}[]|\\:;\"'<>,.?/`~";
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::NameStack {
+                stack: stack_1,
+                name: special_name.to_string(),
+            }],
+        )]);
+
+        let (validated_orders, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none());
+
+        let new_stacks =
+            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+        assert_eq!(new_stacks[&stack_1].name, special_name);
+
+        // Test 7: Multiple rename orders in same turn
+        let orders = HashMap::from([(
+            player_1,
+            vec![
+                Order::NameStack {
+                    stack: stack_1,
+                    name: String::from("first name"),
+                },
+                Order::NameStack {
+                    stack: stack_1,
+                    name: String::from("second name"),
+                },
+            ],
+        )]);
+
+        let (validated_orders, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none());
+        assert!(errors[&player_1][1].is_none());
+
+        // Both orders should be valid and the last one should win
+        let new_stacks =
+            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+        assert_eq!(new_stacks[&stack_1].name, "second name");
+
+        // Test 8: Rename order works in all phases
+        for phase in [Phase::Logistics, Phase::Combat, Phase::Movement] {
+            game_state.phase = phase;
+
+            let orders = HashMap::from([(
+                player_1,
+                vec![Order::NameStack {
+                    stack: stack_1,
+                    name: format!("name in {phase:?}"),
+                }],
+            )]);
+
+            let (_, errors) = Order::validate(&game_state, &orders);
+            assert!(
+                errors[&player_1][0].is_none(),
+                "NameStack should be valid in {phase:?} phase"
+            );
+        }
+
+        // Test 9: Unicode characters in name
+        let unicode_name = "测试名称 🚀 ñoél ∑φμβοl";
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::NameStack {
+                stack: stack_1,
+                name: unicode_name.to_string(),
+            }],
+        )]);
+
+        let (validated_orders, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none());
+
+        let new_stacks =
+            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+        assert_eq!(new_stacks[&stack_1].name, unicode_name);
+    }
+
+    #[test]
+    fn test_module_transfer() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let player_2 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([
+                (player_1, String::from("player 1")),
+                (player_2, String::from("player 2")),
+            ]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Logistics;
+
+        // create stacks and modules
+        let stack_1 = stack_id_generator.next().unwrap();
+        let stack_2 = stack_id_generator.next().unwrap();
+        let stack_3 = stack_id_generator.next().unwrap();
+        let module_1 = module_id_generator.next().unwrap();
+        let module_2 = module_id_generator.next().unwrap();
+
+        let mut stack_1_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        stack_1_data.modules.insert(module_1, Module::new_engine());
+        stack_1_data.modules.insert(module_2, Module::new_gun());
+
+        let stack_2_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1); // same position for rendezvous
+        let stack_3_data = Stack::new(Vec2 { q: 1, r: 0 }, Vec2::zero(), player_2); // different player
+
+        game_state.stacks.insert(stack_1, stack_1_data);
+        game_state.stacks.insert(stack_2, stack_2_data);
+        game_state.stacks.insert(stack_3, stack_3_data);
+
+        // Test 1: Valid transfer to existing rendezvoused stack
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ModuleTransfer {
+                stack: stack_1,
+                module: module_1,
+                to: ModuleTransferTarget::Existing(stack_2),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none());
+
+        // Test 2: Invalid stack id
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ModuleTransfer {
+                stack: 999_u32.into(),
+                module: module_1,
+                to: ModuleTransferTarget::Existing(stack_2),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::InvalidStackId(_)));
+
+        // Test 3: Invalid module id
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ModuleTransfer {
+                stack: stack_1,
+                module: 999_u32.into(),
+                to: ModuleTransferTarget::Existing(stack_2),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::InvalidModuleId(_, _)));
+
+        // Test 4: Wrong ownership of source stack
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ModuleTransfer {
+                stack: stack_3,
+                module: module_1,
+                to: ModuleTransferTarget::Existing(stack_2),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::BadOwnership(_)));
+
+        // Test 5: Wrong ownership of target stack
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ModuleTransfer {
+                stack: stack_1,
+                module: module_1,
+                to: ModuleTransferTarget::Existing(stack_3),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::BadOwnership(_)));
+
+        // Test 6: Not rendezvoused stacks
+        let stack_4 = stack_id_generator.next().unwrap();
+        let stack_4_data = Stack::new(Vec2 { q: 2, r: 0 }, Vec2::zero(), player_1); // different position
+        game_state.stacks.insert(stack_4, stack_4_data);
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ModuleTransfer {
+                stack: stack_1,
+                module: module_1,
+                to: ModuleTransferTarget::Existing(stack_4),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::NotRendezvoused(_, _)));
+
+        // Test 7: Valid transfer to new stack
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ModuleTransfer {
+                stack: stack_1,
+                module: module_1,
+                to: ModuleTransferTarget::New(0),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none());
+
+        // Test 8: Wrong phase
+        game_state.phase = Phase::Combat;
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ModuleTransfer {
+                stack: stack_1,
+                module: module_1,
+                to: ModuleTransferTarget::Existing(stack_2),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::WrongPhase));
+
+        // Test 9: Multiple transfers of same module (conflict)
+        game_state.phase = Phase::Logistics;
+        let orders = HashMap::from([(
+            player_1,
+            vec![
+                Order::ModuleTransfer {
+                    stack: stack_1,
+                    module: module_1,
+                    to: ModuleTransferTarget::Existing(stack_2),
+                },
+                Order::ModuleTransfer {
+                    stack: stack_1,
+                    module: module_1,
+                    to: ModuleTransferTarget::New(0),
+                },
+            ],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_some());
+        assert!(errors[&player_1][1].is_some());
+        assert!(matches!(
+            errors[&player_1][0].unwrap(),
+            OrderError::ModuleTransferConflict
+        ));
+        assert!(matches!(
+            errors[&player_1][1].unwrap(),
+            OrderError::ModuleTransferConflict
+        ));
+
+        // Test 10: Multiple transfers to same new stack with different positions (conflict)
+        let stack_5 = stack_id_generator.next().unwrap();
+        let mut stack_5_data = Stack::new(Vec2 { q: 3, r: 0 }, Vec2::zero(), player_1); // different position
+        let module_3 = module_id_generator.next().unwrap();
+        stack_5_data.modules.insert(module_3, Module::new_tank());
+        game_state.stacks.insert(stack_5, stack_5_data);
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![
+                Order::ModuleTransfer {
+                    stack: stack_1,
+                    module: module_1,
+                    to: ModuleTransferTarget::New(0),
+                },
+                Order::ModuleTransfer {
+                    stack: stack_5,
+                    module: module_3,
+                    to: ModuleTransferTarget::New(0),
+                },
+            ],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_some());
+        assert!(errors[&player_1][1].is_some());
+        assert!(matches!(
+            errors[&player_1][0].unwrap(),
+            OrderError::NewStackStateConflict
+        ));
+        assert!(matches!(
+            errors[&player_1][1].unwrap(),
+            OrderError::NewStackStateConflict
+        ));
+    }
+
+    #[test]
+    fn test_module_transfer_application() {
+        use rand::SeedableRng;
+        use rand::rngs::StdRng;
+
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([(player_1, String::from("player 1"))]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Logistics;
+
+        // create stacks and modules
+        let stack_1 = stack_id_generator.next().unwrap();
+        let stack_2 = stack_id_generator.next().unwrap();
+        let module_1 = module_id_generator.next().unwrap();
+        let module_2 = module_id_generator.next().unwrap();
+
+        let mut stack_1_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        stack_1_data.modules.insert(module_1, Module::new_engine());
+        stack_1_data.modules.insert(module_2, Module::new_gun());
+
+        let stack_2_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1); // same position for rendezvous
+
+        game_state.stacks.insert(stack_1, stack_1_data);
+        game_state.stacks.insert(stack_2, stack_2_data);
+
+        // Test 1: Transfer to existing stack
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ModuleTransfer {
+                stack: stack_1,
+                module: module_1,
+                to: ModuleTransferTarget::Existing(stack_2),
+            }],
+        )]);
+
+        let (validated_orders, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none());
+
+        let mut rng = StdRng::seed_from_u64(42);
+        let new_stacks =
+            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+
+        // Verify module was moved
+        assert!(!new_stacks[&stack_1].modules.contains_key(&module_1));
+        assert!(new_stacks[&stack_1].modules.contains_key(&module_2));
+        assert!(new_stacks[&stack_2].modules.contains_key(&module_1));
+
+        // Test 2: Transfer to new stack
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ModuleTransfer {
+                stack: stack_1,
+                module: module_2,
+                to: ModuleTransferTarget::New(0),
+            }],
+        )]);
+
+        let (validated_orders, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none());
+
+        let new_stacks =
+            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+
+        // Verify module was moved to a new stack
+        assert!(!new_stacks[&stack_1].modules.contains_key(&module_2));
+
+        // Find the new stack that was created
+        let new_stack_id = new_stacks
+            .keys()
+            .find(|&&id| {
+                id != stack_1 && id != stack_2 && new_stacks[&id].modules.contains_key(&module_2)
+            })
+            .expect("New stack should exist");
+
+        let new_stack = &new_stacks[new_stack_id];
+
+        // Verify new stack has correct properties
+        assert_eq!(new_stack.position, Vec2::zero());
+        assert_eq!(new_stack.velocity, Vec2::zero());
+        assert_eq!(new_stack.owner, player_1);
+        assert!(new_stack.modules.contains_key(&module_2));
+    }
+
+    #[test]
+    fn test_board_orders() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let player_2 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([
+                (player_1, String::from("player 1")),
+                (player_2, String::from("player 2")),
+            ]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Logistics;
+
+        // Create test stacks and modules
+        let boarder_stack = stack_id_generator.next().unwrap();
+        let target_stack = stack_id_generator.next().unwrap();
+        let defended_stack = stack_id_generator.next().unwrap();
+        let no_hab_stack = stack_id_generator.next().unwrap();
+
+        let hab_module = module_id_generator.next().unwrap();
+        let engine_module = module_id_generator.next().unwrap();
+        let gun_module = module_id_generator.next().unwrap();
+        let tank_module = module_id_generator.next().unwrap();
+        let target_hab_module = module_id_generator.next().unwrap();
+
+        // Boarder stack: has habitat (can board)
+        let mut boarder_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        boarder_stack_data
+            .modules
+            .insert(hab_module, Module::new_habitat(player_1));
+        boarder_stack_data
+            .modules
+            .insert(engine_module, Module::new_engine());
+
+        // Target stack: no habitat (can be boarded)
+        let mut target_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_2);
+        target_stack_data
+            .modules
+            .insert(gun_module, Module::new_gun());
+        target_stack_data
+            .modules
+            .insert(tank_module, Module::new_tank());
+
+        // Defended stack: has habitat (cannot be boarded)
+        let mut defended_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_2);
+        defended_stack_data
+            .modules
+            .insert(target_hab_module, Module::new_habitat(player_2));
+
+        // No hab stack: no habitat (cannot board others)
+        let no_hab_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+
+        game_state.stacks.insert(boarder_stack, boarder_stack_data);
+        game_state.stacks.insert(target_stack, target_stack_data);
+        game_state
+            .stacks
+            .insert(defended_stack, defended_stack_data);
+        game_state.stacks.insert(no_hab_stack, no_hab_stack_data);
+
+        // Test 1: Valid boarding order
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Board {
+                stack: boarder_stack,
+                target: target_stack,
+            }],
+        )]);
+
+        let (validated_orders, errors) = Order::validate(&game_state, &orders);
+        assert!(
+            errors[&player_1][0].is_none(),
+            "Valid boarding should succeed"
+        );
+
+        // Test order application
+        let mut rng = StdRng::seed_from_u64(42);
+        let new_stacks =
+            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+
+        // Verify boarding worked: all modules from target moved to boarder
+        assert!(new_stacks[&boarder_stack].modules.contains_key(&gun_module));
+        assert!(
+            new_stacks[&boarder_stack]
+                .modules
+                .contains_key(&tank_module)
+        );
+        assert!(new_stacks[&boarder_stack].modules.contains_key(&hab_module));
+        assert!(
+            new_stacks[&boarder_stack]
+                .modules
+                .contains_key(&engine_module)
+        );
+        assert!(new_stacks[&target_stack].modules.is_empty());
+
+        // Test 2: Wrong phase
+        game_state.phase = Phase::Combat;
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Board {
+                stack: boarder_stack,
+                target: target_stack,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::WrongPhase));
+
+        // Reset to logistics phase
+        game_state.phase = Phase::Logistics;
+
+        // Test 3: Invalid boarder stack ID
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Board {
+                stack: 999_u32.into(),
+                target: target_stack,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::InvalidStackId(_)));
+
+        // Test 4: Invalid target stack ID
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Board {
+                stack: boarder_stack,
+                target: 999_u32.into(),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::InvalidStackId(_)));
+
+        // Test 5: Wrong ownership of boarder stack
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Board {
+                stack: defended_stack, // player_2's stack
+                target: target_stack,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::BadOwnership(_)));
+
+        // Test 6: Trying to board own stack
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Board {
+                stack: boarder_stack,
+                target: no_hab_stack, // player_1's stack
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::BadOwnership(_)));
+
+        // Test 7: Boarder has no habitat
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Board {
+                stack: no_hab_stack,
+                target: target_stack,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::NoHab));
+
+        // Test 8: Target has habitat (contested boarding)
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Board {
+                stack: boarder_stack,
+                target: defended_stack,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::ContestedBoarding));
+
+        // Test 9: Multiple boarding attempts on same stack (contested)
+        let another_boarder = stack_id_generator.next().unwrap();
+        let another_hab = module_id_generator.next().unwrap();
+        let mut another_boarder_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        another_boarder_data
+            .modules
+            .insert(another_hab, Module::new_habitat(player_1));
+        game_state
+            .stacks
+            .insert(another_boarder, another_boarder_data);
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![
+                Order::Board {
+                    stack: boarder_stack,
+                    target: target_stack,
+                },
+                Order::Board {
+                    stack: another_boarder,
+                    target: target_stack,
+                },
+            ],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_some());
+        assert!(errors[&player_1][1].is_some());
+        assert!(matches!(
+            errors[&player_1][0].unwrap(),
+            OrderError::ContestedBoarding
+        ));
+        assert!(matches!(
+            errors[&player_1][1].unwrap(),
+            OrderError::ContestedBoarding
+        ));
+
+        // Test 10: Boarding stack tries to do other orders (should fail)
+        let orders = HashMap::from([(
+            player_1,
+            vec![
+                Order::Board {
+                    stack: boarder_stack,
+                    target: target_stack,
+                },
+                Order::Refine {
+                    stack: boarder_stack,
+                    materials: 1,
+                    fuel: 0,
+                },
+            ],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_some());
+        assert!(errors[&player_1][1].is_some());
+        assert!(matches!(
+            errors[&player_1][0].unwrap(),
+            OrderError::TooBusyToBoard
+        ));
+
+        // Test 11: Target stack has other orders but gets boarded (orders interrupted)
+        let refinery_module = module_id_generator.next().unwrap();
+        game_state
+            .stacks
+            .get_mut(&target_stack)
+            .unwrap()
+            .modules
+            .insert(refinery_module, Module::new_refinery());
+
+        let orders = HashMap::from([
+            (
+                player_1,
+                vec![Order::Board {
+                    stack: boarder_stack,
+                    target: target_stack,
+                }],
+            ),
+            (
+                player_2,
+                vec![Order::Refine {
+                    stack: target_stack,
+                    materials: 1,
+                    fuel: 0,
+                }],
+            ),
+        ]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Boarding should succeed");
+        assert!(
+            errors[&player_2][0].is_some(),
+            "Target's orders should be interrupted"
+        );
+        assert!(matches!(errors[&player_2][0].unwrap(), OrderError::Boarded));
+
+        // Test 12: Boarding with damaged habitat should fail
+        let damaged_hab_stack = stack_id_generator.next().unwrap();
+        let damaged_hab_module = module_id_generator.next().unwrap();
+        let mut damaged_hab_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let mut damaged_habitat = Module::new_habitat(player_1);
+        damaged_habitat.health = Health::Damaged;
+        damaged_hab_stack_data
+            .modules
+            .insert(damaged_hab_module, damaged_habitat);
+        game_state
+            .stacks
+            .insert(damaged_hab_stack, damaged_hab_stack_data);
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Board {
+                stack: damaged_hab_stack,
+                target: target_stack,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        let error = errors[&player_1][0].unwrap();
+        assert!(matches!(error, OrderError::NoHab));
+    }
 }

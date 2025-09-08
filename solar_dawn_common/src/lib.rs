@@ -122,6 +122,26 @@ impl GameState {
                     }
                 },
             ),
+            #[cfg(test)]
+            "test" => Ok(
+                |players: HashMap<PlayerId, String>,
+                 celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
+                 _stack_id_generator: &mut dyn Iterator<Item = StackId>,
+                 _module_id_generator: &mut dyn Iterator<Item = ModuleId>| {
+                    {
+                        let (celestials, earth) =
+                            Celestial::solar_system_for_testing(celestial_id_generator);
+                        let _ = celestials.get(&earth).expect("earth id should be valid");
+                        Self {
+                            phase: Phase::Logistics,
+                            players,
+                            celestials,
+                            earth,
+                            stacks: HashMap::new(),
+                        }
+                    }
+                },
+            ),
             _ => Err(scenario),
         }
     }

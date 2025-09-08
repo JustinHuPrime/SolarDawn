@@ -202,6 +202,87 @@ impl Celestial {
         (map, earth_id)
     }
 
+    #[cfg(test)]
+    /// Creates a simple solar system for testing purposes with a Sun, Earth, Moon, and asteroids.
+    pub fn solar_system_for_testing(
+        celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
+    ) -> (HashMap<CelestialId, Celestial>, CelestialId) {
+        let mut map = HashMap::new();
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::zero(),
+                name: String::from("The Sun"),
+                orbit_gravity: true,
+                surface_gravity: 274.0,
+                resources: Resources::None,
+                radius: 0.85,
+            },
+        );
+
+        let earth_id = celestial_id_generator.next().expect("should be infinite");
+        map.insert(
+            earth_id,
+            Celestial {
+                position: Vec2::from_polar(10.0, 0.0),
+                name: String::from("Earth"),
+                orbit_gravity: true,
+                surface_gravity: 9.8,
+                resources: Resources::None,
+                radius: 0.25,
+            },
+        );
+
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::from_polar(10.0, 0.0).up_right().up_right(),
+                name: String::from("Moon"),
+                orbit_gravity: true,
+                surface_gravity: 1.6,
+                resources: Resources::MiningIce,
+                radius: 0.1,
+            },
+        );
+
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::from_polar(10.0, 0.0).down_left().down_left(),
+                name: String::from("1 Ceres"),
+                orbit_gravity: false,
+                surface_gravity: 0.0,
+                resources: Resources::MiningOre,
+                radius: 0.05,
+            },
+        );
+
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::from_polar(10.0, 0.0).down_left().down_left().down(),
+                name: String::from("2 Vesta"),
+                orbit_gravity: false,
+                surface_gravity: 24.8,
+                resources: Resources::MiningBoth,
+                radius: 0.05,
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().expect("should be infinite"),
+            Celestial {
+                position: Vec2::from_polar(15.0, 0.0),
+                name: String::from("Jupiter"),
+                orbit_gravity: true,
+                surface_gravity: 24.8,
+                resources: Resources::Skimming,
+                radius: 0.75,
+            },
+        );
+
+        (map, earth_id)
+    }
+
     /// Can only land on bodies you can get resources from via mining
     ///
     /// So you can't land on Earth, the Sun, or gas giants
@@ -405,16 +486,12 @@ mod tests {
 
         // Line passing through center should collide
         assert!(body.collides(Vec2 { q: -3, r: 0 }, Vec2 { q: 3, r: 0 }));
-        
         // Line passing through center hex but offset from exact center should collide
         assert!(body.collides(Vec2 { q: -2, r: 1 }, Vec2 { q: 1, r: 0 }));
-        
         // Line far from center should not collide
         assert!(!body.collides(Vec2 { q: -2, r: 3 }, Vec2 { q: 2, r: 3 }));
-        
         // Line segment starting at center should collide
         assert!(body.collides(Vec2::zero(), Vec2 { q: 2, r: 0 }));
-        
         // Line segment entirely far away should not collide
         assert!(!body.collides(Vec2 { q: 5, r: 0 }, Vec2 { q: 6, r: 0 }));
 
@@ -427,7 +504,7 @@ mod tests {
             resources: Resources::MiningIce,
             radius: 1.0,
         };
-        
+
         // Even a line passing through should not collide if no gravity
         assert!(!no_gravity_body.collides(Vec2 { q: -2, r: 0 }, Vec2 { q: 2, r: 0 }));
 
@@ -440,10 +517,9 @@ mod tests {
             resources: Resources::None,
             radius: 0.5,
         };
-        
+
         // Line passing through offset body center should collide
         assert!(offset_body.collides(Vec2 { q: 2, r: 2 }, Vec2 { q: 4, r: 2 }));
-        
         // Line missing offset body should not collide
         assert!(!offset_body.collides(Vec2 { q: 2, r: 5 }, Vec2 { q: 4, r: 5 }));
 
@@ -456,10 +532,9 @@ mod tests {
             resources: Resources::None,
             radius: 0.1,
         };
-        
+
         // Line passing very close to center should collide
         assert!(small_body.collides(Vec2 { q: -1, r: 0 }, Vec2 { q: 1, r: 0 }));
-        
         // Line passing farther away should not collide
         assert!(!small_body.collides(Vec2 { q: -1, r: 1 }, Vec2 { q: 1, r: 1 }));
     }
