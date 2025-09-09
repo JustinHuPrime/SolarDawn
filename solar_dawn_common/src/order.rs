@@ -2557,6 +2557,905 @@ mod tests {
     }
 
     #[test]
+    fn test_isru_orders() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([(player_1, String::from("player 1"))]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Logistics;
+
+        // Create a mining world and set up a stack there
+        let mining_world = celestial_id_generator.next().unwrap();
+        game_state.celestials.insert(mining_world, Celestial {
+            position: Vec2 { q: 5, r: 5 },
+            name: "Mining World".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 3.0,
+            resources: Resources::MiningBoth,
+            radius: 0.3,
+        });
+
+        let stack_id = stack_id_generator.next().unwrap();
+        let miner_module = module_id_generator.next().unwrap();
+        let mut stack_data = Stack::new(Vec2 { q: 5, r: 5 }, Vec2::zero(), player_1); // Landed on mining world
+        stack_data.modules.insert(miner_module, Module::new_miner());
+        game_state.stacks.insert(stack_id, stack_data);
+
+        // Test valid ISRU order for mining
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Isru {
+                stack: stack_id,
+                ore: 5,
+                water: 5,
+                fuel: 0,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid ISRU order should succeed");
+
+        // Test ISRU order with wrong phase
+        game_state.phase = Phase::Combat;
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::WrongPhase));
+        game_state.phase = Phase::Logistics;
+
+        // Test ISRU order when not on resource body
+        let mut wrong_stack = Stack::new(Vec2 { q: 0, r: 0 }, Vec2::zero(), player_1); // Not on mining world
+        wrong_stack.modules.insert(module_id_generator.next().unwrap(), Module::new_miner());
+        let wrong_stack_id = stack_id_generator.next().unwrap();
+        game_state.stacks.insert(wrong_stack_id, wrong_stack);
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Isru {
+                stack: wrong_stack_id,
+                ore: 5,
+                water: 0,
+                fuel: 0,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::NoResourceAccess));
+
+        // Test fuel skimming
+        let gas_giant = celestial_id_generator.next().unwrap();
+        game_state.celestials.insert(gas_giant, Celestial {
+            position: Vec2 { q: 10, r: 10 },
+            name: "Gas Giant".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 20.0,
+            resources: Resources::Skimming,
+            radius: 1.0,
+        });
+
+        let orbiting_stack_id = stack_id_generator.next().unwrap();
+        let skimmer_module = module_id_generator.next().unwrap();
+        let mut orbiting_stack = Stack::new(Vec2 { q: 10, r: 11 }, Vec2 { q: -1, r: 0 }, player_1); // Orbiting gas giant
+        orbiting_stack.modules.insert(skimmer_module, Module::new_fuel_skimmer());
+        game_state.stacks.insert(orbiting_stack_id, orbiting_stack);
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Isru {
+                stack: orbiting_stack_id,
+                ore: 0,
+                water: 0,
+                fuel: 8,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid fuel skimming should succeed");
+    }
+
+    #[test]
+    fn test_resource_transfer_orders() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([(player_1, String::from("player 1"))]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Logistics;
+
+        let stack_id = stack_id_generator.next().unwrap();
+        let cargo_module = module_id_generator.next().unwrap();
+        let tank_module = module_id_generator.next().unwrap();
+
+        let mut cargo_hold = Module::new_cargo_hold();
+        if let ModuleDetails::CargoHold { ore, materials } = &mut cargo_hold.details {
+            *ore = 50;
+            *materials = 30;
+        }
+
+        let mut tank = Module::new_tank();
+        if let ModuleDetails::Tank { water, fuel } = &mut tank.details {
+            *water = 40;
+            *fuel = 60;
+        }
+
+        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        stack_data.modules.insert(cargo_module, cargo_hold);
+        stack_data.modules.insert(tank_module, tank);
+        game_state.stacks.insert(stack_id, stack_data);
+
+        // Test valid resource transfer from module to floating pool
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ResourceTransfer {
+                stack: stack_id,
+                from: Some(cargo_module),
+                to: ResourceTransferTarget::FloatingPool,
+                ore: 10,
+                materials: 5,
+                water: 0,
+                fuel: 0,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid resource transfer should succeed");
+
+        // Test invalid transfer - trying to move both solids and liquids from same module
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ResourceTransfer {
+                stack: stack_id,
+                from: Some(cargo_module),
+                to: ResourceTransferTarget::FloatingPool,
+                ore: 10,
+                materials: 5,
+                water: 10, // Invalid - cargo holds don't hold water
+                fuel: 0,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::InvalidModuleType(_, _)));
+
+        // Test transfer from floating pool to module
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ResourceTransfer {
+                stack: stack_id,
+                from: None,
+                to: ResourceTransferTarget::Module(tank_module),
+                ore: 0,
+                materials: 0,
+                water: 5,
+                fuel: 10,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid transfer to module should succeed");
+
+        // Test jettison
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::ResourceTransfer {
+                stack: stack_id,
+                from: None,
+                to: ResourceTransferTarget::Jettison,
+                ore: 5,
+                materials: 5,
+                water: 5,
+                fuel: 5,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid jettison should succeed");
+
+        // Test wrong phase
+        game_state.phase = Phase::Combat;
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::WrongPhase));
+    }
+
+    #[test]
+    fn test_repair_orders() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([(player_1, String::from("player 1"))]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Logistics;
+
+        let repair_stack_id = stack_id_generator.next().unwrap();
+        let target_stack_id = stack_id_generator.next().unwrap();
+        let habitat_module = module_id_generator.next().unwrap();
+        let damaged_module = module_id_generator.next().unwrap();
+
+        // Create repair stack with habitat
+        let mut repair_stack = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        repair_stack.modules.insert(habitat_module, Module::new_habitat(player_1));
+        game_state.stacks.insert(repair_stack_id, repair_stack);
+
+        // Create target stack with damaged module
+        let mut target_stack = Stack::new(Vec2::zero(), Vec2::zero(), player_1); // Same position for rendezvous
+        let mut damaged_engine = Module::new_engine();
+        damaged_engine.health = Health::Damaged;
+        target_stack.modules.insert(damaged_module, damaged_engine);
+        game_state.stacks.insert(target_stack_id, target_stack);
+
+        // Test valid repair order
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Repair {
+                stack: repair_stack_id,
+                target_stack: target_stack_id,
+                target_module: damaged_module,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid repair should succeed");
+
+        // Test repair on intact module (should fail)
+        let intact_module = module_id_generator.next().unwrap();
+        game_state.stacks.get_mut(&target_stack_id).unwrap()
+            .modules.insert(intact_module, Module::new_gun());
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Repair {
+                stack: repair_stack_id,
+                target_stack: target_stack_id,
+                target_module: intact_module,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::NotDamaged));
+
+        // Test repair when not rendezvoused
+        let far_stack_id = stack_id_generator.next().unwrap();
+        let far_damaged_module = module_id_generator.next().unwrap();
+        let mut far_stack = Stack::new(Vec2 { q: 5, r: 5 }, Vec2::zero(), player_1); // Different position
+        let mut far_damaged_engine = Module::new_engine();
+        far_damaged_engine.health = Health::Damaged;
+        far_stack.modules.insert(far_damaged_module, far_damaged_engine);
+        game_state.stacks.insert(far_stack_id, far_stack);
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Repair {
+                stack: repair_stack_id,
+                target_stack: far_stack_id,
+                target_module: far_damaged_module,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::NotRendezvoused(_, _)));
+    }
+
+    #[test]
+    fn test_refine_orders() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([(player_1, String::from("player 1"))]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Logistics;
+
+        let stack_id = stack_id_generator.next().unwrap();
+        let refinery_module = module_id_generator.next().unwrap();
+
+        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        stack_data.modules.insert(refinery_module, Module::new_refinery());
+        game_state.stacks.insert(stack_id, stack_data);
+
+        // Test valid refine order  
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Refine {
+                stack: stack_id,
+                materials: 10,
+                fuel: 5,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid refine should succeed");
+
+        // Test wrong phase
+        game_state.phase = Phase::Combat;
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::WrongPhase));
+        game_state.phase = Phase::Logistics;
+
+        // Test with invalid stack
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Refine {
+                stack: 999_u32.into(),
+                materials: 10,
+                fuel: 5,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::InvalidStackId(_)));
+    }
+
+    #[test]
+    fn test_build_orders() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([(player_1, String::from("player 1"))]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Logistics;
+
+        let stack_id = stack_id_generator.next().unwrap();
+        let factory_module = module_id_generator.next().unwrap();
+        
+        // Set up Earth for habitat building
+        let earth_celestial = game_state.celestials.get(&game_state.earth).unwrap();
+        let earth_position = earth_celestial.position;
+        let earth_neighbors = earth_position.neighbours();
+
+        let mut stack_data = Stack::new(earth_neighbors[0], Vec2 { q: 1, r: 0 }, player_1); // Orbiting Earth
+        stack_data.modules.insert(factory_module, Module::new_factory());
+        game_state.stacks.insert(stack_id, stack_data);
+
+        // Test building various module types
+        for module_type in [
+            ModuleType::Engine,
+            ModuleType::Gun,
+            ModuleType::Miner,
+            ModuleType::FuelSkimmer,
+            ModuleType::CargoHold,
+            ModuleType::Tank,
+            ModuleType::Warhead,
+            ModuleType::Refinery,
+            ModuleType::Factory,
+            ModuleType::ArmourPlate,
+        ] {
+            let orders = HashMap::from([(
+                player_1,
+                vec![Order::Build {
+                    stack: stack_id,
+                    module: module_type,
+                }],
+            )]);
+
+            let (_, errors) = Order::validate(&game_state, &orders);
+            assert!(errors[&player_1][0].is_none(), "Building module should succeed");
+        }
+
+        // Test building habitat in Earth orbit (should succeed)
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Build {
+                stack: stack_id,
+                module: ModuleType::Habitat,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Building habitat in Earth orbit should succeed");
+
+        // Test building habitat NOT in Earth orbit (should fail)
+        let away_stack_id = stack_id_generator.next().unwrap();
+        let away_factory_module = module_id_generator.next().unwrap();
+        let mut away_stack = Stack::new(Vec2 { q: 20, r: 20 }, Vec2::zero(), player_1); // Far from Earth
+        away_stack.modules.insert(away_factory_module, Module::new_factory());
+        game_state.stacks.insert(away_stack_id, away_stack);
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Build {
+                stack: away_stack_id,
+                module: ModuleType::Habitat,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::NotInEarthOrbit));
+
+        // Test wrong phase
+        game_state.phase = Phase::Combat;
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Build {
+                stack: stack_id,
+                module: ModuleType::Engine,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::WrongPhase));
+    }
+
+    #[test]
+    fn test_salvage_orders() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([(player_1, String::from("player 1"))]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Logistics;
+
+        let stack_id = stack_id_generator.next().unwrap();
+        let factory_module = module_id_generator.next().unwrap();
+        let salvage_module = module_id_generator.next().unwrap();
+
+        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        stack_data.modules.insert(factory_module, Module::new_factory());
+        stack_data.modules.insert(salvage_module, Module::new_gun()); // Module to salvage
+        game_state.stacks.insert(stack_id, stack_data);
+
+        // Test valid salvage order
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Salvage {
+                stack: stack_id,
+                salvaged: salvage_module,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid salvage should succeed");
+
+        // Test salvaging invalid module
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Salvage {
+                stack: stack_id,
+                salvaged: 999_u32.into(),
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::InvalidModuleId(_, _)));
+
+        // Test wrong phase
+        game_state.phase = Phase::Combat;
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Salvage {
+                stack: stack_id,
+                salvaged: salvage_module,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::WrongPhase));
+    }
+
+    #[test]
+    fn test_shoot_orders() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let player_2 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([
+                (player_1, String::from("player 1")),
+                (player_2, String::from("player 2")),
+            ]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Combat;
+
+        let shooter_stack = stack_id_generator.next().unwrap();
+        let target_stack = stack_id_generator.next().unwrap();
+        let gun_module = module_id_generator.next().unwrap();
+
+        let mut shooter_data = Stack::new(Vec2 { q: 0, r: 0 }, Vec2::zero(), player_1);
+        shooter_data.modules.insert(gun_module, Module::new_gun());
+        game_state.stacks.insert(shooter_stack, shooter_data);
+
+        let target_data = Stack::new(Vec2 { q: 2, r: 0 }, Vec2::zero(), player_2);
+        game_state.stacks.insert(target_stack, target_data);
+
+        // Test valid shoot order
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Shoot {
+                stack: shooter_stack,
+                target: target_stack,
+                shots: 1,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid shoot should succeed");
+
+        // Test wrong phase
+        game_state.phase = Phase::Logistics;
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::WrongPhase));
+        game_state.phase = Phase::Combat;
+
+        // Test shooting self
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Shoot {
+                stack: shooter_stack,
+                target: shooter_stack,
+                shots: 1,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::InvalidTarget));
+
+        // Test shooting invalid target
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Shoot {
+                stack: shooter_stack,
+                target: 999_u32.into(),
+                shots: 1,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::InvalidStackId(_)));
+
+        // Test line of sight blocked by celestial
+        let blocking_celestial = celestial_id_generator.next().unwrap();
+        game_state.celestials.insert(blocking_celestial, Celestial {
+            position: Vec2 { q: 1, r: 0 }, // Between shooter and target
+            name: "Blocker".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 1.0, // Large enough to block
+        });
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::NoLineOfSight));
+    }
+
+    #[test]
+    fn test_arm_orders() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([(player_1, String::from("player 1"))]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Combat;
+
+        let stack_id = stack_id_generator.next().unwrap();
+        let warhead_module = module_id_generator.next().unwrap();
+
+        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        stack_data.modules.insert(warhead_module, Module::new_warhead());
+        game_state.stacks.insert(stack_id, stack_data);
+
+        // Test valid arm order
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Arm {
+                stack: stack_id,
+                warhead: warhead_module,
+                armed: true,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid arm should succeed");
+
+        // Test disarm order
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Arm {
+                stack: stack_id,
+                warhead: warhead_module,
+                armed: false,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid disarm should succeed");
+
+        // Test wrong phase
+        game_state.phase = Phase::Movement;
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::WrongPhase));
+        game_state.phase = Phase::Combat;
+
+        // Test arming when habitat is present
+        let habitat_module = module_id_generator.next().unwrap();
+        game_state.stacks.get_mut(&stack_id).unwrap()
+            .modules.insert(habitat_module, Module::new_habitat(player_1));
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Arm {
+                stack: stack_id,
+                warhead: warhead_module,
+                armed: true,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::HabOnStack));
+
+        // Test arming non-warhead module
+        let gun_module = module_id_generator.next().unwrap();
+        game_state.stacks.get_mut(&stack_id).unwrap()
+            .modules.insert(gun_module, Module::new_gun());
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Arm {
+                stack: stack_id,
+                warhead: gun_module, // Not a warhead
+                armed: true,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::InvalidModuleType(_, _)));
+    }
+
+    #[test]
+    fn test_module_type_cost() {
+        // Test that all module types have positive costs
+        assert!(ModuleType::Miner.cost() > 0);
+        assert!(ModuleType::FuelSkimmer.cost() > 0);
+        assert!(ModuleType::CargoHold.cost() > 0);
+        assert!(ModuleType::Tank.cost() > 0);
+        assert!(ModuleType::Engine.cost() > 0);
+        assert!(ModuleType::Warhead.cost() > 0);
+        assert!(ModuleType::Gun.cost() > 0);
+        assert!(ModuleType::Habitat.cost() > 0);
+        assert!(ModuleType::Refinery.cost() > 0);
+        assert!(ModuleType::Factory.cost() > 0);
+        assert!(ModuleType::ArmourPlate.cost() > 0);
+
+        // Test that costs are reasonable multiples of mass
+        assert_eq!(ModuleType::Engine.cost(), ModuleDetails::ENGINE_MASS as i32 * 10);
+        assert_eq!(ModuleType::Habitat.cost(), ModuleDetails::HABITAT_MASS as i32 * 10);
+    }
+
+    #[test]
+    fn test_burn_orders() {
+        // setup game state  
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([(player_1, String::from("player 1"))]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Movement;
+
+        let stack_id = stack_id_generator.next().unwrap();
+        let engine_module = module_id_generator.next().unwrap();
+        let tank_module = module_id_generator.next().unwrap();
+
+        let mut tank = Module::new_tank();
+        if let ModuleDetails::Tank { fuel, .. } = &mut tank.details {
+            *fuel = 100; // Plenty of fuel
+        }
+
+        let mut stack_data = Stack::new(Vec2 { q: 5, r: 5 }, Vec2::zero(), player_1);
+        stack_data.modules.insert(engine_module, Module::new_engine());
+        stack_data.modules.insert(tank_module, tank);
+        game_state.stacks.insert(stack_id, stack_data);
+
+        // Test valid burn order (small delta-v)
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Burn {
+                stack: stack_id,
+                delta_v: Vec2 { q: 1, r: 0 }, // 1 hex/turn delta-v
+                fuel_from: vec![(tank_module, 10)], // Use some fuel
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(errors[&player_1][0].is_none(), "Valid burn should succeed");
+
+        // Test wrong phase
+        game_state.phase = Phase::Logistics;
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::WrongPhase));
+        game_state.phase = Phase::Movement;
+
+        // Test burning while landed on a planet
+        let planet = celestial_id_generator.next().unwrap();
+        game_state.celestials.insert(planet, Celestial {
+            position: Vec2 { q: 5, r: 5 }, // Same position as stack
+            name: "Planet".to_string(),
+            orbit_gravity: true,
+            surface_gravity: 9.8,
+            resources: Resources::MiningBoth,
+            radius: 0.3,
+        });
+
+        // Move stack to be landed on planet
+        game_state.stacks.get_mut(&stack_id).unwrap().velocity = Vec2::zero();
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::BurnWhileLanded));
+
+        // Move stack back to space
+        game_state.stacks.get_mut(&stack_id).unwrap().position = Vec2 { q: 10, r: 10 };
+
+        // Test insufficient fuel
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Burn {
+                stack: stack_id,
+                delta_v: Vec2 { q: 1, r: 0 },
+                fuel_from: vec![(tank_module, 200)], // More fuel than available
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::NotEnoughResources(_, _)));
+
+        // Test invalid fuel source module
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Burn {
+                stack: stack_id,
+                delta_v: Vec2 { q: 1, r: 0 },
+                fuel_from: vec![(999_u32.into(), 10)], // Invalid module
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::InvalidModuleId(_, _)));
+    }
+
+    #[test]
+    fn test_movement_order_conflicts() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([(player_1, String::from("player 1"))]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Movement;
+
+        let stack_id = stack_id_generator.next().unwrap();
+        let target_stack_id = stack_id_generator.next().unwrap();
+        let engine_module = module_id_generator.next().unwrap();
+        let tank_module = module_id_generator.next().unwrap();
+
+        let mut fuel_tank = Module::new_tank();
+        if let ModuleDetails::Tank { fuel, .. } = &mut fuel_tank.details {
+            *fuel = 100;
+        }
+
+        let mut stack_data = Stack::new(Vec2 { q: 0, r: 0 }, Vec2::zero(), player_1);
+        stack_data.modules.insert(engine_module, Module::new_engine());
+        stack_data.modules.insert(tank_module, fuel_tank);
+        game_state.stacks.insert(stack_id, stack_data);
+
+        let target_data = Stack::new(Vec2 { q: 1, r: 0 }, Vec2::zero(), player_1);
+        game_state.stacks.insert(target_stack_id, target_data);
+
+        // Test multiple movement orders for same stack
+        let orders = HashMap::from([(
+            player_1,
+            vec![
+                Order::Burn {
+                    stack: stack_id,
+                    delta_v: Vec2 { q: 1, r: 0 },
+                    fuel_from: vec![(tank_module, 5)],
+                },
+                Order::Rendezvous {
+                    stack: stack_id,
+                    target: target_stack_id,
+                    fuel_from: vec![(tank_module, 5)],
+                },
+            ],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::MultipleMoves));
+        assert!(matches!(errors[&player_1][1].unwrap(), OrderError::MultipleMoves));
+
+        // Test rendezvous target that also has move order
+        let target_engine = module_id_generator.next().unwrap();
+        let target_tank = module_id_generator.next().unwrap();
+        let mut target_fuel = Module::new_tank();
+        if let ModuleDetails::Tank { fuel, .. } = &mut target_fuel.details {
+            *fuel = 50;
+        }
+        game_state.stacks.get_mut(&target_stack_id).unwrap()
+            .modules.insert(target_engine, Module::new_engine());
+        game_state.stacks.get_mut(&target_stack_id).unwrap()
+            .modules.insert(target_tank, target_fuel);
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![
+                Order::Rendezvous {
+                    stack: stack_id,
+                    target: target_stack_id,
+                    fuel_from: vec![(tank_module, 5)],
+                },
+                Order::Burn {
+                    stack: target_stack_id,
+                    delta_v: Vec2 { q: 0, r: 1 },
+                    fuel_from: vec![(target_tank, 5)],
+                },
+            ],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(errors[&player_1][0].unwrap(), OrderError::TargetMoved));
+    }
+
+    #[test]
     fn test_board_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
