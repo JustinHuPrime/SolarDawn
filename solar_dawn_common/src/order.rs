@@ -270,7 +270,7 @@ pub enum ResourceTransferTarget {
     Stack(StackId),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[expect(missing_docs)]
 /// Type of module to build
 pub enum ModuleType {
@@ -386,7 +386,7 @@ pub enum OrderError {
     NewStackStateConflict,
     /// Not enough modules to support the wanted order
     NotEnoughModules,
-    /// Residual left in the resource pool
+    /// Residual (either positive or negative) left in the resource pool
     ResourcePoolResidual(StackId),
     /// Too many resources moved into module
     NotEnoughCapacity(StackId, ModuleId),
@@ -2600,12 +2600,23 @@ mod tests {
         // Test valid ISRU order for mining
         let orders = HashMap::from([(
             player_1,
-            vec![Order::Isru {
-                stack: stack_id,
-                ore: 5,
-                water: 5,
-                fuel: 0,
-            }],
+            vec![
+                Order::Isru {
+                    stack: stack_id,
+                    ore: 5,
+                    water: 5,
+                    fuel: 0,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: None,
+                    to: ResourceTransferTarget::Jettison,
+                    ore: 5,
+                    materials: 0,
+                    water: 5,
+                    fuel: 0,
+                },
+            ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
@@ -2671,12 +2682,23 @@ mod tests {
 
         let orders = HashMap::from([(
             player_1,
-            vec![Order::Isru {
-                stack: orbiting_stack_id,
-                ore: 0,
-                water: 0,
-                fuel: 8,
-            }],
+            vec![
+                Order::Isru {
+                    stack: orbiting_stack_id,
+                    ore: 0,
+                    water: 0,
+                    fuel: 8,
+                },
+                Order::ResourceTransfer {
+                    stack: orbiting_stack_id,
+                    from: None,
+                    to: ResourceTransferTarget::Jettison,
+                    ore: 0,
+                    materials: 0,
+                    water: 0,
+                    fuel: 8,
+                },
+            ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
@@ -2726,15 +2748,26 @@ mod tests {
         // Test valid resource transfer from module to floating pool
         let orders = HashMap::from([(
             player_1,
-            vec![Order::ResourceTransfer {
-                stack: stack_id,
-                from: Some(cargo_module),
-                to: ResourceTransferTarget::FloatingPool,
-                ore: 10,
-                materials: 5,
-                water: 0,
-                fuel: 0,
-            }],
+            vec![
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: Some(cargo_module),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: 10,
+                    materials: 5,
+                    water: 0,
+                    fuel: 0,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: None,
+                    to: ResourceTransferTarget::Jettison,
+                    ore: 10,
+                    materials: 5,
+                    water: 0,
+                    fuel: 0,
+                },
+            ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
@@ -2766,15 +2799,26 @@ mod tests {
         // Test transfer from floating pool to module
         let orders = HashMap::from([(
             player_1,
-            vec![Order::ResourceTransfer {
-                stack: stack_id,
-                from: None,
-                to: ResourceTransferTarget::Module(tank_module),
-                ore: 0,
-                materials: 0,
-                water: 5,
-                fuel: 10,
-            }],
+            vec![
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: None,
+                    to: ResourceTransferTarget::Module(tank_module),
+                    ore: 0,
+                    materials: 0,
+                    water: 5,
+                    fuel: 10,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: Some(tank_module),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: 0,
+                    materials: 0,
+                    water: 5,
+                    fuel: 10,
+                },
+            ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
@@ -2786,15 +2830,35 @@ mod tests {
         // Test jettison
         let orders = HashMap::from([(
             player_1,
-            vec![Order::ResourceTransfer {
-                stack: stack_id,
-                from: None,
-                to: ResourceTransferTarget::Jettison,
-                ore: 5,
-                materials: 5,
-                water: 5,
-                fuel: 5,
-            }],
+            vec![
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: None,
+                    to: ResourceTransferTarget::Jettison,
+                    ore: 5,
+                    materials: 5,
+                    water: 5,
+                    fuel: 5,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: Some(tank_module),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: 0,
+                    materials: 0,
+                    water: 5,
+                    fuel: 5,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: Some(cargo_module),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: 5,
+                    materials: 5,
+                    water: 0,
+                    fuel: 0,
+                },
+            ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
@@ -2833,11 +2897,18 @@ mod tests {
         let habitat_module = module_id_generator.next().unwrap();
         let damaged_module = module_id_generator.next().unwrap();
 
-        // Create repair stack with habitat
+        // Create repair stack with habitat and cargo hold with materials
         let mut repair_stack = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
         repair_stack
             .modules
             .insert(habitat_module, Module::new_habitat(player_1));
+
+        let cargo_module = module_id_generator.next().unwrap();
+        let mut cargo_hold = Module::new_cargo_hold();
+        if let ModuleDetails::CargoHold { materials, .. } = &mut cargo_hold.details {
+            *materials = 10; // Add some materials for repair
+        }
+        repair_stack.modules.insert(cargo_module, cargo_hold);
         game_state.stacks.insert(repair_stack_id, repair_stack);
 
         // Create target stack with damaged module
@@ -2850,11 +2921,22 @@ mod tests {
         // Test valid repair order
         let orders = HashMap::from([(
             player_1,
-            vec![Order::Repair {
-                stack: repair_stack_id,
-                target_stack: target_stack_id,
-                target_module: damaged_module,
-            }],
+            vec![
+                Order::ResourceTransfer {
+                    stack: repair_stack_id,
+                    from: Some(cargo_module),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: 0,
+                    materials: 1, // Need materials to repair (1/10th of module mass)
+                    water: 0,
+                    fuel: 0,
+                },
+                Order::Repair {
+                    stack: repair_stack_id,
+                    target_stack: target_stack_id,
+                    target_module: damaged_module,
+                },
+            ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
@@ -2932,21 +3014,67 @@ mod tests {
 
         let stack_id = stack_id_generator.next().unwrap();
         let refinery_module = module_id_generator.next().unwrap();
+        let cargo_module = module_id_generator.next().unwrap();
+        let tank_module = module_id_generator.next().unwrap();
 
         let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
         stack_data
             .modules
             .insert(refinery_module, Module::new_refinery());
+
+        // Add cargo hold with ore
+        let mut cargo_hold = Module::new_cargo_hold();
+        if let ModuleDetails::CargoHold { ore, .. } = &mut cargo_hold.details {
+            *ore = 20; // Enough ore for refining
+        }
+        stack_data.modules.insert(cargo_module, cargo_hold);
+
+        // Add tank with water
+        let mut tank = Module::new_tank();
+        if let ModuleDetails::Tank { water, .. } = &mut tank.details {
+            *water = 10; // Enough water for refining
+        }
+        stack_data.modules.insert(tank_module, tank);
+
         game_state.stacks.insert(stack_id, stack_data);
 
         // Test valid refine order
         let orders = HashMap::from([(
             player_1,
-            vec![Order::Refine {
-                stack: stack_id,
-                materials: 10,
-                fuel: 5,
-            }],
+            vec![
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: Some(cargo_module),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: 20, // Need 2 ore per 1 material, so 20 ore for 10 materials
+                    materials: 0,
+                    water: 0,
+                    fuel: 0,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: Some(tank_module),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: 0,
+                    materials: 0,
+                    water: 10, // Need 2 water per 1 fuel, so 10 water for 5 fuel
+                    fuel: 0,
+                },
+                Order::Refine {
+                    stack: stack_id,
+                    materials: 10,
+                    fuel: 5,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: None,
+                    to: ResourceTransferTarget::Jettison,
+                    ore: 0,
+                    materials: 10, // Jettison the produced materials
+                    water: 0,
+                    fuel: 5, // Jettison the produced fuel
+                },
+            ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
@@ -2999,6 +3127,7 @@ mod tests {
 
         let stack_id = stack_id_generator.next().unwrap();
         let factory_module = module_id_generator.next().unwrap();
+        let cargo_hold_module = module_id_generator.next().unwrap();
 
         // Set up Earth for habitat building
         let earth_celestial = game_state.celestials.get(&game_state.earth).unwrap();
@@ -3009,9 +3138,21 @@ mod tests {
         stack_data
             .modules
             .insert(factory_module, Module::new_factory());
+        let mut cargo_hold_actual = Module::new_cargo_hold();
+        let ModuleDetails::CargoHold {
+            ref mut materials, ..
+        } = cargo_hold_actual.details
+        else {
+            unreachable!();
+        };
+        *materials = ModuleDetails::CARGO_HOLD_CAPACITY as u8;
+        stack_data
+            .modules
+            .insert(cargo_hold_module, cargo_hold_actual);
         game_state.stacks.insert(stack_id, stack_data);
 
         // Test building various module types
+        // No test for factories because they're too expensive to easily test
         for module_type in [
             ModuleType::Engine,
             ModuleType::Gun,
@@ -3021,15 +3162,25 @@ mod tests {
             ModuleType::Tank,
             ModuleType::Warhead,
             ModuleType::Refinery,
-            ModuleType::Factory,
             ModuleType::ArmourPlate,
         ] {
             let orders = HashMap::from([(
                 player_1,
-                vec![Order::Build {
-                    stack: stack_id,
-                    module: module_type,
-                }],
+                vec![
+                    Order::Build {
+                        stack: stack_id,
+                        module: module_type,
+                    },
+                    Order::ResourceTransfer {
+                        stack: stack_id,
+                        from: Some(cargo_hold_module),
+                        to: ResourceTransferTarget::FloatingPool,
+                        ore: 0,
+                        materials: module_type.cost() as u8,
+                        water: 0,
+                        fuel: 0,
+                    },
+                ],
             )]);
 
             let (_, errors) = Order::validate(&game_state, &orders);
@@ -3042,10 +3193,21 @@ mod tests {
         // Test building habitat in Earth orbit (should succeed)
         let orders = HashMap::from([(
             player_1,
-            vec![Order::Build {
-                stack: stack_id,
-                module: ModuleType::Habitat,
-            }],
+            vec![
+                Order::Build {
+                    stack: stack_id,
+                    module: ModuleType::Habitat,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: Some(cargo_hold_module),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: 0,
+                    materials: ModuleType::Habitat.cost() as u8,
+                    water: 0,
+                    fuel: 0,
+                },
+            ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
@@ -3065,10 +3227,21 @@ mod tests {
 
         let orders = HashMap::from([(
             player_1,
-            vec![Order::Build {
-                stack: away_stack_id,
-                module: ModuleType::Habitat,
-            }],
+            vec![
+                Order::Build {
+                    stack: away_stack_id,
+                    module: ModuleType::Habitat,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: Some(cargo_hold_module),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: 0,
+                    materials: ModuleType::Habitat.cost() as u8,
+                    water: 0,
+                    fuel: 0,
+                },
+            ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
@@ -3081,10 +3254,21 @@ mod tests {
         game_state.phase = Phase::Combat;
         let orders = HashMap::from([(
             player_1,
-            vec![Order::Build {
-                stack: stack_id,
-                module: ModuleType::Engine,
-            }],
+            vec![
+                Order::Build {
+                    stack: stack_id,
+                    module: ModuleType::Engine,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: Some(cargo_hold_module),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: 0,
+                    materials: ModuleType::Engine.cost() as u8,
+                    water: 0,
+                    fuel: 0,
+                },
+            ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
@@ -3124,10 +3308,21 @@ mod tests {
         // Test valid salvage order
         let orders = HashMap::from([(
             player_1,
-            vec![Order::Salvage {
-                stack: stack_id,
-                salvaged: salvage_module,
-            }],
+            vec![
+                Order::Salvage {
+                    stack: stack_id,
+                    salvaged: salvage_module,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: None,
+                    to: ResourceTransferTarget::Jettison,
+                    ore: 0,
+                    materials: 10, // Salvage produces gun_mass * 10 / 2 = 2 * 10 / 2 = 10 materials
+                    water: 0,
+                    fuel: 0,
+                },
+            ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
@@ -3192,14 +3387,14 @@ mod tests {
         let target_stack = stack_id_generator.next().unwrap();
         let gun_module = module_id_generator.next().unwrap();
 
-        let mut shooter_data = Stack::new(Vec2 { q: 0, r: 0 }, Vec2::zero(), player_1);
+        let mut shooter_data = Stack::new(Vec2 { q: 20, r: 20 }, Vec2::zero(), player_1); // Far from celestials
         shooter_data.modules.insert(gun_module, Module::new_gun());
         game_state.stacks.insert(shooter_stack, shooter_data);
 
-        let target_data = Stack::new(Vec2 { q: 2, r: 0 }, Vec2::zero(), player_2);
+        let target_data = Stack::new(Vec2 { q: 22, r: 20 }, Vec2::zero(), player_2); // 2 hexes away horizontally
         game_state.stacks.insert(target_stack, target_data);
 
-        // Test valid shoot order
+        // Test valid shoot order (should have clear line of sight initially)
         let orders = HashMap::from([(
             player_1,
             vec![Order::Shoot {
@@ -3258,14 +3453,23 @@ mod tests {
         game_state.celestials.insert(
             blocking_celestial,
             Celestial {
-                position: Vec2 { q: 1, r: 0 }, // Between shooter and target
+                position: Vec2 { q: 21, r: 20 }, // Exactly between shooter at (20,20) and target at (22,20)
                 name: "Blocker".to_string(),
                 orbit_gravity: true,
                 surface_gravity: 1.0,
                 resources: Resources::None,
-                radius: 1.0, // Large enough to block
+                radius: 1.0, // Reasonable blocking radius
             },
         );
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Shoot {
+                stack: shooter_stack,
+                target: target_stack,
+                shots: 1,
+            }],
+        )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
         assert!(matches!(
@@ -3337,30 +3541,6 @@ mod tests {
         ));
         game_state.phase = Phase::Combat;
 
-        // Test arming when habitat is present
-        let habitat_module = module_id_generator.next().unwrap();
-        game_state
-            .stacks
-            .get_mut(&stack_id)
-            .unwrap()
-            .modules
-            .insert(habitat_module, Module::new_habitat(player_1));
-
-        let orders = HashMap::from([(
-            player_1,
-            vec![Order::Arm {
-                stack: stack_id,
-                warhead: warhead_module,
-                armed: true,
-            }],
-        )]);
-
-        let (_, errors) = Order::validate(&game_state, &orders);
-        assert!(matches!(
-            errors[&player_1][0].unwrap(),
-            OrderError::HabOnStack
-        ));
-
         // Test arming non-warhead module
         let gun_module = module_id_generator.next().unwrap();
         game_state
@@ -3383,6 +3563,30 @@ mod tests {
         assert!(matches!(
             errors[&player_1][0].unwrap(),
             OrderError::InvalidModuleType(_, _)
+        ));
+
+        // Test arming when habitat is present
+        let habitat_module = module_id_generator.next().unwrap();
+        game_state
+            .stacks
+            .get_mut(&stack_id)
+            .unwrap()
+            .modules
+            .insert(habitat_module, Module::new_habitat(player_1));
+
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Arm {
+                stack: stack_id,
+                warhead: warhead_module,
+                armed: true,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(matches!(
+            errors[&player_1][0].unwrap(),
+            OrderError::HabOnStack
         ));
     }
 
@@ -3449,8 +3653,8 @@ mod tests {
             player_1,
             vec![Order::Burn {
                 stack: stack_id,
-                delta_v: Vec2 { q: 1, r: 0 },       // 1 hex/turn delta-v
-                fuel_from: vec![(tank_module, 10)], // Use some fuel
+                delta_v: Vec2 { q: 1, r: 0 },      // 1 hex/turn delta-v
+                fuel_from: vec![(tank_module, 6)], // Use correct fuel amount: ceil(12 * 1 / 2) = 6
             }],
         )]);
 
@@ -3551,14 +3755,21 @@ mod tests {
             *fuel = 100;
         }
 
-        let mut stack_data = Stack::new(Vec2 { q: 0, r: 0 }, Vec2::zero(), player_1);
+        // Place both stacks in orbit around Earth at (6, -3)
+        // Use proper orbital parameters from Earth.orbit_parameters(true)
+        let mut stack_data = Stack::new(Vec2 { q: 7, r: -3 }, Vec2 { q: -1, r: 1 }, player_1);
         stack_data
             .modules
             .insert(engine_module, Module::new_engine());
         stack_data.modules.insert(tank_module, fuel_tank);
         game_state.stacks.insert(stack_id, stack_data);
 
-        let target_data = Stack::new(Vec2 { q: 1, r: 0 }, Vec2::zero(), player_1);
+        // Target stack at (5, -3) with proper orbital velocity
+        let mut target_data = Stack::new(Vec2 { q: 5, r: -3 }, Vec2 { q: 1, r: -1 }, player_1);
+        let target_engine = module_id_generator.next().unwrap();
+        target_data
+            .modules
+            .insert(target_engine, Module::new_engine());
         game_state.stacks.insert(target_stack_id, target_data);
 
         // Test multiple movement orders for same stack
@@ -3568,12 +3779,12 @@ mod tests {
                 Order::Burn {
                     stack: stack_id,
                     delta_v: Vec2 { q: 1, r: 0 },
-                    fuel_from: vec![(tank_module, 5)],
+                    fuel_from: vec![(tank_module, 6)], // Correct fuel calculation
                 },
                 Order::Rendezvous {
                     stack: stack_id,
                     target: target_stack_id,
-                    fuel_from: vec![(tank_module, 5)],
+                    fuel_from: vec![(tank_module, 6)], // Correct fuel calculation
                 },
             ],
         )]);
@@ -3614,12 +3825,12 @@ mod tests {
                 Order::Rendezvous {
                     stack: stack_id,
                     target: target_stack_id,
-                    fuel_from: vec![(tank_module, 5)],
+                    fuel_from: vec![(tank_module, 6)], // Correct fuel amount
                 },
                 Order::Burn {
                     stack: target_stack_id,
                     delta_v: Vec2 { q: 0, r: 1 },
-                    fuel_from: vec![(target_tank, 5)],
+                    fuel_from: vec![(target_tank, 4)], // Target stack mass = 7, needs ceil(7*1/2) = 4
                 },
             ],
         )]);

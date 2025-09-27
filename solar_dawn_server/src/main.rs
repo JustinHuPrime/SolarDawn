@@ -234,7 +234,10 @@ impl ServerState {
                 game_state,
                 ..
             } => {
-                eprintln!("got orders from everyone, ticking from {:?}", game_state.game_state.phase);
+                eprintln!(
+                    "got orders from everyone, ticking from {:?}",
+                    game_state.game_state.phase
+                );
                 let delta = game_state.game_state.next(
                     take(&mut game_state.orders),
                     &mut game_state.stack_id_generator,
