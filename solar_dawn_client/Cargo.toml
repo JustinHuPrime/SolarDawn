@@ -3,15 +3,13 @@ name = "solar_dawn_client"
 version = "0.5.0"
 authors = ["Justin Hu <justin.hu@alumni.ubc.ca>"]
 edition = "2024"
-description = "A simultaneous turn resolution 4X inspired by High Frontier and Triplanetary - wasm client library."
+description = "A simultaneous turn resolution 4X inspired by High Frontier and Triplanetary - client package."
 homepage = "https://github.com/JustinHuPrime/SolarDawn#readme"
 repository = "https://github.com/JustinHuPrime/SolarDawn"
 license = "AGPL-3.0-or-later"
 
-[lib]
-crate-type = ["cdylib"]
-
 [dependencies]
+dioxus = { version = "0.6.0", features = ["web"] }
 serde = { workspace = true }
-wasm-bindgen = "0.2.100"
-web-sys = "0.3.77"
+serde_cbor = { workspace = true }
+solar_dawn_common = { path = "../solar_dawn_common", features = ["client"] }
