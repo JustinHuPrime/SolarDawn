@@ -1,6 +1,7 @@
 version: 2
 updates:
-- package-ecosystem: "cargo"
-  directories: ["/", "/solar_dawn_client", "/solar_dawn_common", "/solar_dawn_server"]
-  schedule:
-    interval: "weekly"
+  - package-ecosystem: "cargo"
+    directories:
+      ["/", "/solar_dawn_client", "/solar_dawn_common", "/solar_dawn_server"]
+    schedule:
+      interval: "weekly"
