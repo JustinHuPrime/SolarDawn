@@ -545,7 +545,8 @@ impl ModuleDetails {
     /// Fraction of mass returned when salvaging
     pub const SALVAGE_FRACTION: i32 = 2;
 
-    fn mass(&self) -> f32 {
+    /// Mass of the module, in tonnes
+    pub fn mass(&self) -> f32 {
         match self {
             ModuleDetails::Miner => Self::MINER_MASS as f32,
             ModuleDetails::FuelSkimmer => Self::FUEL_SKIMMER_MASS as f32,
@@ -564,7 +565,10 @@ impl ModuleDetails {
             ModuleDetails::ArmourPlate => Self::ARMOUR_PLATE_MASS as f32,
         }
     }
+}
 
+#[cfg(feature = "server")]
+impl ModuleDetails {
     fn dry_mass(&self) -> u32 {
         match self {
             ModuleDetails::Miner => Self::MINER_MASS,
@@ -613,9 +617,9 @@ mod tests {
         let position = Vec2 { q: 5, r: 3 };
         let velocity = Vec2 { q: 1, r: -1 };
         let owner = PlayerId::from(1u8);
-        
+
         let stack = Stack::new(position, velocity, owner);
-        
+
         assert_eq!(stack.position, position);
         assert_eq!(stack.velocity, velocity);
         assert_eq!(stack.owner, owner);
@@ -661,8 +665,11 @@ mod tests {
             match &module.details {
                 ModuleDetails::Habitat { .. } => hab_count += 1,
                 ModuleDetails::Engine => engine_count += 1,
-                ModuleDetails::Factory | ModuleDetails::Refinery | ModuleDetails::Miner 
-                | ModuleDetails::CargoHold { .. } | ModuleDetails::Tank { .. } => other_count += 1,
+                ModuleDetails::Factory
+                | ModuleDetails::Refinery
+                | ModuleDetails::Miner
+                | ModuleDetails::CargoHold { .. }
+                | ModuleDetails::Tank { .. } => other_count += 1,
                 _ => panic!("Unexpected module type in starter stack"),
             }
         }
@@ -676,7 +683,7 @@ mod tests {
     fn test_stack_rendezvous() {
         let position = Vec2 { q: 5, r: 3 };
         let velocity = Vec2 { q: 1, r: -1 };
-        
+
         let stack1 = Stack {
             position,
             velocity,
@@ -727,15 +734,15 @@ mod tests {
 
         // For a stack to be in orbit, it needs:
         // 1. Distance from celestial = 1 hex
-        // 2. Velocity norm = 1 
+        // 2. Velocity norm = 1
         // 3. After movement (position + velocity) distance from celestial = 1
-        
+
         // Use celestial's neighbors for valid orbital positions
         let neighbors = celestial.position.neighbours();
-        
+
         // Test a valid orbit: position at neighbor, velocity to next neighbor
         let orbiting_stack = Stack {
-            position: neighbors[0], // Vec2 { q: 0, r: -1 } (up from center)
+            position: neighbors[0],        // Vec2 { q: 0, r: -1 } (up from center)
             velocity: Vec2 { q: 1, r: 0 }, // Move to up-right neighbor
             owner: PlayerId::from(1u8),
             name: String::new(),
@@ -745,7 +752,7 @@ mod tests {
         // Check preconditions
         assert_eq!((orbiting_stack.position - celestial.position).norm(), 1);
         assert_eq!(orbiting_stack.velocity.norm(), 1);
-        
+
         // After movement: (0, -1) + (1, 0) = (1, -1) which is also a neighbor
         let next_pos = orbiting_stack.position + orbiting_stack.velocity;
         assert_eq!((next_pos - celestial.position).norm(), 1);
@@ -862,9 +869,14 @@ mod tests {
         assert_eq!(stack.mass(), 0.0);
 
         // Add some modules
-        stack.modules.insert(ModuleId::from(0u32), Module::new_engine());
-        stack.modules.insert(ModuleId::from(1u32), Module::new_habitat(PlayerId::from(1u8)));
-        
+        stack
+            .modules
+            .insert(ModuleId::from(0u32), Module::new_engine());
+        stack.modules.insert(
+            ModuleId::from(1u32),
+            Module::new_habitat(PlayerId::from(1u8)),
+        );
+
         let expected_mass = ModuleDetails::ENGINE_MASS as f32 + ModuleDetails::HABITAT_MASS as f32;
         assert_eq!(stack.mass(), expected_mass);
 
@@ -907,7 +919,7 @@ mod tests {
         // Test stacks that don't come close enough (beyond warhead range)
         let far_stack = Stack {
             position: Vec2 { q: 10, r: 10 }, // Very far away
-            velocity: Vec2 { q: 0, r: 0 }, // Stationary
+            velocity: Vec2 { q: 0, r: 0 },   // Stationary
             owner: PlayerId::from(3u8),
             name: String::new(),
             modules: HashMap::new(),
@@ -931,7 +943,7 @@ mod tests {
     }
 
     #[cfg(feature = "server")]
-    #[test] 
+    #[test]
     fn test_stack_in_range() {
         let stack1 = Stack {
             position: Vec2 { q: 0, r: 0 },
@@ -956,7 +968,7 @@ mod tests {
         // Distance = sqrt((1-0)^2 + (0-1)^2) = sqrt(2) ≈ 1.414
         // But we need cartesian distance: (1.5, sqrt(3)/2) vs (0, sqrt(3))
         // This is more complex than hex distance, so let's test with closer positions
-        
+
         // Test with a closer stationary stack
         let stack3 = Stack {
             position: Vec2 { q: 0, r: 0 },
@@ -968,7 +980,7 @@ mod tests {
 
         // stack1 at t=0.1 will be close to origin - should be in range
         assert!(stack1.in_range(0.1, &stack3));
-        
+
         // At t=0, should definitely be in range (same position)
         assert!(stack1.in_range(0.0, &stack3));
     }
@@ -986,9 +998,15 @@ mod tests {
         };
 
         // Add some modules including armor
-        stack.modules.insert(ModuleId::from(0u32), Module::new_engine());
-        stack.modules.insert(ModuleId::from(1u32), Module::new_gun());
-        stack.modules.insert(ModuleId::from(2u32), Module::new_armour_plate());
+        stack
+            .modules
+            .insert(ModuleId::from(0u32), Module::new_engine());
+        stack
+            .modules
+            .insert(ModuleId::from(1u32), Module::new_gun());
+        stack
+            .modules
+            .insert(ModuleId::from(2u32), Module::new_armour_plate());
 
         // Initially all should be intact
         for module in stack.modules.values() {
@@ -997,19 +1015,34 @@ mod tests {
 
         // Do 1 damage - should hit armour first
         stack.do_damage(1, &mut rng);
-        let damaged_armour_count = stack.modules.values()
-            .filter(|m| matches!(m, Module { health: Health::Damaged, details: ModuleDetails::ArmourPlate }))
+        let damaged_armour_count = stack
+            .modules
+            .values()
+            .filter(|m| {
+                matches!(
+                    m,
+                    Module {
+                        health: Health::Damaged,
+                        details: ModuleDetails::ArmourPlate
+                    }
+                )
+            })
             .count();
         assert_eq!(damaged_armour_count, 1);
 
         // Do enough damage to affect other modules too
         stack.do_damage(5, &mut rng);
-        
+
         // Check that some damage was done (either armor destroyed or other modules damaged)
-        let total_damaged_or_destroyed = stack.modules.values()
+        let total_damaged_or_destroyed = stack
+            .modules
+            .values()
             .filter(|m| !matches!(m.health, Health::Intact))
             .count();
-        assert!(total_damaged_or_destroyed > 1, "Should have more than just one damaged module");
+        assert!(
+            total_damaged_or_destroyed > 1,
+            "Should have more than just one damaged module"
+        );
     }
 
     #[test]
@@ -1018,16 +1051,45 @@ mod tests {
 
         // Test all module creation methods
         assert!(matches!(Module::new_miner().details, ModuleDetails::Miner));
-        assert!(matches!(Module::new_fuel_skimmer().details, ModuleDetails::FuelSkimmer));
-        assert!(matches!(Module::new_cargo_hold().details, ModuleDetails::CargoHold { ore: 0, materials: 0 }));
-        assert!(matches!(Module::new_tank().details, ModuleDetails::Tank { water: 0, fuel: 0 }));
-        assert!(matches!(Module::new_engine().details, ModuleDetails::Engine));
-        assert!(matches!(Module::new_warhead().details, ModuleDetails::Warhead { armed: false }));
+        assert!(matches!(
+            Module::new_fuel_skimmer().details,
+            ModuleDetails::FuelSkimmer
+        ));
+        assert!(matches!(
+            Module::new_cargo_hold().details,
+            ModuleDetails::CargoHold {
+                ore: 0,
+                materials: 0
+            }
+        ));
+        assert!(matches!(
+            Module::new_tank().details,
+            ModuleDetails::Tank { water: 0, fuel: 0 }
+        ));
+        assert!(matches!(
+            Module::new_engine().details,
+            ModuleDetails::Engine
+        ));
+        assert!(matches!(
+            Module::new_warhead().details,
+            ModuleDetails::Warhead { armed: false }
+        ));
         assert!(matches!(Module::new_gun().details, ModuleDetails::Gun));
-        assert!(matches!(Module::new_habitat(owner).details, ModuleDetails::Habitat { owner: o } if o == owner));
-        assert!(matches!(Module::new_refinery().details, ModuleDetails::Refinery));
-        assert!(matches!(Module::new_factory().details, ModuleDetails::Factory));
-        assert!(matches!(Module::new_armour_plate().details, ModuleDetails::ArmourPlate));
+        assert!(
+            matches!(Module::new_habitat(owner).details, ModuleDetails::Habitat { owner: o } if o == owner)
+        );
+        assert!(matches!(
+            Module::new_refinery().details,
+            ModuleDetails::Refinery
+        ));
+        assert!(matches!(
+            Module::new_factory().details,
+            ModuleDetails::Factory
+        ));
+        assert!(matches!(
+            Module::new_armour_plate().details,
+            ModuleDetails::ArmourPlate
+        ));
 
         // Test that all start as intact
         assert!(matches!(Module::new_engine().health, Health::Intact));
@@ -1036,7 +1098,10 @@ mod tests {
     #[test]
     fn test_module_mass() {
         // Test dry modules
-        assert_eq!(Module::new_engine().mass(), ModuleDetails::ENGINE_MASS as f32);
+        assert_eq!(
+            Module::new_engine().mass(),
+            ModuleDetails::ENGINE_MASS as f32
+        );
         assert_eq!(Module::new_miner().mass(), ModuleDetails::MINER_MASS as f32);
 
         // Test modules with contents
@@ -1061,8 +1126,11 @@ mod tests {
     fn test_module_dry_mass() {
         // All modules should return their base mass regardless of contents
         assert_eq!(Module::new_engine().dry_mass(), ModuleDetails::ENGINE_MASS);
-        assert_eq!(Module::new_habitat(PlayerId::from(1u8)).dry_mass(), ModuleDetails::HABITAT_MASS);
-        
+        assert_eq!(
+            Module::new_habitat(PlayerId::from(1u8)).dry_mass(),
+            ModuleDetails::HABITAT_MASS
+        );
+
         // Even with contents, dry mass should be the same
         let mut tank = Module::new_tank();
         if let ModuleDetails::Tank { water, fuel } = &mut tank.details {
@@ -1076,41 +1144,65 @@ mod tests {
     #[test]
     fn test_health_damage() {
         let mut health = Health::Intact;
-        
+
         health.damage();
         assert!(matches!(health, Health::Damaged));
-        
+
         health.damage();
         assert!(matches!(health, Health::Destroyed));
-        
+
         // Damaging a destroyed module should panic in debug mode
         // but we can't easily test panic behavior here
     }
 
     #[test]
     fn test_module_details_mass() {
-        assert_eq!(ModuleDetails::Miner.mass(), ModuleDetails::MINER_MASS as f32);
-        assert_eq!(ModuleDetails::Engine.mass(), ModuleDetails::ENGINE_MASS as f32);
-        
-        let tank_with_contents = ModuleDetails::Tank { water: 50, fuel: 30 };
+        assert_eq!(
+            ModuleDetails::Miner.mass(),
+            ModuleDetails::MINER_MASS as f32
+        );
+        assert_eq!(
+            ModuleDetails::Engine.mass(),
+            ModuleDetails::ENGINE_MASS as f32
+        );
+
+        let tank_with_contents = ModuleDetails::Tank {
+            water: 50,
+            fuel: 30,
+        };
         let expected_mass = ModuleDetails::TANK_MASS as f32 + 0.1 * (50.0 + 30.0);
         assert_eq!(tank_with_contents.mass(), expected_mass);
-        
-        let cargo_with_contents = ModuleDetails::CargoHold { ore: 20, materials: 40 };
+
+        let cargo_with_contents = ModuleDetails::CargoHold {
+            ore: 20,
+            materials: 40,
+        };
         let expected_mass = ModuleDetails::CARGO_HOLD_MASS as f32 + 0.1 * (20.0 + 40.0);
         assert_eq!(cargo_with_contents.mass(), expected_mass);
     }
 
     #[test]
     fn test_module_details_dry_mass() {
-        assert_eq!(ModuleDetails::Factory.dry_mass(), ModuleDetails::FACTORY_MASS);
-        assert_eq!(ModuleDetails::Refinery.dry_mass(), ModuleDetails::REFINERY_MASS);
-        
+        assert_eq!(
+            ModuleDetails::Factory.dry_mass(),
+            ModuleDetails::FACTORY_MASS
+        );
+        assert_eq!(
+            ModuleDetails::Refinery.dry_mass(),
+            ModuleDetails::REFINERY_MASS
+        );
+
         // Contents shouldn't matter for dry mass
-        let tank_full = ModuleDetails::Tank { water: 200, fuel: 0 };
+        let tank_full = ModuleDetails::Tank {
+            water: 200,
+            fuel: 0,
+        };
         assert_eq!(tank_full.dry_mass(), ModuleDetails::TANK_MASS);
-        
-        let cargo_full = ModuleDetails::CargoHold { ore: 100, materials: 100 };
+
+        let cargo_full = ModuleDetails::CargoHold {
+            ore: 100,
+            materials: 100,
+        };
         assert_eq!(cargo_full.dry_mass(), ModuleDetails::CARGO_HOLD_MASS);
     }
 
@@ -1124,13 +1216,16 @@ mod tests {
         assert!(ModuleDetails::ENGINE_SPECIFIC_IMPULSE > 0);
         assert!(ModuleDetails::ENGINE_THRUST > 0.0);
         assert!(ModuleDetails::WARHEAD_RANGE > 0.0);
-        assert!(ModuleDetails::GUN_RANGE_ONE_HIT_CHANCE > 0.0 && ModuleDetails::GUN_RANGE_ONE_HIT_CHANCE <= 1.0);
-        
+        assert!(
+            ModuleDetails::GUN_RANGE_ONE_HIT_CHANCE > 0.0
+                && ModuleDetails::GUN_RANGE_ONE_HIT_CHANCE <= 1.0
+        );
+
         // Test mass constants
         assert!(ModuleDetails::MINER_MASS > 0);
         assert!(ModuleDetails::ENGINE_MASS > 0);
         assert!(ModuleDetails::HABITAT_MASS > 0);
-        
+
         // Test conversion ratios
         assert!(ModuleDetails::REFINERY_ORE_PER_MATERIAL > 0);
         assert!(ModuleDetails::REFINERY_WATER_PER_FUEL > 0);
@@ -1146,7 +1241,7 @@ mod tests {
         let back_to_u32: u32 = stack_id.into();
         assert_eq!(stack_val, back_to_u32);
 
-        // Test ModuleId conversions  
+        // Test ModuleId conversions
         let module_val = 67890u32;
         let module_id = ModuleId::from(module_val);
         let back_to_u32: u32 = module_id.into();

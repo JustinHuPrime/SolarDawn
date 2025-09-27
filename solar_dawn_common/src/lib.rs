@@ -35,11 +35,9 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use stack::{ModuleId, Stack, StackId};
 
+use crate::order::{Order, OrderError};
 #[cfg(feature = "server")]
-use crate::{
-    order::{Order, OrderError},
-    stack::{Health, Module, ModuleDetails},
-};
+use crate::stack::{Health, Module, ModuleDetails};
 
 pub mod celestial;
 pub mod order;
@@ -296,6 +294,7 @@ pub enum Phase {
     Movement,
 }
 
+#[cfg(feature = "server")]
 impl Phase {
     fn next(self) -> Self {
         use Phase::*;
@@ -552,7 +551,7 @@ mod tests {
     #[test]
     fn test_vec2_movement_methods() {
         let origin = Vec2::zero();
-        
+
         assert_eq!(origin.up(), Vec2 { q: 0, r: -1 });
         assert_eq!(origin.up_right(), Vec2 { q: 1, r: -1 });
         assert_eq!(origin.down_right(), Vec2 { q: 1, r: 0 });
@@ -570,12 +569,12 @@ mod tests {
     fn test_vec2_neighbours() {
         let origin = Vec2::zero();
         let neighbours = origin.neighbours();
-        
+
         assert_eq!(neighbours.len(), 6);
         assert_eq!(neighbours[0], Vec2 { q: 0, r: -1 }); // up
         assert_eq!(neighbours[1], Vec2 { q: 1, r: -1 }); // up_right
-        assert_eq!(neighbours[2], Vec2 { q: 1, r: 0 });  // down_right
-        assert_eq!(neighbours[3], Vec2 { q: 0, r: 1 });  // down
+        assert_eq!(neighbours[2], Vec2 { q: 1, r: 0 }); // down_right
+        assert_eq!(neighbours[3], Vec2 { q: 0, r: 1 }); // down
         assert_eq!(neighbours[4], Vec2 { q: -1, r: 1 }); // down_left
         assert_eq!(neighbours[5], Vec2 { q: -1, r: 0 }); // up_left
     }
@@ -614,7 +613,10 @@ mod tests {
     fn test_vec2_from_cartesian() {
         // Test conversion from cartesian back to hex coordinates
         let origin_cart = (0.0, 0.0);
-        assert_eq!(Vec2::from_cartesian(origin_cart.0, origin_cart.1), Vec2::zero());
+        assert_eq!(
+            Vec2::from_cartesian(origin_cart.0, origin_cart.1),
+            Vec2::zero()
+        );
 
         let v1 = Vec2 { q: 1, r: 0 };
         let (x, y) = v1.cartesian();
@@ -633,20 +635,24 @@ mod tests {
     fn test_vec2_from_polar() {
         // Test simple polar coordinate conversion
         assert_eq!(Vec2::from_polar(0.0, 0.0), Vec2::zero());
-        
+
         // Let's test by converting back and forth to verify consistency
         let test_points = vec![
             Vec2 { q: 1, r: 0 },
             Vec2 { q: 0, r: 1 },
             Vec2 { q: 2, r: -1 },
         ];
-        
+
         for point in test_points {
             let (x, y) = point.cartesian();
             let r = (x * x + y * y).sqrt();
             let theta = (-y).atan2(x); // Note: y is negated in from_polar
             let converted_back = Vec2::from_polar(r, theta);
-            assert_eq!(converted_back, point, "Round-trip conversion failed for {:?}", point);
+            assert_eq!(
+                converted_back, point,
+                "Round-trip conversion failed for {:?}",
+                point
+            );
         }
     }
 
@@ -656,7 +662,7 @@ mod tests {
         assert_eq!(Vec2::round(0.0, 0.0), Vec2::zero());
         assert_eq!(Vec2::round(1.0, 0.0), Vec2 { q: 1, r: 0 });
         assert_eq!(Vec2::round(0.0, 1.0), Vec2 { q: 0, r: 1 });
-        
+
         // Test that the rounding function works correctly for round-trip conversions
         let test_points = vec![
             Vec2 { q: 1, r: 0 },
@@ -664,13 +670,17 @@ mod tests {
             Vec2 { q: 2, r: -1 },
             Vec2 { q: -1, r: 2 },
         ];
-        
+
         for point in test_points {
             let (x, y) = point.cartesian();
             let q = x * 2.0 / 3.0;
             let r = x * -1.0 / 3.0 + y * 3.0_f32.sqrt() / 3.0;
             let rounded = Vec2::round(q, r);
-            assert_eq!(rounded, point, "Round failed for {:?} -> ({}, {})", point, q, r);
+            assert_eq!(
+                rounded, point,
+                "Round failed for {:?} -> ({}, {})",
+                point, q, r
+            );
         }
     }
 
@@ -679,7 +689,7 @@ mod tests {
         assert_eq!(Phase::Logistics.next(), Phase::Combat);
         assert_eq!(Phase::Combat.next(), Phase::Movement);
         assert_eq!(Phase::Movement.next(), Phase::Logistics);
-        
+
         // Test complete cycle
         let mut phase = Phase::Logistics;
         phase = phase.next();
@@ -702,12 +712,24 @@ mod tests {
     #[cfg(feature = "server")]
     #[test]
     fn test_player_id_starting_stack_names() {
-        assert_eq!(PlayerId::from(1u8).starting_stack_name(), "Washington Station");
+        assert_eq!(
+            PlayerId::from(1u8).starting_stack_name(),
+            "Washington Station"
+        );
         assert_eq!(PlayerId::from(2u8).starting_stack_name(), "Moscow Orbital");
-        assert_eq!(PlayerId::from(3u8).starting_stack_name(), "Beijing Highport");
+        assert_eq!(
+            PlayerId::from(3u8).starting_stack_name(),
+            "Beijing Highport"
+        );
         assert_eq!(PlayerId::from(4u8).starting_stack_name(), "Paris Terminal");
-        assert_eq!(PlayerId::from(5u8).starting_stack_name(), "London Spacedock");
-        assert_eq!(PlayerId::from(6u8).starting_stack_name(), "New Delhi Platform");
+        assert_eq!(
+            PlayerId::from(5u8).starting_stack_name(),
+            "London Spacedock"
+        );
+        assert_eq!(
+            PlayerId::from(6u8).starting_stack_name(),
+            "New Delhi Platform"
+        );
     }
 
     #[cfg(feature = "server")]
@@ -750,13 +772,16 @@ mod tests {
 
         // Create a delta to apply
         let mut new_stacks = HashMap::new();
-        new_stacks.insert(StackId::from(1u32), Stack {
-            position: Vec2 { q: 1, r: 1 },
-            velocity: Vec2::zero(),
-            owner: PlayerId::from(1u8),
-            name: "Test Stack".to_string(),
-            modules: HashMap::new(),
-        });
+        new_stacks.insert(
+            StackId::from(1u32),
+            Stack {
+                position: Vec2 { q: 1, r: 1 },
+                velocity: Vec2::zero(),
+                owner: PlayerId::from(1u8),
+                name: "Test Stack".to_string(),
+                modules: HashMap::new(),
+            },
+        );
 
         let delta = GameStateDelta {
             phase: Phase::Combat,
