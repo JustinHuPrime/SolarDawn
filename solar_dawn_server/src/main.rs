@@ -31,13 +31,11 @@
 
 use std::{
     collections::HashMap,
-    env::args_os,
-    ffi::OsStr,
     fs::OpenOptions,
     io::Write,
     mem::{replace, take},
     net::SocketAddr,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::ExitCode,
     sync::Arc,
 };
@@ -46,14 +44,14 @@ use anyhow::{Context, Result, anyhow, bail};
 use axum::{
     Router,
     extract::{
-        ConnectInfo, State,
+        State,
         ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade},
     },
     response::IntoResponse,
     routing::any,
 };
-use axum_extra::{TypedHeader, headers};
 use axum_server::tls_rustls::RustlsConfig;
+use clap::Parser;
 use futures_util::{SinkExt, StreamExt, stream::SplitSink};
 use rand::{Rng, rng};
 use rand_distr::Alphanumeric;
@@ -72,7 +70,8 @@ enum ServerState {
     New {
         join_code: String,
         num_players: usize,
-        connections: HashMap<PlayerId, (String, SplitSink<WebSocket, Message>)>,
+        connections: HashMap<PlayerId, SplitSink<WebSocket, Message>>,
+        registered_players: HashMap<String, PlayerId>,
         player_id_generator: IdGenerator<PlayerId, u8>,
         scenario: GameStateInitializer,
         save_file: PathBuf,
@@ -111,6 +110,7 @@ impl ServerState {
             join_code: Self::join_code(),
             num_players,
             connections: HashMap::new(),
+            registered_players: HashMap::new(),
             player_id_generator: IdGenerator::default(),
             scenario,
             save_file,
@@ -139,6 +139,7 @@ impl ServerState {
     async fn server_disconnect(&mut self, player_id: PlayerId, message: Message) {
         match self {
             ServerState::Running { connections, .. } => {
+                eprintln!("dropping {player_id:?}");
                 let _ = connections
                     .get_mut(&player_id)
                     .expect("should only drop connected players")
@@ -156,19 +157,18 @@ impl ServerState {
             ServerState::New {
                 join_code,
                 connections,
+                registered_players,
                 scenario,
                 save_file,
                 ..
             } => {
-                let players = connections
-                    .iter_mut()
-                    .map(|(&player_id, (username, _))| (player_id, take(username)))
-                    .collect();
-                let connections = take(connections)
+                let players = take(registered_players)
                     .into_iter()
-                    .map(|(player_id, (_, send))| (player_id, send))
-                    .collect();
+                    .map(|(username, id)| (id, username))
+                    .collect::<HashMap<_, _>>();
+                let connections = take(connections);
                 let game_state = GameServerState::new(players, *scenario);
+                eprintln!("starting after new");
                 *self = ServerState::Running {
                     join_code: take(join_code),
                     connections,
@@ -182,6 +182,7 @@ impl ServerState {
                 game_state,
                 save_file,
             } => {
+                eprintln!("starting after load");
                 *self = ServerState::Running {
                     join_code: take(join_code),
                     connections: take(connections),
@@ -200,6 +201,10 @@ impl ServerState {
                 ..
             } => {
                 let mut lost_connections = Vec::new();
+                eprintln!(
+                    "sending initial state to all {} believed-connected players",
+                    connections.len()
+                );
                 for (&player_id, connection) in connections.iter_mut() {
                     let message = Message::Binary(
                         to_vec(&game_state.game_state)
@@ -229,6 +234,7 @@ impl ServerState {
                 game_state,
                 ..
             } => {
+                eprintln!("got orders from everyone, ticking from {:?}", game_state.game_state.phase);
                 let delta = game_state.game_state.next(
                     take(&mut game_state.orders),
                     &mut game_state.stack_id_generator,
@@ -240,6 +246,10 @@ impl ServerState {
                 game_state.game_state.apply(delta);
 
                 let mut lost_connections = Vec::new();
+                eprintln!(
+                    "sending state delta to all {} believed-connected players",
+                    connections.len()
+                );
                 for (&player_id, connection) in connections.iter_mut() {
                     let message = Message::Binary(delta_bytes.clone().into());
                     if connection.send(message).await.is_err() {
@@ -262,6 +272,7 @@ impl ServerState {
                 save_file,
                 ..
             } => {
+                eprintln!("trying to save to {save_file:?}");
                 let Ok(mut file) = OpenOptions::new()
                     .write(true)
                     .create(true)
@@ -283,9 +294,11 @@ impl ServerState {
     }
 
     fn join_code() -> String {
-        (0..16)
+        let code = (0..16)
             .map(|_| rng().sample(Alphanumeric) as char)
-            .collect()
+            .collect();
+        println!("Join code: {code}");
+        code
     }
 
     fn barely_init_game_server_state() -> GameServerState {
@@ -308,75 +321,75 @@ impl ServerState {
 
 #[tokio::main]
 async fn main() -> ExitCode {
-    let Ok(args) = args_os()
-        .map(|arg| arg.into_string())
-        .collect::<Result<Vec<_>, _>>()
-    else {
-        eprintln!("Command line arguments had invalid characters");
-        return ExitCode::FAILURE;
-    };
-    let executable = args
-        .first()
-        .map(Path::new)
-        .and_then(Path::file_name)
-        .and_then(OsStr::to_str)
-        .unwrap_or(env!("CARGO_BIN_NAME"));
-    let folder = args
-        .first()
-        .map(Path::new)
-        .and_then(Path::parent)
-        .unwrap_or(Path::new(""));
-    let args = args.iter().skip(1).map(String::as_str).collect::<Vec<_>>();
+    #[derive(Parser)]
+    enum Args {
+        New {
+            num_players: usize,
+            scenario: String,
+            save_file: String,
+            #[clap(flatten)]
+            common_args: CommonArgs,
+        },
+        Load {
+            save_file: String,
+            #[clap(flatten)]
+            common_args: CommonArgs,
+        },
+    }
+    #[derive(Parser)]
+    struct CommonArgs {
+        #[clap(long)]
+        tls: bool,
+        #[clap(long)]
+        port: u16,
+    }
+    let args = Args::parse();
+    println!("Solar Dawn server version {}", env!("CARGO_PKG_VERSION"));
 
-    let server_state = Arc::new(Mutex::new(match *args.as_slice() {
-        ["new", num_players, scenario, save_file] => {
-            let num_players = match num_players.parse::<usize>() {
-                Ok(num_players) => num_players,
-                Err(_) => {
-                    eprintln!("couldn't parse '{num_players}'");
-                    return ExitCode::FAILURE;
-                }
-            };
-            match ServerState::new(num_players, scenario, PathBuf::from(save_file)) {
-                Ok(server_state) => server_state,
-                Err(err) => {
-                    eprintln!("{err}");
-                    return ExitCode::FAILURE;
-                }
-            }
-        }
-        ["load", save_file] => match ServerState::load(PathBuf::from(save_file)) {
-            Ok(server_state) => server_state,
+    let (server_state, args) = match args {
+        Args::New {
+            num_players,
+            scenario,
+            save_file,
+            common_args,
+        } => match ServerState::new(num_players, &scenario, PathBuf::from(save_file)) {
+            Ok(server_state) => (server_state, common_args),
             Err(err) => {
                 eprintln!("{err}");
                 return ExitCode::FAILURE;
             }
         },
-        _ => {
-            eprintln!("Couldn't parse command line '{}'", args.join(" "));
-            eprintln!("Usage:");
-            eprintln!("\t{executable} new <num_players> <scenario> <save_file>");
-            eprintln!("\t{executable} load <save_file>");
-            return ExitCode::FAILURE;
-        }
-    }));
+        Args::Load {
+            save_file,
+            common_args,
+        } => match ServerState::load(PathBuf::from(save_file)) {
+            Ok(server_state) => (server_state, common_args),
+            Err(err) => {
+                eprintln!("{err}");
+                return ExitCode::FAILURE;
+            }
+        },
+    };
+    let server_state = Arc::new(Mutex::new(server_state));
 
     let app = Router::new()
-        .fallback_service(
-            ServeDir::new(folder.join("assets")).append_index_html_on_directories(true),
-        )
+        .fallback_service(ServeDir::new("./assets").append_index_html_on_directories(true))
         .route("/ws", any(ws_handler))
         .with_state(server_state);
 
-    let Ok(config) = RustlsConfig::from_pem_file("./cert.pem", "./key.pem").await else {
-        eprintln!("Couldn't set up TLS");
-        return ExitCode::FAILURE;
+    let addr = SocketAddr::from(([0, 0, 0, 0], args.port));
+    let server = if args.tls {
+        let Ok(config) = RustlsConfig::from_pem_file("./cert.pem", "./key.pem").await else {
+            eprintln!("Couldn't set up TLS");
+            return ExitCode::FAILURE;
+        };
+        axum_server::bind_rustls(addr, config)
+            .serve(app.into_make_service())
+            .await
+    } else {
+        axum_server::bind(addr).serve(app.into_make_service()).await
     };
-    let addr = SocketAddr::from(([127, 0, 0, 1], 443));
-    match axum_server::bind_rustls(addr, config)
-        .serve(app.into_make_service_with_connect_info::<SocketAddr>())
-        .await
-    {
+    match server {
         Ok(()) => {
             unreachable!("axum::serve should never return");
         }
@@ -389,26 +402,29 @@ async fn main() -> ExitCode {
 
 async fn ws_handler(
     ws: WebSocketUpgrade,
-    _: Option<TypedHeader<headers::UserAgent>>,
-    _: ConnectInfo<SocketAddr>,
     State(server_state): State<Arc<Mutex<ServerState>>>,
 ) -> impl IntoResponse {
+    eprintln!("websocket connection");
     ws.on_upgrade(|socket| handle_socket(socket, server_state))
 }
 
 async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerState>>) {
-    fn protocol_error() -> Message {
-        Message::Close(Some(CloseFrame {
-            code: 4002,
-            reason: "protocol error".into(),
-        }))
-    }
-    fn join_code_error() -> Message {
-        Message::Close(Some(CloseFrame {
-            code: 4101,
-            reason: "bad join code".into(),
-        }))
-    }
+    let protocol_error = Message::Close(Some(CloseFrame {
+        code: 4002,
+        reason: "protocol error".into(),
+    }));
+    let join_code_error = Message::Close(Some(CloseFrame {
+        code: 4101,
+        reason: "bad join code".into(),
+    }));
+    let unknown_username = Message::Close(Some(CloseFrame {
+        code: 4102,
+        reason: "unknown username".into(),
+    }));
+    let user_already_connected = Message::Close(Some(CloseFrame {
+        code: 4103,
+        reason: "user already connected".into(),
+    }));
     fn serialize<T: Serialize>(message: &T) -> Message {
         Message::Binary(
             to_vec(&message)
@@ -420,12 +436,12 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
     let (mut send, mut recv) = socket.split();
     let Some(Ok(Message::Text(login))) = recv.next().await else {
         // protocol error
-        let _ = send.send(protocol_error()).await;
+        let _ = send.send(protocol_error).await;
         return;
     };
     let login = login.split('\n').collect::<Vec<_>>();
     let [attempt_join_code, attempt_username] = *login.as_slice() else {
-        let _ = send.send(protocol_error()).await;
+        let _ = send.send(protocol_error).await;
         return;
     };
     let mut server_state = server_state_mutex.lock().await;
@@ -434,26 +450,52 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
             join_code,
             num_players,
             connections,
+            registered_players,
             player_id_generator,
             ..
         } => {
+            eprintln!(
+                "connection attempt from {attempt_username:?} with join code {attempt_join_code:?}"
+            );
             if join_code != attempt_join_code {
                 // join code error
                 drop(server_state);
-                let _ = send.send(join_code_error()).await;
+                let _ = send.send(join_code_error).await;
                 return;
             }
 
-            let player_id = player_id_generator.next().expect("should be infinite");
-
-            // report login success
-            let Ok(()) = send.send(serialize(&player_id)).await else {
-                // couldn't reply - connection dropped?
+            let player_id = if let Some(player_id) = registered_players.get(attempt_username) {
+                // player is already registered
+                if connections.contains_key(player_id) {
+                    // player is already connected!
+                    drop(server_state);
+                    let _ = send.send(user_already_connected).await;
+                    return;
+                } else {
+                    eprintln!("recognized reconnection from {attempt_username:?} as {player_id:?}");
+                    *player_id
+                }
+            } else if registered_players.len() < *num_players {
+                // player is not yet registered
+                let player_id = player_id_generator.next().expect("should be infinite");
+                eprintln!("registering {attempt_username:?} as {player_id:?}");
+                registered_players.insert(attempt_username.to_string(), player_id);
+                player_id
+            } else {
+                // game is full
+                drop(server_state);
+                let _ = send.send(unknown_username).await;
                 return;
             };
 
+            // report login success
+            if send.send(serialize(&player_id)).await.is_err() {
+                eprintln!("lost connection before confirmation could be sent to {player_id:?}");
+                return;
+            }
+
             // add player to connections (guaranteed to have a slot)
-            connections.insert(player_id, (attempt_username.into(), send));
+            connections.insert(player_id, send);
 
             // maybe promote server to running
             if *num_players == connections.len() {
@@ -468,10 +510,13 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
             game_state,
             ..
         } => {
+            eprintln!(
+                "connection attempt from {attempt_username:?} with join code {attempt_join_code:?}"
+            );
             if join_code != attempt_join_code {
                 // join code error
                 drop(server_state);
-                let _ = send.send(join_code_error()).await;
+                let _ = send.send(join_code_error).await;
                 return;
             }
 
@@ -482,29 +527,22 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                 .find(|&(_, username)| username == attempt_username)
             else {
                 drop(server_state);
-                let _ = send
-                    .send(Message::Close(Some(CloseFrame {
-                        code: 4102,
-                        reason: "unknown username".into(),
-                    })))
-                    .await;
+                let _ = send.send(unknown_username).await;
                 return;
             };
             if connections.contains_key(&player_id) {
                 // can't reconnect - someone already connected
                 drop(server_state);
-                let _ = send
-                    .send(Message::Close(Some(CloseFrame {
-                        code: 4103,
-                        reason: "user already connected".into(),
-                    })))
-                    .await;
+                let _ = send.send(user_already_connected).await;
                 return;
             }
+
+            eprintln!("recognizing {attempt_username:?} as {player_id:?}");
 
             // report login success
             let Ok(()) = send.send(serialize(&player_id)).await else {
                 // couldn't reply - connection dropped?
+                eprintln!("lost connection before confirmation could be sent to {player_id:?}");
                 return;
             };
 
@@ -524,10 +562,13 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
             game_state,
             ..
         } => {
+            eprintln!(
+                "connection attempt from {attempt_username:?} with join code {attempt_join_code:?}"
+            );
             if join_code != attempt_join_code {
                 // join code error
                 drop(server_state);
-                let _ = send.send(join_code_error()).await;
+                let _ = send.send(join_code_error).await;
                 return;
             }
 
@@ -538,29 +579,22 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                 .find(|&(_, username)| username == attempt_username)
             else {
                 drop(server_state);
-                let _ = send
-                    .send(Message::Close(Some(CloseFrame {
-                        code: 4102,
-                        reason: "unknown username".into(),
-                    })))
-                    .await;
+                let _ = send.send(unknown_username).await;
                 return;
             };
             if connections.contains_key(&player_id) {
                 // can't reconnect - someone already connected
                 drop(server_state);
-                let _ = send
-                    .send(Message::Close(Some(CloseFrame {
-                        code: 4103,
-                        reason: "user already connected".into(),
-                    })))
-                    .await;
+                let _ = send.send(user_already_connected).await;
                 return;
             }
+
+            eprintln!("recognizing {attempt_username:?} as {player_id:?}");
 
             // report login success
             let Ok(()) = send.send(serialize(&player_id)).await else {
                 // couldn't reply - connection dropped?
+                eprintln!("lost connection before confirmation could be sent to {player_id:?}");
                 return;
             };
 
@@ -589,26 +623,27 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
             // protocol error
             let mut server_state = server_state_mutex.lock().await;
             server_state
-                .server_disconnect(player_id, protocol_error())
+                .server_disconnect(player_id, protocol_error)
                 .await;
             return;
         };
-
         let Ok(parsed) = from_slice(&orders) else {
             // protocol error
             let mut server_state = server_state_mutex.lock().await;
             server_state
-                .server_disconnect(player_id, protocol_error())
+                .server_disconnect(player_id, protocol_error)
                 .await;
             return;
         };
+        eprintln!("got orders from {player_id:?}");
+
         let mut server_state = server_state_mutex.lock().await;
         match &mut *server_state {
             ServerState::Running { game_state, .. } => {
                 if game_state.orders.contains_key(&player_id) {
                     // protocol error - client sent multiple orders
                     server_state
-                        .server_disconnect(player_id, protocol_error())
+                        .server_disconnect(player_id, protocol_error)
                         .await;
                     return;
                 }
@@ -623,7 +658,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
             _ => {
                 // protocol error - client sent packet too early
                 server_state
-                    .server_disconnect(player_id, protocol_error())
+                    .server_disconnect(player_id, protocol_error)
                     .await;
                 return;
             }

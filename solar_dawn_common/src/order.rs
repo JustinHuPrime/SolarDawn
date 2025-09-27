@@ -1162,10 +1162,10 @@ impl Order {
                 }
                 let mut conflicted = Vec::new();
                 for (stack, order) in order_by_stack.iter() {
-                    if let Ok(Order::Rendezvous { target, .. }) = order {
-                        if order_by_stack.contains_key(target) {
-                            conflicted.push(*stack);
-                        }
+                    if let Ok(Order::Rendezvous { target, .. }) = order
+                        && order_by_stack.contains_key(target)
+                    {
+                        conflicted.push(*stack);
                     }
                 }
                 for conflicted in conflicted {
