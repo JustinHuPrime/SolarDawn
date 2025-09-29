@@ -10,7 +10,7 @@ license = "AGPL-3.0-or-later"
 
 [dependencies]
 anyhow = "1.0.100"
-axum = { version = "0.8.4", features = ["ws"] }
+axum = { version = "0.8.5", features = ["ws"] }
 axum-extra = { version = "0.10.1", features = ["typed-header"] }
 axum-server = { version = "0.7.2", features = ["tls-rustls"] }
 clap = { version = "4.5.48", features = ["derive"] }
