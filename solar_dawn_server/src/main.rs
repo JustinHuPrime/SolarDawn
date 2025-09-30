@@ -308,6 +308,7 @@ impl ServerState {
         GameServerState {
             game_state: GameState {
                 phase: Phase::Logistics,
+                turn: 0,
                 players: Default::default(),
                 celestials: Default::default(),
                 earth: 0.into(),

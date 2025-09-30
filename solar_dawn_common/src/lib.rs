@@ -50,6 +50,8 @@ pub mod stack;
 pub struct GameState {
     /// The phase the game is in
     pub phase: Phase,
+    /// Which turn is this - starts at one
+    pub turn: u32,
     /// Map from player id to username
     pub players: HashMap<PlayerId, String>,
     /// Game board
@@ -60,10 +62,10 @@ pub struct GameState {
     pub stacks: HashMap<StackId, Stack>,
     /// Unique game id
     ///
-    /// Is the unix timestamp of when the game was created
+    /// Is the unix timestamp of when the game was created in milliseconds, modulo 32
     ///
     /// Used on the client side for indexing client-side-only settings storage
-    pub game_id: u64,
+    pub game_id: u32,
 }
 
 /// Constructor function for some starting game state
@@ -79,6 +81,8 @@ pub type GameStateInitializer = fn(
 pub struct GameStateDelta {
     /// The next phase it should be in
     pub phase: Phase,
+    /// The next turn count it should be in
+    pub turn: u32,
     /// The new stacks
     pub stacks: HashMap<StackId, Stack>,
     /// All previous orders
@@ -120,6 +124,7 @@ impl GameState {
                         }
                         Self {
                             phase: Phase::Logistics,
+                            turn: 1,
                             players,
                             celestials,
                             earth,
@@ -127,7 +132,7 @@ impl GameState {
                             game_id: SystemTime::now()
                                 .duration_since(SystemTime::UNIX_EPOCH)
                                 .expect("date is well after epoch")
-                                .as_millis() as u64,
+                                .as_millis() as u32,
                         }
                     }
                 },
@@ -144,6 +149,7 @@ impl GameState {
                         let _ = celestials.get(&earth).expect("earth id should be valid");
                         Self {
                             phase: Phase::Logistics,
+                            turn: 1,
                             players,
                             celestials,
                             earth,
@@ -280,6 +286,11 @@ impl GameState {
 
         GameStateDelta {
             phase: self.phase.next(),
+            turn: if matches!(self.phase, Phase::Movement) {
+                self.turn + 1
+            } else {
+                self.turn
+            },
             stacks,
             orders,
             errors,
@@ -291,6 +302,7 @@ impl GameState {
     /// Apply a delta
     pub fn apply(&mut self, delta: GameStateDelta) {
         self.phase = delta.phase;
+        self.turn = delta.turn;
         self.stacks = delta.stacks;
     }
 }
@@ -777,6 +789,7 @@ mod tests {
         // Create a simple game state
         let mut game_state = GameState {
             phase: Phase::Logistics,
+            turn: 1,
             players: HashMap::new(),
             celestials: HashMap::new(),
             earth: CelestialId::from(0u8),
@@ -799,6 +812,7 @@ mod tests {
 
         let delta = GameStateDelta {
             phase: Phase::Combat,
+            turn: 1,
             stacks: new_stacks.clone(),
             orders: HashMap::new(),
             errors: HashMap::new(),
