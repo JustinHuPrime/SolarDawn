@@ -24,6 +24,8 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+#[cfg(feature = "server")]
+use std::time::SystemTime;
 use std::{
     collections::HashMap,
     ops::{Add, AddAssign, Sub, SubAssign},
@@ -56,6 +58,12 @@ pub struct GameState {
     pub earth: CelestialId,
     /// Game pieces
     pub stacks: HashMap<StackId, Stack>,
+    /// Unique game id
+    ///
+    /// Is the unix timestamp of when the game was created
+    ///
+    /// Used on the client side for indexing client-side-only settings storage
+    pub game_id: u64,
 }
 
 /// Constructor function for some starting game state
@@ -116,6 +124,10 @@ impl GameState {
                             celestials,
                             earth,
                             stacks,
+                            game_id: SystemTime::now()
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .expect("date is well after epoch")
+                                .as_millis() as u64,
                         }
                     }
                 },
@@ -136,6 +148,7 @@ impl GameState {
                             celestials,
                             earth,
                             stacks: HashMap::new(),
+                            game_id: 0,
                         }
                     }
                 },
@@ -673,8 +686,8 @@ mod tests {
 
         for point in test_points {
             let (x, y) = point.cartesian();
-            let q = x * 2.0 / 3.0;
-            let r = x * -1.0 / 3.0 + y * 3.0_f32.sqrt() / 3.0;
+            let q = x * (2.0 / 3.0);
+            let r = x * (-1.0 / 3.0) + y * (3.0_f32.sqrt() / 3.0);
             let rounded = Vec2::round(q, r);
             assert_eq!(
                 rounded, point,
@@ -768,6 +781,7 @@ mod tests {
             celestials: HashMap::new(),
             earth: CelestialId::from(0u8),
             stacks: HashMap::new(),
+            game_id: 0,
         };
 
         // Create a delta to apply
