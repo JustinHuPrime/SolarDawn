@@ -503,7 +503,7 @@ impl ModuleDetails {
     /// Mass of a tank, in tonnes
     pub const TANK_MASS: u32 = 1;
 
-    /// How much impulse (in tonne·hex/turn aka kN·turn) does an engine produce per 0.1 tonne of fuel burned
+    /// How much impulse (in tonne·hex/turn/0.1 tonne aka 10 hex/turn) does an engine produce per 0.1 tonne of fuel burned
     pub const ENGINE_SPECIFIC_IMPULSE: u32 = 2;
     /// How much thrust can an engine produce, in kN
     pub const ENGINE_THRUST: f32 = 40.0;
