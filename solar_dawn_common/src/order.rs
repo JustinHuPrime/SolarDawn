@@ -781,7 +781,9 @@ impl Order {
                                 )
                         })
                         .count();
-                    if orders.len() > hab_and_factory_count {
+                    if orders.len() + factory_only_orders.get(&stack).map(Vec::len).unwrap_or(0)
+                        > hab_and_factory_count
+                    {
                         for order in orders {
                             *order = Err(OrderError::NotEnoughModules);
                         }
