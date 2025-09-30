@@ -9,7 +9,8 @@ repository = "https://github.com/JustinHuPrime/SolarDawn"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
-dioxus = { version = "0.6.0", features = ["web"] }
+dioxus = { version = "0.6.3", features = ["web"] }
 serde = { workspace = true }
 serde_cbor = { workspace = true }
 solar_dawn_common = { path = "../solar_dawn_common", features = ["client"] }
+ws-queue-web = { git = "https://github.com/JustinHuPrime/ws-queue-web.git" }
