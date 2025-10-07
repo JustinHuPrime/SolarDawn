@@ -44,6 +44,24 @@ pub fn Login(state: Signal<ClientState>) -> Element {
             div { class: "row",
                 h1 { "Solar Dawn version {VERSION}" }
             }
+            div {
+                class: "row",
+                p {
+                    a { href: asset!("assets/guide.html"), "Read the guide"}
+                }
+            }
+            div { class: "row",
+                p {
+                    "Solar Dawn is free software licenced under the "
+                    a { href: "https://www.gnu.org/licenses/agpl.html",
+                        "GNU Affero General Public License"
+                    }
+                    br {}
+                    a { href: "https://github.com/JustinHuPrime/SolarDawn",
+                        "View the source code here"
+                    }
+                }
+            }
         }
     }
 }

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Solar Dawn Guide</title>
+    <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta charset="UTF-8" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+      crossorigin="anonymous"
+      integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+    />
+    <script
+      crossorigin="anonymous"
+      integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+    ></script>
+    <link rel="stylesheet" href="/assets/main-433afe3eb70ac667.css" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="/assets/apple-touch-icon-f88d38b20edc7cf3.png"
+    />
+    <link
+      rel="icon"
+      sizes="32x32"
+      href="/assets/favicon-32x32-37313a8bb0f36937.png"
+      type="image/png"
+    />
+    <link
+      rel="icon"
+      sizes="16x16"
+      href="/assets/favicon-16x16-af2ce23b691ea85f.png"
+      type="image/png"
+    />
+    <link rel="manifest" href="/assets/site-797806281d32c0cb.webmanifest" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="row">
+        <div class="col">
+          <h1>Solar Dawn Guide</h1>
+          <p>
+            Solar Dawn is a 4X digital board game featuring simultaneous turn
+            resolution as you fly modular spacecraft around a hex-grid board.
+          </p>
+          <p>
+            You play as one of up to six nations racing to industrialize space.
+            Your goal is to become the dominant power in space by controlling
+            the majority of the industrial power in the system, whether through
+            peaceful growth or violent destruction.
+          </p>
+          <h2>The Board</h2>
+          <p>
+            The game board is a hex grid, where the distance from the center of
+            one hex to the center of any other hex represents 0.1 AU. The exact
+            layout of the board can vary by scenario. For the default campaign
+            board, it is a stylized recreation of the solar system (as in, only
+            vaguely accurate positioning of celestial bodies).
+          </p>
+          <p>
+            The standard campaign board consists of the sun, eight planets,
+            seventeen moons, and many asteroids and kuiper belt objects, with
+            more ore-bearing bodies closer to the sun and more water-bearing
+            bodies further from the sun.
+          </p>
+          <ul>
+            <li>Mercury and Venus can be landed on to mine for ore</li>
+            <li>
+              The Earth can't be landed on at all, but you can only build
+              habitats while in orbit of Earth
+            </li>
+            <li>The Moon can be landed on to mine for water and ore</li>
+            <li>Mars can be landed on to mine for water and ore</li>
+            <li>Phobos and Deimos can be rendezvoused with to mine for ore</li>
+            <li>
+              The asteroid belt can be rendezvoused with to mine for ore, and
+              sometimes for water
+            </li>
+            <li>
+              The four gas giants, Jupiter, Saturn, Uranus, and Neptune, can
+              have fuel skimmed from them while in orbit
+            </li>
+            <li>
+              The fourteen moons of the gas giants can be landed on to mine for
+              water and often also for ore
+            </li>
+            <li>
+              The kuiper belt can be rendezvoused with to mine for water and
+              sometimes for ore
+            </li>
+          </ul>
+          <h2>Sequence of Play</h2>
+          <p>
+            Each round is split into three phases - logistics, combat, and
+            movement. During each phase, you and your opponents will give orders
+            to your spacecraft stacks which will be simultaneously resolved,
+            before looping back around to the logistics phase to start the next
+            turn.
+          </p>
+          <p>
+            During the logistics phase you can move modules between rendezvoused
+            stacks, make new stacks, move resources within and between
+            rendezvoused stacks, mine and refine resources, repair, salvage, and
+            build modules, and attempt to board undefended modules.
+          </p>
+          <p>
+            During the combat phase, you can shoot your guns at targets and arm
+            warheads.
+          </p>
+          <p>
+            During the movement phase, you can conduct engine burns, orbital
+            rendezvouses, landings, and take-offs. At the end of this phase,
+            objects move according to their velocity and update their velocities
+            based on the gravity effects of nearby bodies.
+          </p>
+          <h2>Modules and Stacks</h2>
+          <p>
+            Your units are rocket stacks, each of which consists of some number
+            of modules in no particular structure. Stacks move together, share
+            resources, and take damage as a group. Stacks can only be split or
+            combined during the logistics phase.
+          </p>
+          <h3>Modules</h3>
+          <p>The following modules are available:</p>
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Function</th>
+                <th scope="col">Mass</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Miner</td>
+                <td>
+                  Produces up to 1 tonne of raw resources (ore or water) per
+                  turn if landed or rendezvoused with an appropriate body
+                </td>
+                <td>10 tonnes</td>
+              </tr>
+              <tr>
+                <td>Skimmer</td>
+                <td>
+                  Produces up to 1 tonne of fuel per turn if orbiting a gas
+                  giant
+                </td>
+                <td>10 tonnes</td>
+              </tr>
+              <tr>
+                <td>Cargo Hold</td>
+                <td>
+                  Holds up to 20 tonnes of solid resources (ore or materials)
+                </td>
+                <td>1 tonne + mass of resources</td>
+              </tr>
+              <tr>
+                <td>Tank</td>
+                <td>
+                  Holds up to 20 tonnes of liquid resources (water or fuel)
+                </td>
+                <td>1 tonne + mass of resources</td>
+              </tr>
+              <tr>
+                <td>Engine</td>
+                <td>
+                  Provides 1 hex/turn of Δv for up to 20 tonnes of spacecraft;
+                  burns 1 tonne of fuel to do so. (Has a thrust of 20
+                  tonne·hex/turn² (40 kN) with an exhaust velocity of 20
+                  hex/turn, or a fuel efficiency of 20 tonne·hex/turn impulse
+                  per 1 tonne fuel.)
+                </td>
+                <td>1 tonne</td>
+              </tr>
+              <tr>
+                <td>Warhead</td>
+                <td>
+                  Detonates on intercept when armed to deal significant damage
+                  to all stacks within about half a hex (including your own -
+                  beware friendly fire). Can only be armed when on uncrewed
+                  stacks.
+                </td>
+                <td>1 tonne</td>
+              </tr>
+              <tr>
+                <td>Gun</td>
+                <td>
+                  Deals one point of damage with a compounding 50% chance to
+                  miss per hex of range.
+                </td>
+                <td>2 tonnes</td>
+              </tr>
+              <tr>
+                <td>Habitat</td>
+                <td>
+                  Provides crew, allows boarding actions against uncrewed
+                  stacks, and provides one module of repair capability per turn.
+                  Worth 1 victory point.
+                </td>
+                <td>10 tonnes</td>
+              </tr>
+              <tr>
+                <td>Refinery</td>
+                <td>
+                  Refines raw resources (ore or water) into refined resources
+                  (materials or fuel) at a 2:1 ratio. Worth 2 victory points.
+                </td>
+                <td>20 tonnes</td>
+              </tr>
+              <tr>
+                <td>Factory</td>
+                <td>
+                  Produces a new module from materials per turn, scraps a module
+                  per turn, or provides one module of repair capability per
+                  turn. Worth 5 victory points.
+                </td>
+                <td>50 tonnes</td>
+              </tr>
+              <tr>
+                <td>Armour Plate</td>
+                <td>Always takes damage first if intact. Otherwise inert.</td>
+                <td>1 tonne</td>
+              </tr>
+            </tbody>
+          </table>
+          <h2>Combat</h2>
+          <p>There are three means of damaging enemy spacecraft:</p>
+          <ol>
+            <li>
+              You can shoot at them with guns, although this is incredibly
+              ineffective at ranges greater than a single hex. A single gun
+              deals one point of damage on a successful hit, but the hit rate
+              goes down by half (from 100%) per hex of range.
+            </li>
+            <li>
+              You can hit them with a warhead, either in a stack of its own or
+              in a stack with other modules, like a fuel tank and an engine.
+              Warheads deal damage equal to one third (rounded up) of the number
+              of modules on each ship hit, and can hit multiple ships at once.
+              Warheads are the primary means of dealing damage to enemy ships,
+              but can be dodged or shot down, depending on how you construct
+              your missile stack. Warheads have a damage radius of just over
+              half a hex, and will detonate the instant an enemy stack is within
+              range.
+            </li>
+            <li>
+              You can manoeuver them into a planet. This instantly destroys the
+              stack and leaves behind no debris. This is, however, exceedingly
+              difficult to achieve against stacks with even minimal engine
+              thrust.
+            </li>
+          </ol>
+          <p>
+            When taking damage, first: intact armour plates are damaged into
+            damaged armour plates per point of damage until no intact plates
+            remain or all damage has been assigned. Second: non-destroyed
+            modules are randomly selected to take damage per point of damage
+            remaining, converting intact modules into damaged modules and
+            damaged modules into destroyed modules.
+          </p>
+          <p>
+            Damaged modules can be repaired into intact modules at the cost of ⅒
+            of the module's mass by a habitat or a factory during the logistics
+            phase. Destroyed modules, however, can only be scrapped for
+            materials equivalent to ½ of the module's mass by a factory during
+            the logistics phase. Note that a destroyed or damaged module still
+            masses the same as an intact module.
+          </p>
+          <h2>The Economy</h2>
+          <p>
+            There are two main resource cycles in the game. First, your stacks
+            mine ore, which is refined into materials, which is turned into
+            modules to upgrade stacks. Second, your stacks mine water which is
+            refined into fuel (or you skim fuel directory) which is used to move
+            your stacks around.
+          </p>
+          <h2>Orders</h2>
+          <p></p>
+          <h2>Strategy</h2>
+          <p>
+            Your goal in the default scenario is to control the majority of the
+            victory points on the board. You can achieve this both by building
+            more things that grant victory point as well by destroying or
+            capturing things that grant victory points from your opponents.
+          </p>
+          <h3>Ship Design</h3>
+          <p>
+            The with how powerful engines are, the rocket equation is not
+            tyrannical, but it is still mildly unpleasant. A ship that doesn't
+            drop any tanks has a theoretical maximum Δv of 60 hex/turn. This can
+            be extended further by staging, but this would lead to exponentially
+            increasing stack sizes.
+          </p>
+          <h2>Tactics</h2>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -9,7 +9,7 @@ A simultaneous-turn-resolution 4X inspired by High Frontier and Triplanetary
 The board consists of a solar system where the inter-planet distances are to scale, but the size of the bodies themselves and the lunar distances are not. The solar system consists of:
 
 - Sol, which can't be landed on and has extra high gravity
-- Mercury, Venus, Mars, Luna, the Galilean moons of Jupiter (Io, Europa, Ganymede, Callisto), the major moons of Saturn (Titan, Rhea, Iapetus, Dione, Tethys), the major moons of Uranus (Titania, Oberon, Umbriel, Ariel), and the major moon of Neptune, Triton, all of which can be landed on, can be mined for either just ore, just ice, or both, and have standard gravity
+- Mercury, Venus, Mars, Phobos, Deimos, Luna, the Galilean moons of Jupiter (Io, Europa, Ganymede, Callisto), the major moons of Saturn (Titan, Rhea, Iapetus, Dione, Tethys), the major moons of Uranus (Titania, Oberon, Umbriel, Ariel), and the major moon of Neptune, Triton, all of which can be landed on, can be mined for either just ore, just ice, or both, and have standard gravity
 - Terra, which can be landed on, can't be mined, but does have standard gravity
 - the four gas giants Jupiter, Saturn, Uranus, Neptune, which have standard gravity, can't be landed on, but can be skimmed for fuel directly
 - the asteroid belt, hosting mostly ore-bearing bodies

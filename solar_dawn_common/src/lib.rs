@@ -242,6 +242,7 @@ impl GameState {
 
             // apply movement
             for (_, stack) in stacks.iter_mut() {
+                // TODO: apply gravity
                 stack.position += stack.velocity;
             }
         }
