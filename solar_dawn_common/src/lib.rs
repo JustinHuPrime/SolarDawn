@@ -28,7 +28,7 @@
 use std::time::SystemTime;
 use std::{
     collections::HashMap,
-    ops::{Add, AddAssign, Sub, SubAssign},
+    ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign},
 };
 
 use celestial::{Celestial, CelestialId};
@@ -179,6 +179,7 @@ impl GameState {
 
         if matches!(self.phase, Phase::Movement) {
             // crash stacks
+            // TODO: apply crashes and detonations at the same time
             stacks.retain(|_, stack| {
                 !self.celestials.values().any(|celestial| {
                     celestial.collides(stack.position, stack.position + stack.velocity)
@@ -204,7 +205,7 @@ impl GameState {
                     })
                     .count() as u32;
                 if warhead_count > 0 {
-                    // find the first point at which a non-owned stack comes into range, if any
+                    // find the first closest approach with a non-owned stack that's within warhead range
                     if let Some(intercept) = stacks
                         .values()
                         .filter(|stack| stack.owner != missile_ref.owner)
@@ -375,7 +376,7 @@ impl From<PlayerId> for u8 {
 ///
 /// +q = down-right, +r = down
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
-pub struct Vec2<T: Copy> {
+pub struct Vec2<T> {
     q: T,
     r: T,
 }
@@ -392,8 +393,7 @@ impl Add for Vec2<i32> {
 }
 impl AddAssign for Vec2<i32> {
     fn add_assign(&mut self, rhs: Self) {
-        self.q += rhs.q;
-        self.r += rhs.r;
+        *self = *self + rhs;
     }
 }
 impl Sub for Vec2<i32> {
@@ -408,8 +408,7 @@ impl Sub for Vec2<i32> {
 }
 impl SubAssign for Vec2<i32> {
     fn sub_assign(&mut self, rhs: Self) {
-        self.q -= rhs.q;
-        self.r -= rhs.r;
+        *self = *self - rhs;
     }
 }
 impl Vec2<i32> {
@@ -488,10 +487,10 @@ impl Vec2<i32> {
     }
 
     /// Convert this vector to cartesian
-    pub fn cartesian(&self) -> (f32, f32) {
+    pub fn cartesian(&self) -> CartesianVec2 {
         let x: f32 = 1.5 * self.q as f32;
         let y: f32 = 3.0_f32.sqrt() / 2.0 * self.q as f32 + 3.0_f32.sqrt() * self.r as f32;
-        (x, y)
+        CartesianVec2 { x, y }
     }
 
     /// Construct a vector from fractional q and r
@@ -515,19 +514,124 @@ impl Vec2<i32> {
         Self { q: q_int, r: r_int }
     }
 
-    /// Construct a vector from cartesian coordinates
-    pub fn from_cartesian(x: f32, y: f32) -> Self {
-        let q = x * 2.0 / 3.0;
-        #[expect(clippy::neg_multiply)]
-        let r = x * -1.0 / 3.0 + y * 3.0_f32.sqrt() / 3.0;
-        Self::round(q, r)
-    }
-
     /// Construct a vector from polar coordinates
     pub fn from_polar(r: f32, theta: f32) -> Self {
         let x = r * theta.cos();
         let y = r * -theta.sin();
-        Self::from_cartesian(x, y)
+        CartesianVec2 { x, y }.to_axial()
+    }
+
+    /// What is the time in the range 0..=1 of closest approach between two points with velocity
+    pub fn closest_approach(p1: Vec2<i32>, v1: Vec2<i32>, p2: Vec2<i32>, v2: Vec2<i32>) -> f32 {
+        // range^2 = (p1 + v1*t - p2 - v2*t)^2
+        let dp = p1.cartesian() - p2.cartesian();
+        let dv = v1.cartesian() - v2.cartesian();
+
+        // range^2 = (dp + dv*t)^2 = dv⋅dv*t^2 + 2*dp⋅dv*t + dp⋅dp
+        // minimize range^2 on 0..=1
+        let c = dp.dot(dp);
+        let b = 2.0 * dp.dot(dv);
+        let a = dv.dot(dv);
+
+        // consider t = 0, t = 1 and t = -b/2a
+        if !(0.0..=1.0).contains(&(-b / (2.0 * a))) {
+            // vertex out of range, return min of endpoints
+            if c < a + b + c {
+                0.0
+            } else {
+                1.0
+            }
+        } else {
+            // vertex in range, return it - it must be the minimum because a >= 0
+            -b / (2.0 * a)
+        }
+    }
+
+    /// What is the squared distance between two points with velocity at time t
+    pub fn squared_distance_at_time(
+        p1: Vec2<i32>,
+        v1: Vec2<i32>,
+        p2: Vec2<i32>,
+        v2: Vec2<i32>,
+        t: f32,
+    ) -> f32 {
+        let p1_t = p1.cartesian() + v1.cartesian() * t;
+        let p2_t = p2.cartesian() + v2.cartesian() * t;
+        let delta = p1_t - p2_t;
+        delta.dot(delta)
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
+struct CartesianVec2 {
+    x: f32,
+    y: f32,
+}
+impl CartesianVec2 {
+    /// Convert to axial coordinates
+    pub fn to_axial(self) -> Vec2<i32> {
+        let q = self.x * 2.0 / 3.0;
+        #[expect(clippy::neg_multiply)]
+        let r = self.x * -1.0 / 3.0 + self.y * 3.0_f32.sqrt() / 3.0;
+        Vec2::round(q, r)
+    }
+
+    /// Compute the dot product
+    pub fn dot(self, rhs: Self) -> f32 {
+        self.x * rhs.x + self.y * rhs.y
+    }
+}
+
+impl Add for CartesianVec2 {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        Self {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+        }
+    }
+}
+impl AddAssign for CartesianVec2 {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+impl Sub for CartesianVec2 {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+        }
+    }
+}
+impl SubAssign for CartesianVec2 {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = *self - rhs;
+    }
+}
+impl Mul<f32> for CartesianVec2 {
+    type Output = Self;
+
+    fn mul(self, rhs: f32) -> Self::Output {
+        Self {
+            x: self.x * rhs,
+            y: self.y * rhs,
+        }
+    }
+}
+impl Mul<CartesianVec2> for f32 {
+    type Output = CartesianVec2;
+
+    fn mul(self, rhs: CartesianVec2) -> Self::Output {
+        rhs * self
+    }
+}
+impl MulAssign<f32> for CartesianVec2 {
+    fn mul_assign(&mut self, rhs: f32) {
+        *self = *self * rhs;
     }
 }
 
@@ -620,17 +724,17 @@ mod tests {
     #[test]
     fn test_vec2_cartesian() {
         let origin = Vec2::zero();
-        let (x, y) = origin.cartesian();
+        let CartesianVec2 { x, y } = origin.cartesian();
         assert!((x - 0.0).abs() < f32::EPSILON);
         assert!((y - 0.0).abs() < f32::EPSILON);
 
         let v = Vec2 { q: 1, r: 0 };
-        let (x, y) = v.cartesian();
+        let CartesianVec2 { x, y } = v.cartesian();
         assert!((x - 1.5).abs() < f32::EPSILON);
         assert!((y - 3.0_f32.sqrt() / 2.0).abs() < f32::EPSILON);
 
         let v = Vec2 { q: 0, r: 1 };
-        let (x, y) = v.cartesian();
+        let CartesianVec2 { x, y } = v.cartesian();
         assert!((x - 0.0).abs() < f32::EPSILON);
         assert!((y - 3.0_f32.sqrt()).abs() < f32::EPSILON);
     }
@@ -640,21 +744,25 @@ mod tests {
         // Test conversion from cartesian back to hex coordinates
         let origin_cart = (0.0, 0.0);
         assert_eq!(
-            Vec2::from_cartesian(origin_cart.0, origin_cart.1),
+            CartesianVec2 {
+                x: origin_cart.0,
+                y: origin_cart.1
+            }
+            .to_axial(),
             Vec2::zero()
         );
 
         let v1 = Vec2 { q: 1, r: 0 };
-        let (x, y) = v1.cartesian();
-        assert_eq!(Vec2::from_cartesian(x, y), v1);
+        let CartesianVec2 { x, y } = v1.cartesian();
+        assert_eq!(CartesianVec2 { x, y }.to_axial(), v1);
 
         let v2 = Vec2 { q: 0, r: 1 };
-        let (x, y) = v2.cartesian();
-        assert_eq!(Vec2::from_cartesian(x, y), v2);
+        let CartesianVec2 { x, y } = v2.cartesian();
+        assert_eq!(CartesianVec2 { x, y }.to_axial(), v2);
 
         let v3 = Vec2 { q: 2, r: -1 };
-        let (x, y) = v3.cartesian();
-        assert_eq!(Vec2::from_cartesian(x, y), v3);
+        let CartesianVec2 { x, y } = v3.cartesian();
+        assert_eq!(CartesianVec2 { x, y }.to_axial(), v3);
     }
 
     #[test]
@@ -670,7 +778,7 @@ mod tests {
         ];
 
         for point in test_points {
-            let (x, y) = point.cartesian();
+            let CartesianVec2 { x, y } = point.cartesian();
             let r = (x * x + y * y).sqrt();
             let theta = (-y).atan2(x); // Note: y is negated in from_polar
             let converted_back = Vec2::from_polar(r, theta);
@@ -698,7 +806,7 @@ mod tests {
         ];
 
         for point in test_points {
-            let (x, y) = point.cartesian();
+            let CartesianVec2 { x, y } = point.cartesian();
             let q = x * (2.0 / 3.0);
             let r = x * (-1.0 / 3.0) + y * (3.0_f32.sqrt() / 3.0);
             let rounded = Vec2::round(q, r);

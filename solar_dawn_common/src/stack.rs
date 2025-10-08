@@ -155,56 +155,19 @@ impl Stack {
         self.modules.values().map(|module| module.mass()).sum()
     }
 
-    /// How far through the turn does a close approach between this and the other stack happen, if any?
-    ///
-    /// By close, we mean WARHEAD_RANGE
+    /// When is the closest approach between this and the other stack, if it is within WARHEAD_RANGE
     pub fn closest_approach(&self, other: &Stack) -> Option<f32> {
-        // ||O_1 + V_1t - O_2 - V_2t|| <= R
-        // ||O_1 - O_2 + (V_1 - V_2)t|| <= R
-        // (O_1 - O_2 + (V_1 - V_2)t)^2 <= R^2
-        // let dO = O_1 - O_2, dV = V_1 - V_2
-        // (dO + dVt)^2 <= R^2
-        // dV^2t^2 + 2dOdVt + dO^2 <= R^2
-        // dV^2t^2 + 2dOdVt + dO^2 - R^2 <= 0
-        let self_origin = self.position.cartesian();
-        let self_velocity = self.velocity.cartesian();
-        let other_origin = other.position.cartesian();
-        let other_velocity = other.velocity.cartesian();
-
-        let delta_origin = (
-            self_origin.0 - other_origin.0,
-            self_origin.1 - other_origin.1,
-        );
-        let delta_velocity = (
-            self_velocity.0 - other_velocity.0,
-            self_velocity.1 - other_velocity.1,
-        );
-
-        let a = delta_velocity.0 * delta_velocity.0 + delta_velocity.1 * delta_velocity.1;
-        let b = 2.0 * (delta_origin.0 * delta_velocity.0 + delta_origin.1 * delta_velocity.1);
-        let c = delta_origin.0 * delta_origin.0 + delta_origin.1 * delta_origin.1
-            - ModuleDetails::WARHEAD_RANGE * ModuleDetails::WARHEAD_RANGE;
-
-        // case 1: is already less than range at t = 0
-        if c <= 0.0 {
-            return Some(0.0);
-        }
-
-        // solve quadratic
-        let discriminant = b * b - 4.0 * a * c;
-        if discriminant < 0.0 {
-            // no approach
-            return None;
-        }
-        let discriminant = discriminant.sqrt();
-
-        // case 2: starts outside range, intersects one or two points at some time
-        let t1 = (-b - discriminant) / (2.0 * a);
-        let t2 = (-b + discriminant) / (2.0 * a);
-        if (0.0..=1.0).contains(&t1) {
-            Some(t1)
-        } else if (0.0..=1.0).contains(&t2) {
-            Some(t2)
+        let t =
+            Vec2::closest_approach(self.position, self.velocity, other.position, other.velocity);
+        if Vec2::squared_distance_at_time(
+            self.position,
+            self.velocity,
+            other.position,
+            other.velocity,
+            t,
+        ) <= ModuleDetails::WARHEAD_RANGE * ModuleDetails::WARHEAD_RANGE
+        {
+            Some(t)
         } else {
             None
         }
@@ -214,27 +177,13 @@ impl Stack {
     ///
     /// By in range, we mean WARHEAD_RANGE
     pub fn in_range(&self, t: f32, other: &Stack) -> bool {
-        let self_position = self.position.cartesian();
-        let self_velocity = self.velocity.cartesian();
-        let self_position = (
-            self_position.0 + self_velocity.0 * t,
-            self_position.1 + self_velocity.1 * t,
-        );
-
-        let other_position = other.position.cartesian();
-        let other_velocity = other.velocity.cartesian();
-        let other_position = (
-            other_position.0 + other_velocity.0 * t,
-            other_position.1 + other_velocity.1 * t,
-        );
-
-        let delta = (
-            self_position.0 - other_position.0,
-            self_position.1 - other_position.1,
-        );
-
-        delta.0 * delta.0 + delta.1 * delta.1
-            < ModuleDetails::WARHEAD_RANGE * ModuleDetails::WARHEAD_RANGE
+        Vec2::squared_distance_at_time(
+            self.position,
+            self.velocity,
+            other.position,
+            other.velocity,
+            t,
+        ) < ModuleDetails::WARHEAD_RANGE * ModuleDetails::WARHEAD_RANGE
     }
 
     /// Deal some damage to the stack

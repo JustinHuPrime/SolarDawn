@@ -321,33 +321,9 @@ impl Celestial {
             return false;
         }
 
-        let start = start.cartesian();
-        let end = end.cartesian();
-        let direction = (end.0 - start.0, end.1 - start.1);
-        // line is of the form start + t * direction
-        let center = self.position.cartesian();
-        let radius = self.radius;
-        // circle is of the form (x - center)^2 + (y - center)^2 = radius^2
-        let offset_start = (start.0 - center.0, start.1 - center.1);
-
-        // construct quadratic equation of intersections according to https://stackoverflow.com/a/1084899
-
-        let a = direction.0 * direction.0 + direction.1 * direction.1;
-        let b = 2.0 * (direction.0 * offset_start.0 + direction.1 * offset_start.1);
-        let c =
-            (offset_start.0 * offset_start.0 + offset_start.1 * offset_start.1) - (radius * radius);
-
-        let discriminant = b * b - 4.0 * a * c;
-
-        if discriminant < 0.0 {
-            // no collision
-            return false;
-        }
-
-        let intersect_1 = (-b - discriminant.sqrt()) / (2.0 * a);
-        let intersect_2 = (-b + discriminant.sqrt()) / (2.0 * a);
-
-        (0.0..=1.0).contains(&intersect_1) || (0.0..=1.0).contains(&intersect_2)
+        let t = Vec2::closest_approach(self.position, Vec2::zero(), start, end - start);
+        Vec2::squared_distance_at_time(self.position, Vec2::zero(), start, end - start, t)
+            <= self.radius * self.radius
     }
 }
 
@@ -596,18 +572,6 @@ mod tests {
 
         // Line that starts inside (should collide)
         assert!(body.collides(body.position, Vec2 { q: 10, r: 10 }));
-
-        // Very short line segment entirely inside
-        // Doesn't collide - because algorithm checks only for surface intersections
-        let inside_start = Vec2::from_cartesian(
-            body.position.cartesian().0 + 0.1,
-            body.position.cartesian().1,
-        );
-        let inside_end = Vec2::from_cartesian(
-            body.position.cartesian().0 + 0.2,
-            body.position.cartesian().1,
-        );
-        assert!(!body.collides(inside_start, inside_end));
     }
 
     #[test]
