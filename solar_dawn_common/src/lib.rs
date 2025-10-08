@@ -178,15 +178,25 @@ impl GameState {
         let mut stacks = validated.apply(stack_id_generator, module_id_generator, rng);
 
         if matches!(self.phase, Phase::Movement) {
-            // crash stacks
-            // TODO: apply crashes and detonations at the same time
-            stacks.retain(|_, stack| {
-                !self.celestials.values().any(|celestial| {
-                    celestial.collides(stack.position, stack.position + stack.velocity)
+            // find time of crash
+            let crashes = stacks
+                .iter()
+                .filter_map(|(id, stack)| {
+                    // for each stack, find the first celestial it collides with, if any
+                    self.celestials
+                        .values()
+                        .filter_map(|celestial| {
+                            celestial.collides(
+                                stack.position.cartesian(),
+                                (stack.position + stack.velocity).cartesian(),
+                            )
+                        })
+                        .min_by(|a, b| a.total_cmp(b))
+                        .map(|t| (*id, t))
                 })
-            });
+                .collect::<HashMap<_, _>>();
 
-            // detonate warheads
+            // find time of detonation
             let mut detonated = Vec::new();
             let mut damaged: HashMap<StackId, u32> = HashMap::new();
             for (&missile, missile_ref) in stacks.iter() {
@@ -212,9 +222,29 @@ impl GameState {
                         .filter_map(|stack| missile_ref.closest_approach(stack))
                         .min_by(|a, b| a.total_cmp(b))
                     {
-                        // mark all stacks in range at that point in time as damaged
+                        // if this crashed before the intercept, skip
+                        if let Some(&crash_time) = crashes.get(&missile)
+                            && intercept >= crash_time
+                        {
+                            continue;
+                        }
+
+                        // mark all stacks in range and within line of sight at that point in time as damaged
+                        // except the missile itself
                         for thing in stacks.iter().filter_map(|(stack, stack_ref)| {
-                            if missile_ref.in_range(intercept, stack_ref) {
+                            if !std::ptr::eq(missile_ref, stack_ref)
+                                && missile_ref.in_range(intercept, stack_ref)
+                                && !self.celestials.values().any(|celestial| {
+                                    celestial
+                                        .collides(
+                                            missile_ref.position.cartesian()
+                                                + (missile_ref.velocity.cartesian() * intercept),
+                                            stack_ref.position.cartesian()
+                                                + (stack_ref.velocity.cartesian() * intercept),
+                                        )
+                                        .is_some()
+                                })
+                            {
                                 Some(*stack)
                             } else {
                                 None
@@ -227,6 +257,7 @@ impl GameState {
                     }
                 }
             }
+
             // actually do damage
             for (stack, hits) in damaged {
                 let stack_ref = stacks.get_mut(&stack).expect("saved key");
@@ -239,6 +270,10 @@ impl GameState {
             // remove detonated stacks
             for detonated in detonated {
                 stacks.remove(&detonated);
+            }
+            // remove crashed stacks
+            for (crashed, _) in crashes {
+                stacks.remove(&crashed);
             }
 
             // apply movement
@@ -536,11 +571,7 @@ impl Vec2<i32> {
         // consider t = 0, t = 1 and t = -b/2a
         if !(0.0..=1.0).contains(&(-b / (2.0 * a))) {
             // vertex out of range, return min of endpoints
-            if c < a + b + c {
-                0.0
-            } else {
-                1.0
-            }
+            if c < a + b + c { 0.0 } else { 1.0 }
         } else {
             // vertex in range, return it - it must be the minimum because a >= 0
             -b / (2.0 * a)
@@ -562,8 +593,11 @@ impl Vec2<i32> {
     }
 }
 
+/// A cartesian vector
+/// 
+/// +x = right, +y = down
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
-struct CartesianVec2 {
+pub struct CartesianVec2 {
     x: f32,
     y: f32,
 }

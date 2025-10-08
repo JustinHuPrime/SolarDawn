@@ -1548,7 +1548,7 @@ impl Order {
                 if game_state
                     .celestials
                     .values()
-                    .any(|celestial| celestial.collides(stack_ref.position, target_ref.position))
+                    .any(|celestial| celestial.collides(stack_ref.position.cartesian(), target_ref.position.cartesian()).is_some())
                 {
                     return Err(OrderError::NoLineOfSight);
                 }

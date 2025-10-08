@@ -24,6 +24,8 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "server")]
+use crate::CartesianVec2;
 use crate::Vec2;
 
 /// A celestial body
@@ -313,17 +315,46 @@ impl Celestial {
             .expect("base vector has exact number of args")
     }
 
-    /// Does the line from start to end collide with this celestial body
+    /// When does the line from start to end collide with this celestial body, if at all
     ///
     /// Note bodies without gravity also have no collision
-    pub fn collides(&self, start: Vec2<i32>, end: Vec2<i32>) -> bool {
+    pub fn collides(&self, start: CartesianVec2, end: CartesianVec2) -> Option<f32> {
         if !self.orbit_gravity {
-            return false;
+            return None;
         }
 
-        let t = Vec2::closest_approach(self.position, Vec2::zero(), start, end - start);
-        Vec2::squared_distance_at_time(self.position, Vec2::zero(), start, end - start, t)
-            <= self.radius * self.radius
+        // find t such that self.radius^2 = (start - self.position + t*(end - start))^2
+        let dp = start - self.position.cartesian();
+
+        // special case - if already in range, collide immediately
+        if dp.dot(dp) <= self.radius * self.radius {
+            return Some(0.0);
+        }
+
+        let dv = end - start;
+
+        // find t such that 0 = (dp + t*dv)^2 = dv⋅dv*t^2 + 2*dp⋅dv*t + dp⋅dp - self.radius^2
+        let c = dp.dot(dp) - self.radius * self.radius;
+        let b = 2.0 * dp.dot(dv);
+        let a = dv.dot(dv);
+
+        let discriminant = b * b - 4.0 * a * c;
+        if discriminant < 0.0 {
+            // no collision
+            return None;
+        }
+
+        let intersect_1 = (-b - discriminant.sqrt()) / (2.0 * a);
+        let intersect_2 = (-b + discriminant.sqrt()) / (2.0 * a);
+
+        // note - if both are in range, intersect_1 is the first collision
+        if (0.0..=1.0).contains(&intersect_1) {
+            Some(intersect_1)
+        } else if (0.0..=1.0).contains(&intersect_2) {
+            Some(intersect_2)
+        } else {
+            None
+        }
     }
 }
 
@@ -561,17 +592,29 @@ mod tests {
         };
 
         // Line that starts and ends at the same point (zero length)
-        assert!(!body.collides(Vec2 { q: 10, r: 10 }, Vec2 { q: 10, r: 10 }));
+        assert!(
+            body.collides(
+                Vec2 { q: 10, r: 10 }.cartesian(),
+                Vec2 { q: 10, r: 10 }.cartesian()
+            )
+            .is_none()
+        );
 
         // Line that just touches the edge of the circle
         // This is harder to test precisely due to floating point, so test approximate collision
         let close_start = Vec2 { q: 5, r: 4 }; // Just outside
         let close_end = Vec2 { q: 5, r: 6 }; // Just outside on other side
         // This line passes very close to center and should collide
-        assert!(body.collides(close_start, close_end));
+        assert!(
+            body.collides(close_start.cartesian(), close_end.cartesian())
+                .is_some()
+        );
 
         // Line that starts inside (should collide)
-        assert!(body.collides(body.position, Vec2 { q: 10, r: 10 }));
+        assert!(
+            body.collides(body.position.cartesian(), Vec2 { q: 10, r: 10 }.cartesian())
+                .is_some()
+        );
     }
 
     #[test]
@@ -586,8 +629,22 @@ mod tests {
         };
 
         // Only lines that pass exactly through the center should collide
-        assert!(point_body.collides(Vec2 { q: -1, r: 0 }, Vec2 { q: 1, r: 0 }));
-        assert!(!point_body.collides(Vec2 { q: -1, r: 1 }, Vec2 { q: 1, r: 1 }));
+        assert!(
+            point_body
+                .collides(
+                    Vec2 { q: -1, r: 0 }.cartesian(),
+                    Vec2 { q: 1, r: 0 }.cartesian()
+                )
+                .is_some()
+        );
+        assert!(
+            point_body
+                .collides(
+                    Vec2 { q: -1, r: 1 }.cartesian(),
+                    Vec2 { q: 1, r: 1 }.cartesian()
+                )
+                .is_none()
+        );
     }
 
     #[cfg(feature = "server")]
@@ -702,15 +759,43 @@ mod tests {
         };
 
         // Line passing through center should collide
-        assert!(body.collides(Vec2 { q: -3, r: 0 }, Vec2 { q: 3, r: 0 }));
+        assert!(
+            body.collides(
+                Vec2 { q: -3, r: 0 }.cartesian(),
+                Vec2 { q: 3, r: 0 }.cartesian()
+            )
+            .is_some()
+        );
         // Line passing through center hex but offset from exact center should collide
-        assert!(body.collides(Vec2 { q: -2, r: 1 }, Vec2 { q: 1, r: 0 }));
+        assert!(
+            body.collides(
+                Vec2 { q: -2, r: 1 }.cartesian(),
+                Vec2 { q: 1, r: 0 }.cartesian()
+            )
+            .is_some()
+        );
         // Line far from center should not collide
-        assert!(!body.collides(Vec2 { q: -2, r: 3 }, Vec2 { q: 2, r: 3 }));
+        assert!(
+            !body
+                .collides(
+                    Vec2 { q: -2, r: 3 }.cartesian(),
+                    Vec2 { q: 2, r: 3 }.cartesian()
+                )
+                .is_some()
+        );
         // Line segment starting at center should collide
-        assert!(body.collides(Vec2::zero(), Vec2 { q: 2, r: 0 }));
+        assert!(
+            body.collides(Vec2::zero().cartesian(), Vec2 { q: 2, r: 0 }.cartesian())
+                .is_some()
+        );
         // Line segment entirely far away should not collide
-        assert!(!body.collides(Vec2 { q: 5, r: 0 }, Vec2 { q: 6, r: 0 }));
+        assert!(
+            body.collides(
+                Vec2 { q: 5, r: 0 }.cartesian(),
+                Vec2 { q: 6, r: 0 }.cartesian()
+            )
+            .is_none()
+        );
 
         // Body without gravity should never collide
         let no_gravity_body = Celestial {
@@ -723,7 +808,14 @@ mod tests {
         };
 
         // Even a line passing through should not collide if no gravity
-        assert!(!no_gravity_body.collides(Vec2 { q: -2, r: 0 }, Vec2 { q: 2, r: 0 }));
+        assert!(
+            no_gravity_body
+                .collides(
+                    Vec2 { q: -2, r: 0 }.cartesian(),
+                    Vec2 { q: 2, r: 0 }.cartesian()
+                )
+                .is_none()
+        );
 
         // Test with body at different position
         let offset_body = Celestial {
@@ -736,9 +828,23 @@ mod tests {
         };
 
         // Line passing through offset body center should collide
-        assert!(offset_body.collides(Vec2 { q: 2, r: 2 }, Vec2 { q: 4, r: 2 }));
+        assert!(
+            offset_body
+                .collides(
+                    Vec2 { q: 2, r: 2 }.cartesian(),
+                    Vec2 { q: 4, r: 2 }.cartesian()
+                )
+                .is_some()
+        );
         // Line missing offset body should not collide
-        assert!(!offset_body.collides(Vec2 { q: 2, r: 5 }, Vec2 { q: 4, r: 5 }));
+        assert!(
+            offset_body
+                .collides(
+                    Vec2 { q: 2, r: 5 }.cartesian(),
+                    Vec2 { q: 4, r: 5 }.cartesian()
+                )
+                .is_none()
+        );
 
         // Test edge case with very small body
         let small_body = Celestial {
@@ -751,8 +857,22 @@ mod tests {
         };
 
         // Line passing very close to center should collide
-        assert!(small_body.collides(Vec2 { q: -1, r: 0 }, Vec2 { q: 1, r: 0 }));
+        assert!(
+            small_body
+                .collides(
+                    Vec2 { q: -1, r: 0 }.cartesian(),
+                    Vec2 { q: 1, r: 0 }.cartesian()
+                )
+                .is_some()
+        );
         // Line passing farther away should not collide
-        assert!(!small_body.collides(Vec2 { q: -1, r: 1 }, Vec2 { q: 1, r: 1 }));
+        assert!(
+            small_body
+                .collides(
+                    Vec2 { q: -1, r: 1 }.cartesian(),
+                    Vec2 { q: 1, r: 1 }.cartesian()
+                )
+                .is_none()
+        );
     }
 }
