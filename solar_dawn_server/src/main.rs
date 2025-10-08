@@ -52,7 +52,10 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
-use futures_util::{SinkExt, StreamExt, stream::SplitSink};
+use futures_util::{
+    SinkExt, StreamExt,
+    stream::{SplitSink, SplitStream},
+};
 use rand::{Rng, rng};
 use rand_distr::Alphanumeric;
 use rand_pcg::Pcg64;
@@ -439,7 +442,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
     }
 
     let (mut send, mut recv) = socket.split();
-    let Some(Ok(Message::Text(login))) = recv.next().await else {
+    let Some(Ok(Message::Text(login))) = next_actual_message(&mut recv).await else {
         // protocol error
         let _ = send.send(protocol_error).await;
         return;
@@ -624,7 +627,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
 
     // get orders from player
     loop {
-        let Some(Ok(Message::Binary(orders))) = recv.next().await else {
+        let Some(Ok(Message::Binary(orders))) = next_actual_message(&mut recv).await else {
             // protocol error
             let mut server_state = server_state_mutex.lock().await;
             server_state
@@ -669,5 +672,18 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
             }
         }
         drop(server_state);
+    }
+}
+
+async fn next_actual_message(
+    recv: &mut SplitStream<WebSocket>,
+) -> Option<Result<Message, axum::Error>> {
+    loop {
+        match recv.next().await {
+            Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => {
+                // ignore pings and pongs
+            }
+            message => return message,
+        }
     }
 }
