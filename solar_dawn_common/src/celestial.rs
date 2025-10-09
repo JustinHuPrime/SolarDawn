@@ -162,7 +162,7 @@ impl Celestial {
                 radius: 0.75,
             },
         );
-        // TODO: Io, Europa, Ganymede, Calliston
+        // TODO: Io, Europa, Ganymede, Callisto
         map.insert(
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
@@ -355,6 +355,75 @@ impl Celestial {
         } else {
             None
         }
+    }
+
+    /// Given a starting position and velocity, what's the effect of this body's gravity
+    pub fn gravity_to(&self, position: Vec2<i32>, velocity: Vec2<i32>) -> Vec2<i32> {
+        if !self.orbit_gravity {
+            return Vec2::zero();
+        }
+
+        // special case - if velocity is zero, apply the gravity on the occupied hex
+        if velocity == Vec2::zero() {
+            if let Some(gravity_hex) = self
+                .position
+                .neighbours()
+                .into_iter()
+                .find(|&neighbour| neighbour == position)
+            {
+                return self.position - gravity_hex;
+            } else {
+                return Vec2::zero();
+            }
+        }
+
+        // each gravity hex defines a hex and a triangular slice of the planet's hex
+        self.position
+            .neighbours()
+            .into_iter()
+            .filter_map(|gravity_hex| {
+                // ignore the starting hex
+                if gravity_hex == position {
+                    return None;
+                }
+
+                // this hex is effectively traversed if, at the point of closest approach, the distance is less than:
+                // - the distance to any neighbouring hex, except the planet's own hex
+                // - the distance to any other gravity hex
+
+                let closest_approach =
+                    Vec2::closest_approach(position, velocity, self.position, Vec2::zero());
+                let closest_distance = Vec2::squared_distance_at_time(
+                    position,
+                    velocity,
+                    self.position,
+                    Vec2::zero(),
+                    closest_approach,
+                );
+
+                gravity_hex
+                    .neighbours()
+                    .into_iter()
+                    .filter(|&neighbour| neighbour != self.position)
+                    .chain(
+                        self.position
+                            .neighbours()
+                            .into_iter()
+                            .filter(|&neighbour| neighbour != gravity_hex),
+                    )
+                    .map(|neighbour| {
+                        Vec2::squared_distance_at_time(
+                            position,
+                            velocity,
+                            neighbour,
+                            Vec2::zero(),
+                            closest_approach,
+                        )
+                    })
+                    .all(|neighbour_distance| neighbour_distance >= closest_distance)
+                    .then(|| self.position - gravity_hex)
+            })
+            .sum()
     }
 }
 
@@ -776,12 +845,11 @@ mod tests {
         );
         // Line far from center should not collide
         assert!(
-            !body
-                .collides(
-                    Vec2 { q: -2, r: 3 }.cartesian(),
-                    Vec2 { q: 2, r: 3 }.cartesian()
-                )
-                .is_some()
+            body.collides(
+                Vec2 { q: -2, r: 3 }.cartesian(),
+                Vec2 { q: 2, r: 3 }.cartesian()
+            )
+            .is_none()
         );
         // Line segment starting at center should collide
         assert!(

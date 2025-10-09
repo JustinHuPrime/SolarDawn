@@ -28,6 +28,7 @@
 use std::time::SystemTime;
 use std::{
     collections::HashMap,
+    iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign},
 };
 
@@ -279,7 +280,10 @@ impl GameState {
 
             // apply detonations
             let mut detonated = Vec::new();
-            for DetonationRecord { missile, in_range, .. } in detonations {
+            for DetonationRecord {
+                missile, in_range, ..
+            } in detonations
+            {
                 let missile_ref = stacks.get_mut(&missile).expect("saved key");
                 let warhead_count = missile_ref
                     .modules
@@ -303,8 +307,9 @@ impl GameState {
                 for stack in in_range {
                     let stack_ref = stacks.get_mut(&stack).expect("saved key");
                     let module_count = stack_ref.modules.len() as u32;
-                    let damaged_count =
-                        module_count.div_ceil(ModuleDetails::WARHEAD_DAMAGE_FRACTION) * warhead_count as u32;
+                    let damaged_count = module_count
+                        .div_ceil(ModuleDetails::WARHEAD_DAMAGE_FRACTION)
+                        * warhead_count as u32;
                     stack_ref.do_damage(damaged_count, rng);
                 }
             }
@@ -320,8 +325,13 @@ impl GameState {
 
             // apply movement
             for (_, stack) in stacks.iter_mut() {
-                // TODO: apply gravity
+                let gravity = self
+                    .celestials
+                    .values()
+                    .map(|celestial| celestial.gravity_to(stack.position, stack.velocity))
+                    .sum();
                 stack.position += stack.velocity;
+                stack.velocity += gravity;
             }
         }
 
@@ -488,6 +498,11 @@ impl SubAssign for Vec2<i32> {
         *self = *self - rhs;
     }
 }
+impl Sum for Vec2<i32> {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(Self::zero(), |a, b| a + b)
+    }
+}
 impl Vec2<i32> {
     /// Create the zero vector
     pub fn zero() -> Self {
@@ -636,7 +651,7 @@ impl Vec2<i32> {
 }
 
 /// A cartesian vector
-/// 
+///
 /// +x = right, +y = down
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 pub struct CartesianVec2 {
