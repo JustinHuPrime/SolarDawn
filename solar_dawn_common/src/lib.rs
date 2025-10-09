@@ -188,6 +188,11 @@ impl GameState {
             let crashes = stacks
                 .iter()
                 .filter_map(|(id, stack)| {
+                    // skip stacks that are landed on any celestial
+                    if self.celestials.values().any(|celestial| stack.landed(celestial)) {
+                        return None;
+                    }
+                    
                     // for each stack, find the first celestial it collides with, if any
                     self.celestials
                         .values()
@@ -1031,5 +1036,139 @@ mod tests {
         assert_eq!(game_state.phase, Phase::Combat);
         assert_eq!(game_state.stacks.len(), 1);
         assert!(game_state.stacks.contains_key(&StackId::from(1u32)));
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn test_landed_stack_not_crashed() {
+        use std::collections::HashMap;
+        use rand::rngs::StdRng;
+        use rand::SeedableRng;
+
+        // Create a celestial body with gravity
+        let mut celestials = HashMap::new();
+        let celestial_id = CelestialId::from(1u8);
+        celestials.insert(
+            celestial_id,
+            celestial::Celestial {
+                position: Vec2 { q: 5, r: 5 },
+                name: "Test Planet".to_string(),
+                orbit_gravity: true,
+                surface_gravity: 9.8,
+                resources: celestial::Resources::MiningBoth,
+                radius: 0.5,
+            },
+        );
+
+        // Create a landed stack (same position, zero velocity) with at least one module
+        let mut stacks = HashMap::new();
+        let stack_id = StackId::from(1u32);
+        let mut modules = HashMap::new();
+        modules.insert(
+            ModuleId::from(1u32),
+            stack::Module::new_habitat(PlayerId::from(1u8)),
+        );
+        stacks.insert(
+            stack_id,
+            Stack {
+                position: Vec2 { q: 5, r: 5 },
+                velocity: Vec2::zero(),
+                owner: PlayerId::from(1u8),
+                name: "Landed Stack".to_string(),
+                modules,
+            },
+        );
+
+        let game_state = GameState {
+            phase: Phase::Movement,
+            turn: 1,
+            players: HashMap::new(),
+            celestials,
+            earth: CelestialId::from(0u8),
+            stacks,
+            game_id: 0,
+        };
+
+        // Process movement phase with no orders
+        let mut rng = StdRng::seed_from_u64(42);
+        let mut stack_id_gen = (2u32..).map(StackId::from);
+        let mut module_id_gen = (2u32..).map(ModuleId::from);
+        
+        let delta = game_state.next(
+            HashMap::new(),
+            &mut stack_id_gen,
+            &mut module_id_gen,
+            &mut rng,
+        );
+
+        // The landed stack should still exist (not crashed)
+        assert!(delta.stacks.contains_key(&stack_id));
+    }
+
+    #[cfg(feature = "server")]
+    #[test]
+    fn test_moving_stack_crashes() {
+        use std::collections::HashMap;
+        use rand::rngs::StdRng;
+        use rand::SeedableRng;
+
+        // Create a celestial body with gravity
+        let mut celestials = HashMap::new();
+        let celestial_id = CelestialId::from(1u8);
+        celestials.insert(
+            celestial_id,
+            celestial::Celestial {
+                position: Vec2 { q: 5, r: 5 },
+                name: "Test Planet".to_string(),
+                orbit_gravity: true,
+                surface_gravity: 9.8,
+                resources: celestial::Resources::MiningBoth,
+                radius: 0.5,
+            },
+        );
+
+        // Create a moving stack that will collide with the planet
+        let mut stacks = HashMap::new();
+        let stack_id = StackId::from(1u32);
+        let mut modules = HashMap::new();
+        modules.insert(
+            ModuleId::from(1u32),
+            stack::Module::new_habitat(PlayerId::from(1u8)),
+        );
+        stacks.insert(
+            stack_id,
+            Stack {
+                position: Vec2 { q: 3, r: 5 },
+                velocity: Vec2 { q: 2, r: 0 }, // Moving towards the planet
+                owner: PlayerId::from(1u8),
+                name: "Moving Stack".to_string(),
+                modules,
+            },
+        );
+
+        let game_state = GameState {
+            phase: Phase::Movement,
+            turn: 1,
+            players: HashMap::new(),
+            celestials,
+            earth: CelestialId::from(0u8),
+            stacks,
+            game_id: 0,
+        };
+
+        // Process movement phase with no orders
+        let mut rng = StdRng::seed_from_u64(42);
+        let mut stack_id_gen = (2u32..).map(StackId::from);
+        let mut module_id_gen = (2u32..).map(ModuleId::from);
+        
+        let delta = game_state.next(
+            HashMap::new(),
+            &mut stack_id_gen,
+            &mut module_id_gen,
+            &mut rng,
+        );
+
+        // The moving stack should have crashed (not in stacks)
+        assert!(!delta.stacks.contains_key(&stack_id));
     }
 }
