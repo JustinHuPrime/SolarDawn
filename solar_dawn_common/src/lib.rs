@@ -94,6 +94,9 @@ pub struct GameStateDelta {
 
 #[cfg(feature = "server")]
 impl GameState {
+    /// Maximum distance from the sun (origin) before stacks are deleted, in hexes
+    const MAX_DISTANCE_FROM_SUN: i32 = 1000;
+
     /// Constructs an initializer for a new game given a scenario identifier
     ///
     /// Returns Err with the identifier if it does not correspond to a known scenario
@@ -333,6 +336,9 @@ impl GameState {
                 stack.position += stack.velocity;
                 stack.velocity += gravity;
             }
+
+            // apply state-based action - delete stacks beyond the game bounds
+            stacks.retain(|_, stack| stack.position.norm() <= Self::MAX_DISTANCE_FROM_SUN);
         }
 
         // apply state-based action - delete empty stacks
