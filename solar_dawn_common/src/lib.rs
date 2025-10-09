@@ -179,6 +179,8 @@ impl GameState {
 
         if matches!(self.phase, Phase::Movement) {
             // find time of crash
+
+            use rand::seq::SliceRandom;
             let crashes = stacks
                 .iter()
                 .filter_map(|(id, stack)| {
@@ -197,8 +199,12 @@ impl GameState {
                 .collect::<HashMap<_, _>>();
 
             // find time of detonation
-            let mut detonated = Vec::new();
-            let mut damaged: HashMap<StackId, u32> = HashMap::new();
+            struct DetonationRecord {
+                missile: StackId,
+                time: f32,
+                in_range: Vec<StackId>,
+            }
+            let mut detonations = Vec::new();
             for (&missile, missile_ref) in stacks.iter() {
                 // for each stack with an armed warhead
                 let warhead_count = missile_ref
@@ -229,9 +235,15 @@ impl GameState {
                             continue;
                         }
 
+                        let mut record = DetonationRecord {
+                            missile,
+                            time: intercept,
+                            in_range: Vec::new(),
+                        };
+
                         // mark all stacks in range and within line of sight at that point in time as damaged
                         // except the missile itself
-                        for thing in stacks.iter().filter_map(|(stack, stack_ref)| {
+                        for stack in stacks.iter().filter_map(|(stack, stack_ref)| {
                             if !std::ptr::eq(missile_ref, stack_ref)
                                 && missile_ref.in_range(intercept, stack_ref)
                                 && !self.celestials.values().any(|celestial| {
@@ -250,23 +262,53 @@ impl GameState {
                                 None
                             }
                         }) {
-                            *damaged.entry(thing).or_default() += warhead_count;
+                            record.in_range.push(stack);
                         }
-                        // mark the warhead as detonated
-                        detonated.push(missile);
+
+                        if !record.in_range.is_empty() {
+                            detonations.push(record);
+                        }
                     }
                 }
             }
 
-            // actually do damage
-            for (stack, hits) in damaged {
-                let stack_ref = stacks.get_mut(&stack).expect("saved key");
+            // shuffle detonations to handle cases where multiple missiles have similar trajectories
+            detonations.shuffle(rng);
+            // sort detonations by time
+            detonations.sort_by(|a, b| a.time.total_cmp(&b.time));
 
-                let module_count = stack_ref.modules.len() as u32;
-                let damaged_count =
-                    module_count.div_ceil(ModuleDetails::WARHEAD_DAMAGE_FRACTION) * hits;
-                stack_ref.do_damage(damaged_count, rng);
+            // apply detonations
+            let mut detonated = Vec::new();
+            for DetonationRecord { missile, in_range, .. } in detonations {
+                let missile_ref = stacks.get_mut(&missile).expect("saved key");
+                let warhead_count = missile_ref
+                    .modules
+                    .values()
+                    .filter(|module| {
+                        matches!(
+                            module,
+                            Module {
+                                health: Health::Intact,
+                                details: ModuleDetails::Warhead { armed: true }
+                            }
+                        )
+                    })
+                    .count();
+                if warhead_count == 0 {
+                    // no warheads left (was damaged by previous detonation)
+                    continue;
+                }
+                detonated.push(missile);
+
+                for stack in in_range {
+                    let stack_ref = stacks.get_mut(&stack).expect("saved key");
+                    let module_count = stack_ref.modules.len() as u32;
+                    let damaged_count =
+                        module_count.div_ceil(ModuleDetails::WARHEAD_DAMAGE_FRACTION) * warhead_count as u32;
+                    stack_ref.do_damage(damaged_count, rng);
+                }
             }
+
             // remove detonated stacks
             for detonated in detonated {
                 stacks.remove(&detonated);
