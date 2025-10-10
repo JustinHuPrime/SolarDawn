@@ -61,7 +61,7 @@ use rand_distr::Alphanumeric;
 use rand_pcg::Pcg64;
 use serde::Serialize;
 use serde_cbor::{from_slice, to_vec};
-use solar_dawn_common::{GameState, GameStateInitializer, Phase, PlayerId};
+use solar_dawn_common::{order::Order, GameState, GameStateInitializer, Phase, PlayerId};
 use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
 
@@ -635,7 +635,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                 .await;
             return;
         };
-        let Ok(parsed) = from_slice(&orders) else {
+        let Ok(parsed) = from_slice::<Vec<Order>>(&orders) else {
             // protocol error
             let mut server_state = server_state_mutex.lock().await;
             server_state
@@ -643,7 +643,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                 .await;
             return;
         };
-        eprintln!("got orders from {player_id:?}");
+        eprintln!("got {} orders from {player_id:?}", parsed.len());
 
         let mut server_state = server_state_mutex.lock().await;
         match &mut *server_state {
