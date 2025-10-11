@@ -35,6 +35,7 @@ use celestial::{Celestial, CelestialId};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use stack::{ModuleId, Stack, StackId};
+#[cfg(feature = "server")]
 use uuid::Uuid;
 
 use crate::order::{Order, OrderError};
