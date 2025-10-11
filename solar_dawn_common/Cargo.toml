@@ -13,9 +13,6 @@ rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 uuid = { version = "1.18", features = ["serde", "v4"] }
 
-[dev-dependencies]
-serde_cbor = { workspace = true }
-
 [features]
 server = ["rand"]
 client = []

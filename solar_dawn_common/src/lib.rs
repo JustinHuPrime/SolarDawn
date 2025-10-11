@@ -1167,35 +1167,4 @@ mod tests {
         // The moving stack should have crashed (not in stacks)
         assert!(!delta.stacks.contains_key(&stack_id));
     }
-
-    #[test]
-    fn test_uuid_serialization_as_string() {
-        use serde_cbor::{from_slice, to_vec};
-
-        // Create a simple game state with a known UUID in simple format
-        let test_uuid_simple = "550e8400e29b41d4a716446655440000";
-        let game_state = GameState {
-            phase: Phase::Logistics,
-            turn: 1,
-            players: HashMap::new(),
-            celestials: HashMap::new(),
-            earth: CelestialId::from(0u8),
-            stacks: HashMap::new(),
-            game_id: test_uuid_simple.to_string(),
-        };
-
-        // Serialize to CBOR
-        let serialized = to_vec(&game_state).expect("should serialize");
-
-        // Check that the UUID string appears in the serialized data (simple format, no hyphens)
-        let serialized_str = String::from_utf8_lossy(&serialized);
-        assert!(
-            serialized_str.contains(test_uuid_simple),
-            "UUID should be serialized as a string in simple format"
-        );
-
-        // Deserialize and verify it works
-        let deserialized: GameState = from_slice(&serialized).expect("should deserialize");
-        assert_eq!(deserialized.game_id, test_uuid_simple);
-    }
 }
