@@ -45,27 +45,6 @@ pub mod celestial;
 pub mod order;
 pub mod stack;
 
-/// Helper module for serializing UUID as string
-mod uuid_as_string {
-    use serde::{Deserialize, Deserializer, Serializer};
-    use uuid::Uuid;
-
-    pub fn serialize<S>(uuid: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&uuid.to_string())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Uuid::parse_str(&s).map_err(serde::de::Error::custom)
-    }
-}
-
 /// The game state
 #[derive(Debug, Serialize, Deserialize)]
 pub struct GameState {
@@ -83,11 +62,10 @@ pub struct GameState {
     pub stacks: HashMap<StackId, Stack>,
     /// Unique game id
     ///
-    /// A UUID generated when the game is created
+    /// A UUID (v4) stored in simple format (without hyphens) when the game is created
     ///
     /// Used on the client side for indexing client-side-only settings storage
-    #[serde(with = "uuid_as_string")]
-    pub game_id: Uuid,
+    pub game_id: String,
 }
 
 /// Constructor function for some starting game state
@@ -154,7 +132,7 @@ impl GameState {
                             celestials,
                             earth,
                             stacks,
-                            game_id: Uuid::new_v4(),
+                            game_id: Uuid::new_v4().simple().to_string(),
                         }
                     }
                 },
@@ -176,7 +154,7 @@ impl GameState {
                             celestials,
                             earth,
                             stacks: HashMap::new(),
-                            game_id: Uuid::nil(),
+                            game_id: Uuid::nil().simple().to_string(),
                         }
                     }
                 },
@@ -1023,7 +1001,7 @@ mod tests {
             celestials: HashMap::new(),
             earth: CelestialId::from(0u8),
             stacks: HashMap::new(),
-            game_id: Uuid::nil(),
+            game_id: Uuid::nil().simple().to_string(),
         };
 
         // Create a delta to apply
@@ -1104,7 +1082,7 @@ mod tests {
             celestials,
             earth: CelestialId::from(0u8),
             stacks,
-            game_id: Uuid::nil(),
+            game_id: Uuid::nil().simple().to_string(),
         };
 
         // Process movement phase with no orders
@@ -1171,7 +1149,7 @@ mod tests {
             celestials,
             earth: CelestialId::from(0u8),
             stacks,
-            game_id: Uuid::nil(),
+            game_id: Uuid::nil().simple().to_string(),
         };
 
         // Process movement phase with no orders
@@ -1194,8 +1172,8 @@ mod tests {
     fn test_uuid_serialization_as_string() {
         use serde_cbor::{from_slice, to_vec};
 
-        // Create a simple game state with a known UUID
-        let test_uuid = Uuid::parse_str("550e8400-e29b-41d4-a716-446655440000").unwrap();
+        // Create a simple game state with a known UUID in simple format
+        let test_uuid_simple = "550e8400e29b41d4a716446655440000";
         let game_state = GameState {
             phase: Phase::Logistics,
             turn: 1,
@@ -1203,21 +1181,21 @@ mod tests {
             celestials: HashMap::new(),
             earth: CelestialId::from(0u8),
             stacks: HashMap::new(),
-            game_id: test_uuid,
+            game_id: test_uuid_simple.to_string(),
         };
 
         // Serialize to CBOR
         let serialized = to_vec(&game_state).expect("should serialize");
 
-        // Check that the UUID string appears in the serialized data
+        // Check that the UUID string appears in the serialized data (simple format, no hyphens)
         let serialized_str = String::from_utf8_lossy(&serialized);
         assert!(
-            serialized_str.contains("550e8400-e29b-41d4-a716-446655440000"),
-            "UUID should be serialized as a string"
+            serialized_str.contains(test_uuid_simple),
+            "UUID should be serialized as a string in simple format"
         );
 
         // Deserialize and verify it works
         let deserialized: GameState = from_slice(&serialized).expect("should deserialize");
-        assert_eq!(deserialized.game_id, test_uuid);
+        assert_eq!(deserialized.game_id, test_uuid_simple);
     }
 }

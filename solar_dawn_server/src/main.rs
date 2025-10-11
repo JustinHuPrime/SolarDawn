@@ -317,7 +317,7 @@ impl ServerState {
                 celestials: Default::default(),
                 earth: 0.into(),
                 stacks: Default::default(),
-                game_id: Uuid::nil(),
+                game_id: Uuid::nil().simple().to_string(),
             },
             orders: Default::default(),
             celestial_id_generator: Default::default(),
