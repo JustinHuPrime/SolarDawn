@@ -24,8 +24,6 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-#[cfg(feature = "server")]
-use std::time::SystemTime;
 use std::{
     collections::HashMap,
     iter::Sum,
@@ -37,6 +35,7 @@ use celestial::{Celestial, CelestialId};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use stack::{ModuleId, Stack, StackId};
+use uuid::Uuid;
 
 use crate::order::{Order, OrderError};
 #[cfg(feature = "server")]
@@ -63,10 +62,10 @@ pub struct GameState {
     pub stacks: HashMap<StackId, Stack>,
     /// Unique game id
     ///
-    /// Is the unix timestamp of when the game was created in milliseconds, modulo 32
+    /// A UUID generated when the game is created
     ///
     /// Used on the client side for indexing client-side-only settings storage
-    pub game_id: u32,
+    pub game_id: Uuid,
 }
 
 /// Constructor function for some starting game state
@@ -133,10 +132,7 @@ impl GameState {
                             celestials,
                             earth,
                             stacks,
-                            game_id: SystemTime::now()
-                                .duration_since(SystemTime::UNIX_EPOCH)
-                                .expect("date is well after epoch")
-                                .as_millis() as u32,
+                            game_id: Uuid::new_v4(),
                         }
                     }
                 },
@@ -158,7 +154,7 @@ impl GameState {
                             celestials,
                             earth,
                             stacks: HashMap::new(),
-                            game_id: 0,
+                            game_id: Uuid::nil(),
                         }
                     }
                 },
@@ -1005,7 +1001,7 @@ mod tests {
             celestials: HashMap::new(),
             earth: CelestialId::from(0u8),
             stacks: HashMap::new(),
-            game_id: 0,
+            game_id: Uuid::nil(),
         };
 
         // Create a delta to apply
@@ -1086,7 +1082,7 @@ mod tests {
             celestials,
             earth: CelestialId::from(0u8),
             stacks,
-            game_id: 0,
+            game_id: Uuid::nil(),
         };
 
         // Process movement phase with no orders
@@ -1153,7 +1149,7 @@ mod tests {
             celestials,
             earth: CelestialId::from(0u8),
             stacks,
-            game_id: 0,
+            game_id: Uuid::nil(),
         };
 
         // Process movement phase with no orders
