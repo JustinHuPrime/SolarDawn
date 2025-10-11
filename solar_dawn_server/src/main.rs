@@ -61,7 +61,7 @@ use rand_distr::Alphanumeric;
 use rand_pcg::Pcg64;
 use serde::Serialize;
 use serde_cbor::{from_slice, to_vec};
-use solar_dawn_common::{order::Order, GameState, GameStateInitializer, Phase, PlayerId};
+use solar_dawn_common::{GameState, GameStateInitializer, Phase, PlayerId, order::Order};
 use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
 use uuid::Uuid;

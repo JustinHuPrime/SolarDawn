@@ -1545,11 +1545,14 @@ impl Order {
                 if *stack == *target {
                     return Err(OrderError::InvalidTarget);
                 }
-                if game_state
-                    .celestials
-                    .values()
-                    .any(|celestial| celestial.collides(stack_ref.position.cartesian(), target_ref.position.cartesian()).is_some())
-                {
+                if game_state.celestials.values().any(|celestial| {
+                    celestial
+                        .collides(
+                            stack_ref.position.cartesian(),
+                            target_ref.position.cartesian(),
+                        )
+                        .is_some()
+                }) {
                     return Err(OrderError::NoLineOfSight);
                 }
             }

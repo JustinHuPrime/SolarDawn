@@ -186,10 +186,14 @@ impl GameState {
                 .iter()
                 .filter_map(|(id, stack)| {
                     // skip stacks that are landed on any celestial
-                    if self.celestials.values().any(|celestial| stack.landed(celestial)) {
+                    if self
+                        .celestials
+                        .values()
+                        .any(|celestial| stack.landed(celestial))
+                    {
                         return None;
                     }
-                    
+
                     // for each stack, find the first celestial it collides with, if any
                     self.celestials
                         .values()
@@ -1038,9 +1042,9 @@ mod tests {
     #[cfg(feature = "server")]
     #[test]
     fn test_landed_stack_not_crashed() {
-        use std::collections::HashMap;
-        use rand::rngs::StdRng;
         use rand::SeedableRng;
+        use rand::rngs::StdRng;
+        use std::collections::HashMap;
 
         // Create a celestial body with gravity
         let mut celestials = HashMap::new();
@@ -1090,7 +1094,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(42);
         let mut stack_id_gen = (2u32..).map(StackId::from);
         let mut module_id_gen = (2u32..).map(ModuleId::from);
-        
+
         let delta = game_state.next(
             HashMap::new(),
             &mut stack_id_gen,
@@ -1105,9 +1109,9 @@ mod tests {
     #[cfg(feature = "server")]
     #[test]
     fn test_moving_stack_crashes() {
-        use std::collections::HashMap;
-        use rand::rngs::StdRng;
         use rand::SeedableRng;
+        use rand::rngs::StdRng;
+        use std::collections::HashMap;
 
         // Create a celestial body with gravity
         let mut celestials = HashMap::new();
@@ -1157,7 +1161,7 @@ mod tests {
         let mut rng = StdRng::seed_from_u64(42);
         let mut stack_id_gen = (2u32..).map(StackId::from);
         let mut module_id_gen = (2u32..).map(ModuleId::from);
-        
+
         let delta = game_state.next(
             HashMap::new(),
             &mut stack_id_gen,
