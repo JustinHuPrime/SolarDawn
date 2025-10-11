@@ -11,7 +11,8 @@ license = "AGPL-3.0-or-later"
 [dependencies]
 rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
+uuid = { version = "1.18", features = ["serde", "v4"], optional = true }
 
 [features]
-server = ["rand"]
+server = ["rand", "uuid"]
 client = []

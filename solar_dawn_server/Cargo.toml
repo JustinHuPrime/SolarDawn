@@ -24,3 +24,4 @@ serde_cbor = { workspace = true }
 solar_dawn_common = { path = "../solar_dawn_common", features = ["server"] }
 tokio = { version = "1.47.1", features = ["full"] }
 tower-http = { version = "0.6.6", features = ["fs"] }
+uuid = { version = "1.18", features = ["serde", "v4"] }
