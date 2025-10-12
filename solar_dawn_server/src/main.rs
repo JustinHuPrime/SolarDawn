@@ -21,8 +21,7 @@
 //!
 //! Expects to be run in a directory where:
 //!
-//! - ./assets/index.html is an appropriate HTML file to run the client in
-//! - ./assets/pkg/* is the client WASM pkg
+//! - ./public/* are the client side files
 //! - ./cert.pem is a TLS certificate
 //! - ./key.pem is the private key for the certificate
 
@@ -30,14 +29,7 @@
 #![warn(missing_docs)]
 
 use std::{
-    collections::HashMap,
-    fs::OpenOptions,
-    io::Write,
-    mem::{replace, take},
-    net::SocketAddr,
-    path::PathBuf,
-    process::ExitCode,
-    sync::Arc,
+    collections::HashMap, fs::OpenOptions, io::Write, mem::{replace, take}, net::SocketAddr, path::PathBuf, process::ExitCode, sync::Arc
 };
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -133,16 +125,19 @@ impl ServerState {
 
     fn lost_connection(&mut self, player_id: PlayerId) {
         match self {
-            ServerState::Running { connections, .. } => {
+            ServerState::New { connections, .. }
+            | ServerState::Load { connections, .. }
+            | ServerState::Running { connections, .. } => {
                 connections.remove(&player_id);
             }
-            _ => panic!("tried to disconnect from an already-stopped server"),
         }
     }
 
     async fn server_disconnect(&mut self, player_id: PlayerId, message: Message) {
         match self {
-            ServerState::Running { connections, .. } => {
+            ServerState::New { connections, .. }
+            | ServerState::Load { connections, .. }
+            | ServerState::Running { connections, .. } => {
                 eprintln!("dropping {player_id:?}");
                 let _ = connections
                     .get_mut(&player_id)
@@ -150,7 +145,6 @@ impl ServerState {
                     .send(message)
                     .await;
             }
-            _ => panic!("tried to drop client from an already-stopped server"),
         }
         self.lost_connection(player_id);
     }
@@ -382,7 +376,7 @@ async fn main() -> ExitCode {
     let server_state = Arc::new(Mutex::new(server_state));
 
     let app = Router::new()
-        .fallback_service(ServeDir::new("./assets").append_index_html_on_directories(true))
+        .fallback_service(ServeDir::new("./public").append_index_html_on_directories(true))
         .route("/ws", any(ws_handler))
         .with_state(server_state);
 
@@ -419,19 +413,19 @@ async fn ws_handler(
 
 async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerState>>) {
     let protocol_error = Message::Close(Some(CloseFrame {
-        code: 4002,
+        code: 1002,
         reason: "protocol error".into(),
     }));
     let join_code_error = Message::Close(Some(CloseFrame {
-        code: 4101,
+        code: 1000,
         reason: "bad join code".into(),
     }));
-    let unknown_username = Message::Close(Some(CloseFrame {
-        code: 4102,
-        reason: "unknown username".into(),
+    let full = Message::Close(Some(CloseFrame {
+        code: 1000,
+        reason: "game full".into(),
     }));
     let user_already_connected = Message::Close(Some(CloseFrame {
-        code: 4103,
+        code: 1000,
         reason: "user already connected".into(),
     }));
     fn serialize<T: Serialize>(message: &T) -> Message {
@@ -449,7 +443,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
         return;
     };
     let login = login.split('\n').collect::<Vec<_>>();
-    let [attempt_join_code, attempt_username] = *login.as_slice() else {
+    let [attempt_username, attempt_join_code] = *login.as_slice() else {
         let _ = send.send(protocol_error).await;
         return;
     };
@@ -493,7 +487,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
             } else {
                 // game is full
                 drop(server_state);
-                let _ = send.send(unknown_username).await;
+                let _ = send.send(full).await;
                 return;
             };
 
@@ -536,7 +530,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                 .find(|&(_, username)| username == attempt_username)
             else {
                 drop(server_state);
-                let _ = send.send(unknown_username).await;
+                let _ = send.send(full).await;
                 return;
             };
             if connections.contains_key(&player_id) {
@@ -588,7 +582,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                 .find(|&(_, username)| username == attempt_username)
             else {
                 drop(server_state);
-                let _ = send.send(unknown_username).await;
+                let _ = send.send(full).await;
                 return;
             };
             if connections.contains_key(&player_id) {

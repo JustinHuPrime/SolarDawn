@@ -85,7 +85,7 @@ pub struct IdGenerator<T: From<U>, U: PrimInt> {
 impl<T: From<U>, U: PrimInt> Default for IdGenerator<T, U> {
     fn default() -> Self {
         Self {
-            next: U::zero(),
+            next: U::one(),
             _t: PhantomData,
         }
     }

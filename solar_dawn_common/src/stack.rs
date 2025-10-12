@@ -32,7 +32,8 @@ use crate::celestial::Celestial;
 use crate::{PlayerId, Vec2};
 
 /// A stack - a collection of modules docked to one another
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "client", derive(Clone))]
 pub struct Stack {
     /// Current position
     pub position: Vec2<i32>,

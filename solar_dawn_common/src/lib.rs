@@ -48,6 +48,7 @@ pub mod stack;
 
 /// The game state
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "client", derive(Clone))]
 pub struct GameState {
     /// The phase the game is in
     pub phase: Phase,
@@ -68,6 +69,15 @@ pub struct GameState {
     /// Used on the client side for indexing client-side-only settings storage
     pub game_id: String,
 }
+
+#[cfg(feature = "client")]
+impl PartialEq for GameState {
+    fn eq(&self, other: &Self) -> bool {
+        self.phase == other.phase && self.turn == other.turn
+    }
+}
+#[cfg(feature = "client")]
+impl Eq for GameState {}
 
 /// Constructor function for some starting game state
 pub type GameStateInitializer = fn(

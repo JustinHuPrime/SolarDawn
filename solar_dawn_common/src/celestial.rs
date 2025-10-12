@@ -30,6 +30,7 @@ use crate::Vec2;
 
 /// A celestial body
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "client", derive(Clone))]
 pub struct Celestial {
     /// Where this celestial body is positioned
     pub position: Vec2<i32>,

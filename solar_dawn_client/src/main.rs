@@ -22,15 +22,18 @@
 mod scenes;
 
 use dioxus::prelude::*;
+use solar_dawn_common::{GameState, PlayerId};
 use ws_queue_web::WebSocketClient;
 
-use crate::scenes::{Error, Login};
+use crate::scenes::*;
 
 static WEBSOCKET: GlobalSignal<Option<WebSocketClient>> = Global::new(|| None);
 
 enum ClientState {
     Error(String),
     Login,
+    WaitingForPlayers(PlayerId),
+    InGame(GameState, PlayerId),
 }
 
 fn main() {
@@ -79,15 +82,26 @@ fn App() -> Element {
                 asset!("/assets/site.webmanifest")
             },
         }
-        match *state.read() {
-            ClientState::Error(ref message) => {
+        match &*state.read() {
+            ClientState::Error(message) => {
                 rsx! {
                     Error { message }
                 }
             }
             ClientState::Login => {
                 rsx! {
-                    Login { state }
+                    Join { state }
+                }
+            }
+            ClientState::WaitingForPlayers(me) => {
+                rsx! {
+                    WaitingForPlayers { state, me: *me }
+                }
+            }
+            ClientState::InGame(game_state, me) => {
+                let game_state = use_signal(|| game_state.clone());
+                rsx! {
+                    InGame { state, game_state, me: *me }
                 }
             }
         }
