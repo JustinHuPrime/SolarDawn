@@ -17,12 +17,16 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+mod game;
+
 use dioxus::prelude::*;
 use serde_cbor::from_slice;
-use solar_dawn_common::{GameState, GameStateDelta, PlayerId};
+use solar_dawn_common::{GameState, PlayerId};
 use ws_queue_web::{Message, WebSocketClient};
 
 use crate::{ClientState, WEBSOCKET};
+
+pub use game::InGame;
 
 #[component]
 pub fn Error(message: String) -> Element {
@@ -198,7 +202,11 @@ pub fn Join(state: Signal<ClientState>) -> Element {
 }
 
 #[component]
-pub fn WaitingForPlayers(state: Signal<ClientState>, me: PlayerId) -> Element {
+pub fn WaitingForPlayers(state: Signal<ClientState>) -> Element {
+    let ClientState::WaitingForPlayers(me) = *state.read() else {
+        unreachable!();
+    };
+
     WEBSOCKET
         .write()
         .as_mut()
@@ -222,46 +230,6 @@ pub fn WaitingForPlayers(state: Signal<ClientState>, me: PlayerId) -> Element {
     rsx! {
         div { class: "container",
             h1 { "Waiting for players..." }
-        }
-    }
-}
-
-#[component]
-pub fn InGame(
-    state: Signal<ClientState>,
-    game_state: Signal<GameState>,
-    me: PlayerId,
-) -> Element {
-    WEBSOCKET
-        .write()
-        .as_mut()
-        .expect("state transition guarded")
-        .set_onmessage(Some(Box::new({
-            move |message| {
-                let Message::Binary(bytes) = message else {
-                    protocol_error(state);
-                    return;
-                };
-                let Ok(delta) = from_slice::<GameStateDelta>(&bytes) else {
-                    protocol_error(state);
-                    return;
-                };
-                game_state.write().apply(delta);
-            }
-        })));
-
-    rsx! {
-        div { class: "container-fluid",
-            h1 { "Game scene" }
-            p { {format!("{:#?}", game_state.read())} }
-            button {
-                onclick: {
-                    move |_| {
-                        game_state.write().turn += 1;
-                    }
-                },
-                "Test!"
-            }
         }
     }
 }

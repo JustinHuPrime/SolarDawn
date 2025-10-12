@@ -93,15 +93,14 @@ fn App() -> Element {
                     Join { state }
                 }
             }
-            ClientState::WaitingForPlayers(me) => {
+            ClientState::WaitingForPlayers(..) => {
                 rsx! {
-                    WaitingForPlayers { state, me: *me }
+                    WaitingForPlayers { state }
                 }
             }
-            ClientState::InGame(game_state, me) => {
-                let game_state = use_signal(|| game_state.clone());
+            ClientState::InGame(..) => {
                 rsx! {
-                    InGame { state, game_state, me: *me }
+                    InGame { state }
                 }
             }
         }
