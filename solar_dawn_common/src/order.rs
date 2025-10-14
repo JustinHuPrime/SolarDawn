@@ -3832,6 +3832,96 @@ mod tests {
     }
 
     #[test]
+    fn test_orbit_adjust_application() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            HashMap::from([(player_1, String::from("player 1"))]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+        );
+        game_state.phase = Phase::Movement;
+
+        let stack_id = stack_id_generator.next().unwrap();
+        let engine_module = module_id_generator.next().unwrap();
+        let tank_module = module_id_generator.next().unwrap();
+
+        let mut fuel_tank = Module::new_tank();
+        if let ModuleDetails::Tank { fuel, .. } = &mut fuel_tank.details {
+            *fuel = 100;
+        }
+
+        // Place stack in orbit around Earth at (7, -3) with velocity (-1, 1)
+        // This is a valid clockwise orbital position
+        let mut stack_data = Stack::new(Vec2 { q: 7, r: -3 }, Vec2 { q: -1, r: 1 }, player_1);
+        stack_data
+            .modules
+            .insert(engine_module, Module::new_engine());
+        stack_data.modules.insert(tank_module, fuel_tank);
+        game_state.stacks.insert(stack_id, stack_data);
+
+        // Test orbit adjustment to a different position (clockwise)
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::OrbitAdjust {
+                stack: stack_id,
+                target_position: Vec2 { q: 5, r: -3 }, // Another valid orbital position
+                clockwise: true,
+                fuel_from: vec![(tank_module, 6)],
+            }],
+        )]);
+
+        let (validated_orders, errors) = Order::validate(&game_state, &orders);
+        assert!(
+            errors[&player_1][0].is_none(),
+            "Valid orbit adjustment should succeed"
+        );
+
+        // Apply the orders and check result
+        use rand::SeedableRng;
+        use rand::rngs::StdRng;
+        let mut rng = StdRng::seed_from_u64(12345);
+        let updated_stacks = validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+        
+        // Check that the stack moved to the correct position with correct velocity
+        let updated_stack = updated_stacks.get(&stack_id).expect("Stack should exist");
+        assert_eq!(updated_stack.position, Vec2 { q: 5, r: -3 }, "Stack should be at target position");
+        // For clockwise orbit at (5, -3), velocity should be (1, -1)
+        assert_eq!(updated_stack.velocity, Vec2 { q: 1, r: -1 }, "Stack should have correct orbital velocity");
+        
+        // Test counterclockwise orbit
+        game_state.stacks.get_mut(&stack_id).unwrap().position = Vec2 { q: 7, r: -3 };
+        game_state.stacks.get_mut(&stack_id).unwrap().velocity = Vec2 { q: 0, r: -1 };
+        
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::OrbitAdjust {
+                stack: stack_id,
+                target_position: Vec2 { q: 5, r: -3 },
+                clockwise: false, // counterclockwise
+                fuel_from: vec![(tank_module, 6)],
+            }],
+        )]);
+
+        let (validated_orders, errors) = Order::validate(&game_state, &orders);
+        assert!(
+            errors[&player_1][0].is_none(),
+            "Valid counterclockwise orbit adjustment should succeed"
+        );
+
+        let updated_stacks = validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+        let updated_stack = updated_stacks.get(&stack_id).expect("Stack should exist");
+        assert_eq!(updated_stack.position, Vec2 { q: 5, r: -3 }, "Stack should be at target position");
+        // For counterclockwise orbit at (5, -3), velocity should be (0, 1)
+        assert_eq!(updated_stack.velocity, Vec2 { q: 0, r: 1 }, "Stack should have correct counterclockwise orbital velocity");
+    }
+
+    #[test]
     fn test_board_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
