@@ -207,16 +207,18 @@ pub enum Order {
         /// Where to draw fuel from
         fuel_from: Vec<(ModuleId, u8)>,
     },
-    /// Rendezvous with another stack orbiting the same body
+    /// Adjust orbit to target orbital hex and direction
     ///
     /// Requires functional engine and one hex/turn of delta-v
     ///
-    /// Target must not have any move order
-    Rendezvous {
+    /// Target must be a valid orbital position around the currently orbited body
+    OrbitAdjust {
         /// Which stack
         stack: StackId,
-        /// Who to rendezvous with
-        target: StackId,
+        /// Target orbital position
+        target_position: Vec2<i32>,
+        /// Clockwise or counterclockwise orbit direction
+        clockwise: bool,
         /// Where to draw fuel from
         fuel_from: Vec<(ModuleId, u8)>,
     },
@@ -1127,7 +1129,7 @@ impl Order {
                         match order {
                             Ok(
                                 Order::Burn { stack, .. }
-                                | Order::Rendezvous { stack, .. }
+                                | Order::OrbitAdjust { stack, .. }
                                 | Order::Land { stack, .. }
                                 | Order::TakeOff { stack, .. },
                             ) => {
@@ -1145,39 +1147,6 @@ impl Order {
                             *order = Err(OrderError::MultipleMoves);
                         }
                     }
-                }
-
-                // aggregate check that rendezvous target has no move order
-                let mut order_by_stack: HashMap<StackId, &mut Result<&Order, OrderError>> =
-                    HashMap::new();
-                for (_, orders) in orders.iter_mut() {
-                    for order in orders.iter_mut() {
-                        match order {
-                            Ok(
-                                Order::Burn { stack, .. }
-                                | Order::Rendezvous { stack, .. }
-                                | Order::Land { stack, .. }
-                                | Order::TakeOff { stack, .. },
-                            ) => {
-                                order_by_stack.insert(*stack, order);
-                            }
-                            _ => {
-                                // no-op - should only be errors here
-                            }
-                        }
-                    }
-                }
-                let mut conflicted = Vec::new();
-                for (stack, order) in order_by_stack.iter() {
-                    if let Ok(Order::Rendezvous { target, .. }) = order
-                        && order_by_stack.contains_key(target)
-                    {
-                        conflicted.push(*stack);
-                    }
-                }
-                for conflicted in conflicted {
-                    **order_by_stack.get_mut(&conflicted).expect("saved key") =
-                        Err(OrderError::TargetMoved);
                 }
             }
         }
@@ -1607,16 +1576,14 @@ impl Order {
 
                 // aggregate check that there's only one move order per stack
             }
-            Order::Rendezvous {
+            Order::OrbitAdjust {
                 stack,
-                target,
+                target_position,
+                clockwise,
                 fuel_from,
             } => {
                 validate_phase(game_state, Phase::Movement)?;
                 let stack_ref = validate_stack(*stack, game_state, player)?;
-                let Some(target_ref) = game_state.stacks.get(target) else {
-                    return Err(OrderError::InvalidStackId(*target));
-                };
 
                 validate_burn(*stack, stack_ref, 1, fuel_from, 0.0)?;
 
@@ -1628,12 +1595,21 @@ impl Order {
                     return Err(OrderError::NotInOrbit);
                 };
 
-                if !target_ref.orbiting(orbited) {
-                    return Err(OrderError::NotInOrbit);
+                // Check that target_position is a valid orbital position (distance 1 from orbited body)
+                if (*target_position - orbited.position).norm() != 1 {
+                    return Err(OrderError::DestinationTooFar);
+                }
+
+                // Verify that the target position with the velocity would maintain orbit
+                let orbit_params = orbited.orbit_parameters(*clockwise);
+                if !orbit_params
+                    .iter()
+                    .any(|(pos, _vel)| pos == target_position)
+                {
+                    return Err(OrderError::DestinationTooFar);
                 }
 
                 // aggregate check that there's only one move order per stack
-                // aggregate check that target has no move order
             }
             Order::Land {
                 stack,
@@ -1935,18 +1911,33 @@ impl Order {
 
                 drain_fuel(stack, fuel_from);
             }
-            Order::Rendezvous {
+            Order::OrbitAdjust {
                 stack,
-                target,
+                target_position,
+                clockwise,
                 fuel_from,
             } => {
-                let target = stacks.get(target).expect("order is validated");
-                let target_position = target.position;
-                let target_velocity = target.velocity;
-
                 let stack = stacks.get_mut(stack).expect("order is validated");
-                stack.position = target_position;
-                stack.velocity = target_velocity;
+                
+                // Find the orbited body to get correct velocity for target position
+                let orbited = game_state
+                    .celestials
+                    .values()
+                    .find(|celestial| {
+                        celestial.orbit_gravity
+                            && (stack.position - celestial.position).norm() == 1
+                    })
+                    .expect("order is validated");
+                
+                // Get the correct velocity for the target position
+                let orbit_params = orbited.orbit_parameters(*clockwise);
+                let (_pos, target_velocity) = orbit_params
+                    .iter()
+                    .find(|(pos, _vel)| pos == target_position)
+                    .expect("order is validated");
+
+                stack.position = *target_position;
+                stack.velocity = *target_velocity;
 
                 drain_fuel(stack, fuel_from);
             }
@@ -3786,9 +3777,10 @@ mod tests {
                     delta_v: Vec2 { q: 1, r: 0 },
                     fuel_from: vec![(tank_module, 6)], // Correct fuel calculation
                 },
-                Order::Rendezvous {
+                Order::OrbitAdjust {
                     stack: stack_id,
-                    target: target_stack_id,
+                    target_position: Vec2 { q: 5, r: -3 },
+                    clockwise: true,
                     fuel_from: vec![(tank_module, 6)], // Correct fuel calculation
                 },
             ],
@@ -3804,46 +3796,38 @@ mod tests {
             OrderError::MultipleMoves
         ));
 
-        // Test rendezvous target that also has move order
-        let target_engine = module_id_generator.next().unwrap();
-        let target_tank = module_id_generator.next().unwrap();
-        let mut target_fuel = Module::new_tank();
-        if let ModuleDetails::Tank { fuel, .. } = &mut target_fuel.details {
-            *fuel = 50;
-        }
-        game_state
-            .stacks
-            .get_mut(&target_stack_id)
-            .unwrap()
-            .modules
-            .insert(target_engine, Module::new_engine());
-        game_state
-            .stacks
-            .get_mut(&target_stack_id)
-            .unwrap()
-            .modules
-            .insert(target_tank, target_fuel);
-
+        // Test valid orbit adjustment
         let orders = HashMap::from([(
             player_1,
-            vec![
-                Order::Rendezvous {
-                    stack: stack_id,
-                    target: target_stack_id,
-                    fuel_from: vec![(tank_module, 6)], // Correct fuel amount
-                },
-                Order::Burn {
-                    stack: target_stack_id,
-                    delta_v: Vec2 { q: 0, r: 1 },
-                    fuel_from: vec![(target_tank, 4)], // Target stack mass = 7, needs ceil(7*1/2) = 4
-                },
-            ],
+            vec![Order::OrbitAdjust {
+                stack: stack_id,
+                target_position: Vec2 { q: 5, r: -3 },
+                clockwise: true,
+                fuel_from: vec![(tank_module, 6)],
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(
+            errors[&player_1][0].is_none(),
+            "Valid orbit adjustment should succeed"
+        );
+
+        // Test invalid orbit adjustment - target too far
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::OrbitAdjust {
+                stack: stack_id,
+                target_position: Vec2 { q: 10, r: -3 }, // Not an orbital position
+                clockwise: true,
+                fuel_from: vec![(tank_module, 6)],
+            }],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
         assert!(matches!(
             errors[&player_1][0].unwrap(),
-            OrderError::TargetMoved
+            OrderError::DestinationTooFar
         ));
     }
 
