@@ -267,14 +267,12 @@ impl GameState {
                             if !std::ptr::eq(missile_ref, stack_ref)
                                 && missile_ref.in_range(intercept, stack_ref)
                                 && !self.celestials.values().any(|celestial| {
-                                    celestial
-                                        .collides(
-                                            missile_ref.position.cartesian()
-                                                + (missile_ref.velocity.cartesian() * intercept),
-                                            stack_ref.position.cartesian()
-                                                + (stack_ref.velocity.cartesian() * intercept),
-                                        )
-                                        .is_some()
+                                    celestial.passes_through(
+                                        missile_ref.position.cartesian()
+                                            + (missile_ref.velocity.cartesian() * intercept),
+                                        stack_ref.position.cartesian()
+                                            + (stack_ref.velocity.cartesian() * intercept),
+                                    )
                                 })
                             {
                                 Some(*stack)

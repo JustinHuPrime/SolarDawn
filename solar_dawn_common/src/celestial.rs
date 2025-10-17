@@ -358,6 +358,37 @@ impl Celestial {
         }
     }
 
+    /// Does the line from start to end pass completely through this celestial body
+    ///
+    /// Returns true only if both entry and exit points are within the line segment
+    /// Note bodies without gravity don't block
+    pub fn passes_through(&self, start: CartesianVec2, end: CartesianVec2) -> bool {
+        if !self.orbit_gravity {
+            return false;
+        }
+
+        // find t such that self.radius^2 = (start - self.position + t*(end - start))^2
+        let dp = start - self.position.cartesian();
+        let dv = end - start;
+
+        // find t such that 0 = (dp + t*dv)^2 = dv⋅dv*t^2 + 2*dp⋅dv*t + dp⋅dp - self.radius^2
+        let c = dp.dot(dp) - self.radius * self.radius;
+        let b = 2.0 * dp.dot(dv);
+        let a = dv.dot(dv);
+
+        let discriminant = b * b - 4.0 * a * c;
+        if discriminant < 0.0 {
+            // no intersection at all
+            return false;
+        }
+
+        let intersect_1 = (-b - discriminant.sqrt()) / (2.0 * a);
+        let intersect_2 = (-b + discriminant.sqrt()) / (2.0 * a);
+
+        // only blocks if BOTH intersection points are within the segment
+        (0.0..=1.0).contains(&intersect_1) && (0.0..=1.0).contains(&intersect_2)
+    }
+
     /// Given a starting position and velocity, what's the effect of this body's gravity
     pub fn gravity_to(&self, position: Vec2<i32>, velocity: Vec2<i32>) -> Vec2<i32> {
         if !self.orbit_gravity {
@@ -943,5 +974,113 @@ mod tests {
                 )
                 .is_none()
         );
+    }
+
+    #[test]
+    fn test_passes_through() {
+        // Body with gravity at origin with radius 1.0
+        let body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("Test Body"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 1.0,
+        };
+
+        // Line passing completely through center should pass through
+        assert!(body.passes_through(
+            Vec2 { q: -3, r: 0 }.cartesian(),
+            Vec2 { q: 3, r: 0 }.cartesian()
+        ));
+
+        // Line passing through but offset should still pass through
+        assert!(body.passes_through(
+            Vec2 { q: -2, r: 1 }.cartesian(),
+            Vec2 { q: 1, r: 0 }.cartesian()
+        ));
+
+        // Line starting at center (inside) going out should NOT pass through
+        // because only one intersection point is in range
+        assert!(!body.passes_through(
+            Vec2::zero().cartesian(),
+            Vec2 { q: 2, r: 0 }.cartesian()
+        ));
+
+        // Line ending at center (inside) should NOT pass through
+        assert!(!body.passes_through(
+            Vec2 { q: -2, r: 0 }.cartesian(),
+            Vec2::zero().cartesian()
+        ));
+
+        // Line entirely far away should not pass through
+        assert!(!body.passes_through(
+            Vec2 { q: 5, r: 0 }.cartesian(),
+            Vec2 { q: 6, r: 0 }.cartesian()
+        ));
+
+        // Line that grazes the surface (tangent) - should not pass through
+        // because discriminant would be zero (or very small)
+        // This is a subtle edge case
+
+        // Body without gravity should never block
+        let no_gravity_body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("No Gravity"),
+            orbit_gravity: false,
+            surface_gravity: 0.0,
+            resources: Resources::MiningIce,
+            radius: 1.0,
+        };
+
+        // Even a line passing through should not block if no gravity
+        assert!(!no_gravity_body.passes_through(
+            Vec2 { q: -2, r: 0 }.cartesian(),
+            Vec2 { q: 2, r: 0 }.cartesian()
+        ));
+
+        // Test with body at different position
+        let offset_body = Celestial {
+            position: Vec2 { q: 3, r: 2 },
+            name: String::from("Offset Body"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 0.5,
+        };
+
+        // Line passing completely through offset body should pass through
+        assert!(offset_body.passes_through(
+            Vec2 { q: 2, r: 2 }.cartesian(),
+            Vec2 { q: 4, r: 2 }.cartesian()
+        ));
+
+        // Line missing offset body should not pass through
+        assert!(!offset_body.passes_through(
+            Vec2 { q: 2, r: 5 }.cartesian(),
+            Vec2 { q: 4, r: 5 }.cartesian()
+        ));
+
+        // Test with very small body - line passing through should still pass through
+        let small_body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("Small Body"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 0.1,
+        };
+
+        // Line passing completely through small body
+        assert!(small_body.passes_through(
+            Vec2 { q: -1, r: 0 }.cartesian(),
+            Vec2 { q: 1, r: 0 }.cartesian()
+        ));
+
+        // Line passing farther away should not pass through
+        assert!(!small_body.passes_through(
+            Vec2 { q: -1, r: 1 }.cartesian(),
+            Vec2 { q: 1, r: 1 }.cartesian()
+        ));
     }
 }
