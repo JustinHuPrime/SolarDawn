@@ -22,7 +22,7 @@ use serde_cbor::from_slice;
 use solar_dawn_common::GameStateDelta;
 use ws_queue_web::Message;
 
-use crate::{scenes::protocol_error, ClientState, WEBSOCKET};
+use crate::{ClientState, WEBSOCKET, scenes::protocol_error};
 
 struct ClientGameSettings {}
 struct ClientViewSettings {
@@ -31,9 +31,7 @@ struct ClientViewSettings {
 }
 
 #[component]
-pub fn InGame(
-    state: Signal<ClientState>,
-) -> Element {
+pub fn InGame(state: Signal<ClientState>) -> Element {
     let ClientState::InGame(game_state, me) = &*state.read() else {
         unreachable!()
     };

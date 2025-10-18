@@ -29,7 +29,14 @@
 #![warn(missing_docs)]
 
 use std::{
-    collections::HashMap, fs::OpenOptions, io::Write, mem::{replace, take}, net::SocketAddr, path::PathBuf, process::ExitCode, sync::Arc
+    collections::HashMap,
+    fs::OpenOptions,
+    io::Write,
+    mem::{replace, take},
+    net::SocketAddr,
+    path::PathBuf,
+    process::ExitCode,
+    sync::Arc,
 };
 
 use anyhow::{Context, Result, anyhow, bail};
