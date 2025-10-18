@@ -371,7 +371,7 @@ pub enum OrderError {
     /// Burning while landed on a planet
     BurnWhileLanded,
 
-    /// Destination after takeoff is too far
+    /// Destination after takeoff or orbit adjust is too far
     DestinationTooFar,
 
     /// Stack tried to board and do something else
@@ -1600,15 +1600,6 @@ impl Order {
                     return Err(OrderError::DestinationTooFar);
                 }
 
-                // Verify that the target position with the velocity would maintain orbit
-                let orbit_params = orbited.orbit_parameters(*clockwise);
-                if !orbit_params
-                    .iter()
-                    .any(|(pos, _vel)| pos == target_position)
-                {
-                    return Err(OrderError::DestinationTooFar);
-                }
-
                 // aggregate check that there's only one move order per stack
             }
             Order::Land {
@@ -1918,26 +1909,25 @@ impl Order {
                 fuel_from,
             } => {
                 let stack = stacks.get_mut(stack).expect("order is validated");
-                
+
                 // Find the orbited body to get correct velocity for target position
                 let orbited = game_state
                     .celestials
                     .values()
                     .find(|celestial| {
-                        celestial.orbit_gravity
-                            && (stack.position - celestial.position).norm() == 1
+                        celestial.orbit_gravity && (stack.position - celestial.position).norm() == 1
                     })
                     .expect("order is validated");
-                
+
                 // Get the correct velocity for the target position
                 let orbit_params = orbited.orbit_parameters(*clockwise);
-                let (_pos, target_velocity) = orbit_params
-                    .iter()
-                    .find(|(pos, _vel)| pos == target_position)
+                let (_, target_velocity) = orbit_params
+                    .into_iter()
+                    .find(|(pos, _)| pos == target_position)
                     .expect("order is validated");
 
                 stack.position = *target_position;
-                stack.velocity = *target_velocity;
+                stack.velocity = target_velocity;
 
                 drain_fuel(stack, fuel_from);
             }
@@ -3886,18 +3876,27 @@ mod tests {
         use rand::SeedableRng;
         use rand::rngs::StdRng;
         let mut rng = StdRng::seed_from_u64(12345);
-        let updated_stacks = validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
-        
+        let updated_stacks =
+            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+
         // Check that the stack moved to the correct position with correct velocity
         let updated_stack = updated_stacks.get(&stack_id).expect("Stack should exist");
-        assert_eq!(updated_stack.position, Vec2 { q: 5, r: -3 }, "Stack should be at target position");
+        assert_eq!(
+            updated_stack.position,
+            Vec2 { q: 5, r: -3 },
+            "Stack should be at target position"
+        );
         // For clockwise orbit at (5, -3), velocity should be (1, -1)
-        assert_eq!(updated_stack.velocity, Vec2 { q: 1, r: -1 }, "Stack should have correct orbital velocity");
-        
+        assert_eq!(
+            updated_stack.velocity,
+            Vec2 { q: 1, r: -1 },
+            "Stack should have correct orbital velocity"
+        );
+
         // Test counterclockwise orbit
         game_state.stacks.get_mut(&stack_id).unwrap().position = Vec2 { q: 7, r: -3 };
         game_state.stacks.get_mut(&stack_id).unwrap().velocity = Vec2 { q: 0, r: -1 };
-        
+
         let orders = HashMap::from([(
             player_1,
             vec![Order::OrbitAdjust {
@@ -3914,11 +3913,20 @@ mod tests {
             "Valid counterclockwise orbit adjustment should succeed"
         );
 
-        let updated_stacks = validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
+        let updated_stacks =
+            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
         let updated_stack = updated_stacks.get(&stack_id).expect("Stack should exist");
-        assert_eq!(updated_stack.position, Vec2 { q: 5, r: -3 }, "Stack should be at target position");
+        assert_eq!(
+            updated_stack.position,
+            Vec2 { q: 5, r: -3 },
+            "Stack should be at target position"
+        );
         // For counterclockwise orbit at (5, -3), velocity should be (0, 1)
-        assert_eq!(updated_stack.velocity, Vec2 { q: 0, r: 1 }, "Stack should have correct counterclockwise orbital velocity");
+        assert_eq!(
+            updated_stack.velocity,
+            Vec2 { q: 0, r: 1 },
+            "Stack should have correct counterclockwise orbital velocity"
+        );
     }
 
     #[test]
