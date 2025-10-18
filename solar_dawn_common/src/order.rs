@@ -1515,12 +1515,10 @@ impl Order {
                     return Err(OrderError::InvalidTarget);
                 }
                 if game_state.celestials.values().any(|celestial| {
-                    celestial
-                        .collides(
-                            stack_ref.position.cartesian(),
-                            target_ref.position.cartesian(),
-                        )
-                        .is_some()
+                    celestial.blocks_weapons_effect(
+                        stack_ref.position.cartesian(),
+                        target_ref.position.cartesian(),
+                    )
                 }) {
                     return Err(OrderError::NoLineOfSight);
                 }

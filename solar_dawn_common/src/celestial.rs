@@ -316,22 +316,9 @@ impl Celestial {
             .expect("base vector has exact number of args")
     }
 
-    /// When does the line from start to end collide with this celestial body, if at all
-    ///
-    /// Note bodies without gravity also have no collision
-    pub fn collides(&self, start: CartesianVec2, end: CartesianVec2) -> Option<f32> {
-        if !self.orbit_gravity {
-            return None;
-        }
-
+    fn intersects(&self, start: CartesianVec2, end: CartesianVec2) -> Option<(f32, f32)> {
         // find t such that self.radius^2 = (start - self.position + t*(end - start))^2
         let dp = start - self.position.cartesian();
-
-        // special case - if already in range, collide immediately
-        if dp.dot(dp) <= self.radius * self.radius {
-            return Some(0.0);
-        }
-
         let dv = end - start;
 
         // find t such that 0 = (dp + t*dv)^2 = dv⋅dv*t^2 + 2*dp⋅dv*t + dp⋅dp - self.radius^2
@@ -347,6 +334,18 @@ impl Celestial {
 
         let intersect_1 = (-b - discriminant.sqrt()) / (2.0 * a);
         let intersect_2 = (-b + discriminant.sqrt()) / (2.0 * a);
+        Some((intersect_1, intersect_2))
+    }
+
+    /// Would a stack moving from start to end collide with this celestial body, and if so, when?
+    ///
+    /// Note bodies without gravity also have no collision
+    pub fn stack_movement_collides(&self, start: CartesianVec2, end: CartesianVec2) -> Option<f32> {
+        if !self.orbit_gravity {
+            return None;
+        }
+
+        let (intersect_1, intersect_2) = self.intersects(start, end)?;
 
         // note - if both are in range, intersect_1 is the first collision
         if (0.0..=1.0).contains(&intersect_1) {
@@ -356,6 +355,23 @@ impl Celestial {
         } else {
             None
         }
+    }
+
+    /// Is a weapons effect originating from start blocked for a stack at end?
+    ///
+    /// Note bodies without gravity don't block
+    pub fn blocks_weapons_effect(&self, start: CartesianVec2, end: CartesianVec2) -> bool {
+        if !self.orbit_gravity {
+            return false;
+        }
+
+        self.intersects(start, end)
+            .is_some_and(|(intersect_1, intersect_2)| {
+                // only blocks if BOTH intersection points are within the segment
+                (0.0..=1.0).contains(&intersect_1)
+                    && (0.0..=1.0).contains(&intersect_2)
+                    && intersect_1 != intersect_2
+            })
     }
 
     /// Given a starting position and velocity, what's the effect of this body's gravity
@@ -663,7 +679,7 @@ mod tests {
 
         // Line that starts and ends at the same point (zero length)
         assert!(
-            body.collides(
+            body.stack_movement_collides(
                 Vec2 { q: 10, r: 10 }.cartesian(),
                 Vec2 { q: 10, r: 10 }.cartesian()
             )
@@ -676,14 +692,17 @@ mod tests {
         let close_end = Vec2 { q: 5, r: 6 }; // Just outside on other side
         // This line passes very close to center and should collide
         assert!(
-            body.collides(close_start.cartesian(), close_end.cartesian())
+            body.stack_movement_collides(close_start.cartesian(), close_end.cartesian())
                 .is_some()
         );
 
         // Line that starts inside (should collide)
         assert!(
-            body.collides(body.position.cartesian(), Vec2 { q: 10, r: 10 }.cartesian())
-                .is_some()
+            body.stack_movement_collides(
+                body.position.cartesian(),
+                Vec2 { q: 10, r: 10 }.cartesian()
+            )
+            .is_some()
         );
     }
 
@@ -701,7 +720,7 @@ mod tests {
         // Only lines that pass exactly through the center should collide
         assert!(
             point_body
-                .collides(
+                .stack_movement_collides(
                     Vec2 { q: -1, r: 0 }.cartesian(),
                     Vec2 { q: 1, r: 0 }.cartesian()
                 )
@@ -709,7 +728,7 @@ mod tests {
         );
         assert!(
             point_body
-                .collides(
+                .stack_movement_collides(
                     Vec2 { q: -1, r: 1 }.cartesian(),
                     Vec2 { q: 1, r: 1 }.cartesian()
                 )
@@ -830,7 +849,7 @@ mod tests {
 
         // Line passing through center should collide
         assert!(
-            body.collides(
+            body.stack_movement_collides(
                 Vec2 { q: -3, r: 0 }.cartesian(),
                 Vec2 { q: 3, r: 0 }.cartesian()
             )
@@ -838,7 +857,7 @@ mod tests {
         );
         // Line passing through center hex but offset from exact center should collide
         assert!(
-            body.collides(
+            body.stack_movement_collides(
                 Vec2 { q: -2, r: 1 }.cartesian(),
                 Vec2 { q: 1, r: 0 }.cartesian()
             )
@@ -846,7 +865,7 @@ mod tests {
         );
         // Line far from center should not collide
         assert!(
-            body.collides(
+            body.stack_movement_collides(
                 Vec2 { q: -2, r: 3 }.cartesian(),
                 Vec2 { q: 2, r: 3 }.cartesian()
             )
@@ -854,12 +873,12 @@ mod tests {
         );
         // Line segment starting at center should collide
         assert!(
-            body.collides(Vec2::zero().cartesian(), Vec2 { q: 2, r: 0 }.cartesian())
+            body.stack_movement_collides(Vec2::zero().cartesian(), Vec2 { q: 2, r: 0 }.cartesian())
                 .is_some()
         );
         // Line segment entirely far away should not collide
         assert!(
-            body.collides(
+            body.stack_movement_collides(
                 Vec2 { q: 5, r: 0 }.cartesian(),
                 Vec2 { q: 6, r: 0 }.cartesian()
             )
@@ -879,7 +898,7 @@ mod tests {
         // Even a line passing through should not collide if no gravity
         assert!(
             no_gravity_body
-                .collides(
+                .stack_movement_collides(
                     Vec2 { q: -2, r: 0 }.cartesian(),
                     Vec2 { q: 2, r: 0 }.cartesian()
                 )
@@ -899,7 +918,7 @@ mod tests {
         // Line passing through offset body center should collide
         assert!(
             offset_body
-                .collides(
+                .stack_movement_collides(
                     Vec2 { q: 2, r: 2 }.cartesian(),
                     Vec2 { q: 4, r: 2 }.cartesian()
                 )
@@ -908,7 +927,7 @@ mod tests {
         // Line missing offset body should not collide
         assert!(
             offset_body
-                .collides(
+                .stack_movement_collides(
                     Vec2 { q: 2, r: 5 }.cartesian(),
                     Vec2 { q: 4, r: 5 }.cartesian()
                 )
@@ -928,7 +947,7 @@ mod tests {
         // Line passing very close to center should collide
         assert!(
             small_body
-                .collides(
+                .stack_movement_collides(
                     Vec2 { q: -1, r: 0 }.cartesian(),
                     Vec2 { q: 1, r: 0 }.cartesian()
                 )
@@ -937,11 +956,117 @@ mod tests {
         // Line passing farther away should not collide
         assert!(
             small_body
-                .collides(
+                .stack_movement_collides(
                     Vec2 { q: -1, r: 1 }.cartesian(),
                     Vec2 { q: 1, r: 1 }.cartesian()
                 )
                 .is_none()
         );
+    }
+
+    #[test]
+    fn test_passes_through() {
+        // Body with gravity at origin with radius 1.0
+        let body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("Test Body"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 1.0,
+        };
+
+        // Line passing completely through center should pass through
+        assert!(body.blocks_weapons_effect(
+            Vec2 { q: -3, r: 0 }.cartesian(),
+            Vec2 { q: 3, r: 0 }.cartesian()
+        ));
+
+        // Line passing through but offset should still pass through
+        assert!(body.blocks_weapons_effect(
+            Vec2 { q: -2, r: 1 }.cartesian(),
+            Vec2 { q: 1, r: 0 }.cartesian()
+        ));
+
+        // Line starting at center (inside) going out should NOT pass through
+        // because only one intersection point is in range
+        assert!(
+            !body.blocks_weapons_effect(Vec2::zero().cartesian(), Vec2 { q: 2, r: 0 }.cartesian())
+        );
+
+        // Line ending at center (inside) should NOT pass through
+        assert!(
+            !body.blocks_weapons_effect(Vec2 { q: -2, r: 0 }.cartesian(), Vec2::zero().cartesian())
+        );
+
+        // Line entirely far away should not pass through
+        assert!(!body.blocks_weapons_effect(
+            Vec2 { q: 5, r: 0 }.cartesian(),
+            Vec2 { q: 6, r: 0 }.cartesian()
+        ));
+
+        // Line that grazes the surface (tangent) - should not pass through
+        // because discriminant would be zero (or very small)
+        // This is a subtle edge case
+
+        // Body without gravity should never block
+        let no_gravity_body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("No Gravity"),
+            orbit_gravity: false,
+            surface_gravity: 0.0,
+            resources: Resources::MiningIce,
+            radius: 1.0,
+        };
+
+        // Even a line passing through should not block if no gravity
+        assert!(!no_gravity_body.blocks_weapons_effect(
+            Vec2 { q: -2, r: 0 }.cartesian(),
+            Vec2 { q: 2, r: 0 }.cartesian()
+        ));
+
+        // Test with body at different position
+        let offset_body = Celestial {
+            position: Vec2 { q: 3, r: 2 },
+            name: String::from("Offset Body"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 0.5,
+        };
+
+        // Line passing completely through offset body should pass through
+        assert!(offset_body.blocks_weapons_effect(
+            Vec2 { q: 2, r: 2 }.cartesian(),
+            Vec2 { q: 4, r: 2 }.cartesian()
+        ));
+
+        // Line missing offset body should not pass through
+        assert!(!offset_body.blocks_weapons_effect(
+            Vec2 { q: 2, r: 5 }.cartesian(),
+            Vec2 { q: 4, r: 5 }.cartesian()
+        ));
+
+        // Test with very small body - line passing through should still pass through
+        let small_body = Celestial {
+            position: Vec2::zero(),
+            name: String::from("Small Body"),
+            orbit_gravity: true,
+            surface_gravity: 1.0,
+            resources: Resources::None,
+            radius: 0.1,
+        };
+
+        // Line passing completely through small body
+        assert!(small_body.blocks_weapons_effect(
+            Vec2 { q: -1, r: 0 }.cartesian(),
+            Vec2 { q: 1, r: 0 }.cartesian()
+        ));
+
+        // Line passing farther away should not pass through
+        assert!(!small_body.blocks_weapons_effect(
+            Vec2 { q: -1, r: 1 }.cartesian(),
+            Vec2 { q: 1, r: 1 }.cartesian()
+        ));
     }
 }

@@ -195,20 +195,12 @@ impl GameState {
             let crashes = stacks
                 .iter()
                 .filter_map(|(id, stack)| {
-                    // skip stacks that are landed on any celestial
-                    if self
-                        .celestials
-                        .values()
-                        .any(|celestial| stack.landed(celestial))
-                    {
-                        return None;
-                    }
-
                     // for each stack, find the first celestial it collides with, if any
+                    // note that the movement_collides method ignores landed stacks
                     self.celestials
                         .values()
                         .filter_map(|celestial| {
-                            celestial.collides(
+                            celestial.stack_movement_collides(
                                 stack.position.cartesian(),
                                 (stack.position + stack.velocity).cartesian(),
                             )
@@ -267,14 +259,12 @@ impl GameState {
                             if !std::ptr::eq(missile_ref, stack_ref)
                                 && missile_ref.in_range(intercept, stack_ref)
                                 && !self.celestials.values().any(|celestial| {
-                                    celestial
-                                        .collides(
-                                            missile_ref.position.cartesian()
-                                                + (missile_ref.velocity.cartesian() * intercept),
-                                            stack_ref.position.cartesian()
-                                                + (stack_ref.velocity.cartesian() * intercept),
-                                        )
-                                        .is_some()
+                                    celestial.blocks_weapons_effect(
+                                        missile_ref.position.cartesian()
+                                            + (missile_ref.velocity.cartesian() * intercept),
+                                        stack_ref.position.cartesian()
+                                            + (stack_ref.velocity.cartesian() * intercept),
+                                    )
                                 })
                             {
                                 Some(*stack)
