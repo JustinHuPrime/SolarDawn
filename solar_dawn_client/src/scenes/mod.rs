@@ -17,16 +17,9 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-mod game;
-
 use dioxus::prelude::*;
-use serde_cbor::from_slice;
-use solar_dawn_common::{GameState, PlayerId};
-use ws_queue_web::{Message, WebSocketClient};
 
-use crate::{ClientState, WEBSOCKET};
-
-pub use game::InGame;
+use crate::ClientState;
 
 #[component]
 pub fn Error(message: String) -> Element {
@@ -43,13 +36,13 @@ pub fn Error(message: String) -> Element {
 }
 
 #[component]
-pub fn Join(state: Signal<ClientState>) -> Element {
+pub fn Join(change_state: EventHandler<ClientState>) -> Element {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
 
     let mut username = use_signal(String::new);
     let mut join_code = use_signal(String::new);
-    let mut submitting = use_signal(|| false);
     let mut error_message = use_signal(|| Option::<String>::None);
+    let mut submitting = use_signal(|| false);
 
     rsx! {
         div { class: "container",
@@ -100,71 +93,6 @@ pub fn Join(state: Signal<ClientState>) -> Element {
                         r#type: "submit",
                         onclick: move |_| {
                             submitting.set(true);
-                            let mut client = match WebSocketClient::new(
-                                "/ws",
-                                Some(Message::Text(format!("{}\n{}", username.read(), join_code.read()))),
-                            ) {
-                                Ok(client) => client,
-                                Err(err) => {
-                                    error_message
-                                        .set(Some(format!("Couldn't connect to server: {:#?}", err)));
-                                    return;
-                                }
-                            };
-                            client
-                                .set_onmessage(
-                                    Some(
-                                        Box::new(move |message| {
-                                            match message {
-                                                Message::Text(message) => {
-                                                    match message.as_str() {
-                                                        "bad join code" => {
-                                                            error_message.set(Some("Incorrect join code".to_string()));
-                                                            *submitting.write() = false;
-                                                            *WEBSOCKET.write() = None;
-                                                        }
-                                                        "game full" => {
-                                                            error_message.set(Some("No open seats".to_string()));
-                                                            *submitting.write() = false;
-                                                            *WEBSOCKET.write() = None;
-                                                        }
-                                                        "user already connected" => {
-                                                            error_message
-                                                                .set(Some("Username already connected".to_string()));
-                                                            *submitting.write() = false;
-                                                            *WEBSOCKET.write() = None;
-                                                        }
-                                                        _ => protocol_error(state),
-                                                    }
-                                                }
-                                                Message::Binary(bytes) => {
-                                                    let Ok(player_id) = from_slice::<PlayerId>(&bytes) else {
-                                                        protocol_error(state);
-                                                        return;
-                                                    };
-                                                    state.set(ClientState::WaitingForPlayers(player_id));
-                                                    WEBSOCKET
-                                                        .write()
-                                                        .as_mut()
-                                                        .expect("got message from socket")
-                                                        .set_onmessage(None);
-                                                }
-                                            }
-                                        }),
-                                    ),
-                                );
-                            client
-                                .set_onerror(
-                                    Some(
-                                        Box::new(move |err| {
-                                            state
-                                                .set(
-                                                    ClientState::Error(format!("Connection lost\n{err:#?}")),
-                                                )
-                                        }),
-                                    ),
-                                );
-                            *WEBSOCKET.write() = Some(client);
                         },
                         disabled: *submitting.read(),
                         "Join Game"
@@ -199,44 +127,4 @@ pub fn Join(state: Signal<ClientState>) -> Element {
             }
         }
     }
-}
-
-#[component]
-pub fn WaitingForPlayers(state: Signal<ClientState>) -> Element {
-    let ClientState::WaitingForPlayers(me) = *state.read() else {
-        unreachable!();
-    };
-
-    WEBSOCKET
-        .write()
-        .as_mut()
-        .expect("state transition guarded")
-        .set_onmessage(Some(Box::new(move |message| {
-            let Message::Binary(bytes) = message else {
-                protocol_error(state);
-                return;
-            };
-            let Ok(game_state) = from_slice::<GameState>(&bytes) else {
-                protocol_error(state);
-                return;
-            };
-            WEBSOCKET
-                .write()
-                .as_mut()
-                .expect("state transition guarded")
-                .set_onmessage(None);
-            state.set(ClientState::InGame(game_state, me));
-        })));
-    rsx! {
-        div { class: "container",
-            h1 { "Waiting for players..." }
-        }
-    }
-}
-
-pub fn protocol_error(mut state: Signal<ClientState>) {
-    state.set(ClientState::Error(
-        "Connection lost: protocol error".to_string(),
-    ));
-    *WEBSOCKET.write() = None;
 }

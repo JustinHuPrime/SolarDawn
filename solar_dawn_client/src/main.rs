@@ -17,32 +17,24 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-//! Client for Solar Dawn
-
 mod scenes;
 
 use dioxus::prelude::*;
-use solar_dawn_common::{GameState, PlayerId};
-use ws_queue_web::WebSocketClient;
 
-use crate::scenes::*;
-
-static WEBSOCKET: GlobalSignal<Option<WebSocketClient>> = Global::new(|| None);
-
-enum ClientState {
-    Error(String),
-    Login,
-    WaitingForPlayers(PlayerId),
-    InGame(GameState, PlayerId),
-}
+use crate::scenes::{Error, Join};
 
 fn main() {
     dioxus::launch(App);
 }
 
+enum ClientState {
+    Error(String),
+    Join,
+}
+
 #[component]
 fn App() -> Element {
-    let state = use_signal(|| ClientState::Login);
+    let mut state = use_signal(|| ClientState::Join);
 
     rsx! {
         document::Link {
@@ -56,51 +48,60 @@ fn App() -> Element {
             integrity: "sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI",
             crossorigin: "anonymous",
         }
-        document::Link { rel: "stylesheet", href: asset!("/assets/main.css") }
+        document::Link {
+            rel: "stylesheet",
+            href: asset!("/assets/main.css", AssetOptions::builder().with_hash_suffix(false)),
+        }
         document::Link {
             rel: "apple-touch-icon",
             sizes: "180x180",
-            href: asset!("/assets/apple-touch-icon.png"),
+            href: asset!(
+                "/assets/apple-touch-icon.png", AssetOptions::builder().with_hash_suffix(false)
+            ),
         }
         document::Link {
             rel: "icon",
             r#type: "image/png",
             sizes: "32x32",
-            href: asset!("/assets/favicon-32x32.png"),
+            href: asset!("/assets/favicon-32x32.png", AssetOptions::builder().with_hash_suffix(false)),
         }
         document::Link {
             rel: "icon",
             r#type: "image/png",
             sizes: "16x16",
-            href: asset!("/assets/favicon-16x16.png"),
+            href: asset!("/assets/favicon-16x16.png", AssetOptions::builder().with_hash_suffix(false)),
         }
         document::Link {
             rel: "manifest",
             href: {
-                let _ = asset!("/assets/android-chrome-192x192.png");
-                let _ = asset!("/assets/android-chrome-512x512.png");
-                asset!("/assets/site.webmanifest")
+                #[used]
+                static _ANDROID_192: Asset = asset!(
+                    "/assets/android-chrome-192x192.png", AssetOptions::builder()
+                    .with_hash_suffix(false)
+                );
+                #[used]
+                static _ANDROID_512: Asset = asset!(
+                    "/assets/android-chrome-512x512.png", AssetOptions::builder()
+                    .with_hash_suffix(false)
+                );
+                asset!(
+                    "/assets/site.webmanifest", AssetOptions::builder().with_hash_suffix(false)
+                )
             },
         }
-        match &*state.read() {
-            ClientState::Error(message) => {
+        match *state.read() {
+            ClientState::Error(ref message) => {
                 rsx! {
                     Error { message }
                 }
             }
-            ClientState::Login => {
+            ClientState::Join => {
                 rsx! {
-                    Join { state }
-                }
-            }
-            ClientState::WaitingForPlayers(..) => {
-                rsx! {
-                    WaitingForPlayers { state }
-                }
-            }
-            ClientState::InGame(..) => {
-                rsx! {
-                    InGame { state }
+                    Join {
+                        change_state: move |new_state| {
+                            *state.write() = new_state;
+                        },
+                    }
                 }
             }
         }

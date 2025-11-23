@@ -1,5 +1,9 @@
 [workspace]
-members = ["solar_dawn_client", "solar_dawn_common", "solar_dawn_server"]
+members = [
+    "solar_dawn_client",
+    "solar_dawn_common",
+    "solar_dawn_server", "solar_dawn_client",
+]
 resolver = "2"
 
 [workspace.dependencies]
@@ -7,14 +11,12 @@ rand = "0.9.2"
 serde = "1.0.228"
 serde_cbor = "0.11.2"
 
-[profile]
-
-[profile.wasm-dev]
+[profile.android-dev]
 inherits = "dev"
-opt-level = 1
 
 [profile.server-dev]
 inherits = "dev"
 
-[profile.android-dev]
+[profile.wasm-dev]
+opt-level = 1
 inherits = "dev"
