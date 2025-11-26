@@ -17,10 +17,15 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+//! Client for Solar Dawn
+//! 
+//! Is a dioxus app
+
+#![forbid(unsafe_code)]
+#![warn(missing_docs)]
+
 mod scenes;
 mod websocket;
-
-use std::{cell::RefCell, rc::Rc};
 
 use dioxus::prelude::*;
 use solar_dawn_common::PlayerId;

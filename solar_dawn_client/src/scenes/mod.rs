@@ -17,8 +17,6 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::{cell::RefCell, rc::Rc};
-
 use dioxus::prelude::*;
 use futures::StreamExt;
 use serde_cbor::from_slice;
