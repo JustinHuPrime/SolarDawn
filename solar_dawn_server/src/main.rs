@@ -63,7 +63,6 @@ use serde_cbor::{from_slice, to_vec};
 use solar_dawn_common::{GameState, GameStateInitializer, Phase, PlayerId, order::Order};
 use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
-use uuid::Uuid;
 
 use crate::model::{GameServerState, IdGenerator};
 
@@ -318,7 +317,7 @@ impl ServerState {
                 celestials: Default::default(),
                 earth: 0.into(),
                 stacks: Default::default(),
-                game_id: Uuid::nil().simple().to_string(),
+                game_id: String::new(),
             },
             orders: Default::default(),
             celestial_id_generator: Default::default(),
