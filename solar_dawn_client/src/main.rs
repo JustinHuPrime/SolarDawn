@@ -18,10 +18,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 mod scenes;
+mod websocket;
+
+use std::{cell::RefCell, rc::Rc};
 
 use dioxus::prelude::*;
+use solar_dawn_common::PlayerId;
 
-use crate::scenes::{Error, Join};
+use crate::{scenes::{Error, Join, WaitingForPlayers}, websocket::WebsocketClient};
 
 fn main() {
     dioxus::launch(App);
@@ -30,6 +34,10 @@ fn main() {
 enum ClientState {
     Error(String),
     Join,
+    WaitingForPlayers {
+        me: PlayerId,
+        websocket: WebsocketClient
+    }
 }
 
 #[component]
@@ -89,8 +97,8 @@ fn App() -> Element {
                 )
             },
         }
-        match *state.read() {
-            ClientState::Error(ref message) => {
+        match &*state.read() {
+            ClientState::Error(message) => {
                 rsx! {
                     Error { message }
                 }
@@ -101,6 +109,17 @@ fn App() -> Element {
                         change_state: move |new_state| {
                             *state.write() = new_state;
                         },
+                    }
+                }
+            }
+            ClientState::WaitingForPlayers { me, websocket } => {
+                rsx! {
+                    WaitingForPlayers {
+                        me: *me,
+                        websocket: websocket.clone(),
+                        change_state: move |new_state| {
+                            *state.write() = new_state;
+                        }
                     }
                 }
             }
