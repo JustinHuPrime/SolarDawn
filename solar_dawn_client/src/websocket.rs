@@ -209,6 +209,7 @@ impl Future for WebsocketClientBuilder {
             }
             1..=3 => {
                 // note - 2 and 3 (closing, closed) should result in the returned websocket eventually having a ConnectionClosed error
+                self.0.waker.borrow_mut().take();
                 Poll::Ready(self.0.clone())
             }
             4.. => {
