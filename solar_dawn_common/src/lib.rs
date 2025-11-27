@@ -24,10 +24,13 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+#[cfg(feature = "client")]
+use std::fmt::Display;
 use std::{
     collections::HashMap,
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign},
+    sync::Arc,
 };
 
 use celestial::{Celestial, CelestialId};
@@ -55,9 +58,9 @@ pub struct GameState {
     /// Which turn is this - starts at one
     pub turn: u32,
     /// Map from player id to username
-    pub players: HashMap<PlayerId, String>,
+    pub players: Arc<HashMap<PlayerId, String>>,
     /// Game board
-    pub celestials: HashMap<CelestialId, Celestial>,
+    pub celestials: Arc<HashMap<CelestialId, Celestial>>,
     /// Which celestial is Earth (starting planet and allows habitat builds in orbit)
     pub earth: CelestialId,
     /// Game pieces
@@ -139,8 +142,8 @@ impl GameState {
                         Self {
                             phase: Phase::Logistics,
                             turn: 1,
-                            players,
-                            celestials,
+                            players: Arc::new(players),
+                            celestials: Arc::new(celestials),
                             earth,
                             stacks,
                             game_id: Uuid::new_v4().simple().to_string(),
@@ -161,8 +164,8 @@ impl GameState {
                         Self {
                             phase: Phase::Logistics,
                             turn: 1,
-                            players,
-                            celestials,
+                            players: Arc::new(players),
+                            celestials: Arc::new(celestials),
                             earth,
                             stacks: HashMap::new(),
                             game_id: Uuid::nil().simple().to_string(),
@@ -401,10 +404,17 @@ impl GameState {
 
 impl GameState {
     /// Apply a delta
-    pub fn apply(&mut self, delta: GameStateDelta) {
-        self.phase = delta.phase;
-        self.turn = delta.turn;
-        self.stacks = delta.stacks;
+    #[must_use = "apply creates a new game state"]
+    pub fn apply(&self, delta: GameStateDelta) -> Self {
+        Self {
+            phase: delta.phase,
+            turn: delta.turn,
+            players: self.players.clone(),
+            celestials: self.celestials.clone(),
+            earth: self.earth,
+            stacks: delta.stacks,
+            game_id: self.game_id.clone(),
+        }
     }
 }
 
@@ -452,6 +462,13 @@ impl PlayerId {
             6 => "New Delhi Platform".to_string(),
             _ => panic!("Invalid player id"),
         }
+    }
+}
+
+#[cfg(feature = "client")]
+impl Display for PlayerId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
@@ -999,11 +1016,11 @@ mod tests {
         use std::collections::HashMap;
 
         // Create a simple game state
-        let mut game_state = GameState {
+        let game_state = GameState {
             phase: Phase::Logistics,
             turn: 1,
-            players: HashMap::new(),
-            celestials: HashMap::new(),
+            players: Arc::new(HashMap::new()),
+            celestials: Arc::new(HashMap::new()),
             earth: CelestialId::from(0u8),
             stacks: HashMap::new(),
             game_id: Uuid::nil().simple().to_string(),
@@ -1031,7 +1048,7 @@ mod tests {
         };
 
         // Apply the delta
-        game_state.apply(delta);
+        let game_state = game_state.apply(delta);
 
         // Verify the changes
         assert_eq!(game_state.phase, Phase::Combat);
@@ -1083,8 +1100,8 @@ mod tests {
         let game_state = GameState {
             phase: Phase::Movement,
             turn: 1,
-            players: HashMap::new(),
-            celestials,
+            players: Arc::new(HashMap::new()),
+            celestials: Arc::new(celestials),
             earth: CelestialId::from(0u8),
             stacks,
             game_id: Uuid::nil().simple().to_string(),
@@ -1150,8 +1167,8 @@ mod tests {
         let game_state = GameState {
             phase: Phase::Movement,
             turn: 1,
-            players: HashMap::new(),
-            celestials,
+            players: Arc::new(HashMap::new()),
+            celestials: Arc::new(celestials),
             earth: CelestialId::from(0u8),
             stacks,
             game_id: Uuid::nil().simple().to_string(),

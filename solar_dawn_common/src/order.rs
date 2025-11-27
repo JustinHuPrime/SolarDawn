@@ -1577,8 +1577,8 @@ impl Order {
             Order::OrbitAdjust {
                 stack,
                 target_position,
-                clockwise,
                 fuel_from,
+                ..
             } => {
                 validate_phase(game_state, Phase::Movement)?;
                 let stack_ref = validate_stack(*stack, game_state, player)?;
@@ -2004,7 +2004,7 @@ impl ValidatedOrders<'_> {
 #[cfg(test)]
 mod tests {
     use rand::{SeedableRng, rngs::StdRng};
-    use std::marker::PhantomData;
+    use std::{marker::PhantomData, sync::Arc};
 
     use super::*;
 
@@ -2563,7 +2563,8 @@ mod tests {
 
         // Create a mining world and set up a stack there
         let mining_world = celestial_id_generator.next().unwrap();
-        game_state.celestials.insert(
+        let mut celestials = (*game_state.celestials).clone();
+        celestials.insert(
             mining_world,
             Celestial {
                 position: Vec2 { q: 5, r: 5 },
@@ -2574,6 +2575,7 @@ mod tests {
                 radius: 0.3,
             },
         );
+        game_state.celestials = Arc::new(celestials);
 
         let stack_id = stack_id_generator.next().unwrap();
         let miner_module = module_id_generator.next().unwrap();
@@ -2644,7 +2646,8 @@ mod tests {
 
         // Test fuel skimming
         let gas_giant = celestial_id_generator.next().unwrap();
-        game_state.celestials.insert(
+        let mut celestials = (*game_state.celestials).clone();
+        celestials.insert(
             gas_giant,
             Celestial {
                 position: Vec2 { q: 10, r: 10 },
@@ -2655,6 +2658,7 @@ mod tests {
                 radius: 1.0,
             },
         );
+        game_state.celestials = Arc::new(celestials);
 
         let orbiting_stack_id = stack_id_generator.next().unwrap();
         let skimmer_module = module_id_generator.next().unwrap();
@@ -3434,7 +3438,8 @@ mod tests {
 
         // Test line of sight blocked by celestial
         let blocking_celestial = celestial_id_generator.next().unwrap();
-        game_state.celestials.insert(
+        let mut celestials = (*game_state.celestials).clone();
+        celestials.insert(
             blocking_celestial,
             Celestial {
                 position: Vec2 { q: 21, r: 20 }, // Exactly between shooter at (20,20) and target at (22,20)
@@ -3445,6 +3450,7 @@ mod tests {
                 radius: 1.0, // Reasonable blocking radius
             },
         );
+        game_state.celestials = Arc::new(celestials);
 
         let orders = HashMap::from([(
             player_1,
@@ -3656,7 +3662,8 @@ mod tests {
 
         // Test burning while landed on a planet
         let planet = celestial_id_generator.next().unwrap();
-        game_state.celestials.insert(
+        let mut celestials = (*game_state.celestials).clone();
+        celestials.insert(
             planet,
             Celestial {
                 position: Vec2 { q: 5, r: 5 }, // Same position as stack
@@ -3667,6 +3674,7 @@ mod tests {
                 radius: 0.3,
             },
         );
+        game_state.celestials = Arc::new(celestials);
 
         // Move stack to be landed on planet
         game_state.stacks.get_mut(&stack_id).unwrap().velocity = Vec2::zero();

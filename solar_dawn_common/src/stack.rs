@@ -32,8 +32,7 @@ use crate::celestial::Celestial;
 use crate::{PlayerId, Vec2};
 
 /// A stack - a collection of modules docked to one another
-#[derive(Debug, Serialize, Deserialize)]
-#[cfg_attr(feature = "client", derive(Clone))]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Stack {
     /// Current position
     pub position: Vec2<i32>,
@@ -1157,6 +1156,7 @@ mod tests {
     }
 
     #[test]
+    #[expect(clippy::assertions_on_constants)]
     fn test_module_details_constants() {
         // Test that all constants are positive and reasonable
         assert!(ModuleDetails::MINER_PRODUCTION_RATE > 0);

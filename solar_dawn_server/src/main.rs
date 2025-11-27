@@ -250,7 +250,7 @@ impl ServerState {
                 );
                 let delta_bytes =
                     to_vec(&delta).expect("game state delta should always be serializable");
-                game_state.game_state.apply(delta);
+                game_state.game_state = game_state.game_state.apply(delta);
 
                 let mut lost_connections = Vec::new();
                 eprintln!(

@@ -33,6 +33,8 @@ use web_sys::{
     js_sys::{ArrayBuffer, JsString, Uint8Array},
 };
 
+use dioxus::prelude::*;
+
 pub enum Message {
     Text(String),
     Binary(Box<[u8]>),
@@ -52,13 +54,14 @@ pub enum WebsocketError {
     },
 }
 
+#[derive(Clone)]
 pub struct WebsocketClient {
     raw_ws: WebSocket,
     waker: Rc<RefCell<Option<Waker>>>,
-    on_open: Rc<EventListener>,
-    on_message: Rc<EventListener>,
-    on_error: Rc<EventListener>,
-    on_close: Rc<EventListener>,
+    _on_open: Rc<EventListener>,
+    _on_message: Rc<EventListener>,
+    _on_error: Rc<EventListener>,
+    _on_close: Rc<EventListener>,
     event_queue: Rc<RefCell<VecDeque<Result<Message, WebsocketError>>>>,
 }
 
@@ -100,19 +103,6 @@ impl PartialEq for WebsocketClient {
     }
 }
 impl Eq for WebsocketClient {}
-impl Clone for WebsocketClient {
-    fn clone(&self) -> Self {
-        Self {
-            raw_ws: self.raw_ws.clone(),
-            waker: Rc::new(RefCell::new(None)),
-            on_open: self.on_open.clone(),
-            on_message: self.on_message.clone(),
-            on_error: self.on_error.clone(),
-            on_close: self.on_close.clone(),
-            event_queue: self.event_queue.clone(),
-        }
-    }
-}
 
 pub struct WebsocketClientBuilder(WebsocketClient);
 
@@ -127,7 +117,7 @@ impl WebsocketClientBuilder {
         Ok(Self(WebsocketClient {
             raw_ws: raw_ws.clone(),
             waker: waker.clone(),
-            on_open: Rc::new(EventListener::new(raw_ws.clone().into(), "open", {
+            _on_open: Rc::new(EventListener::new(raw_ws.clone().into(), "open", {
                 let waker = waker.clone();
                 move |_| {
                     if let Some(waker) = waker.borrow_mut().take() {
@@ -135,7 +125,7 @@ impl WebsocketClientBuilder {
                     }
                 }
             })),
-            on_message: Rc::new(EventListener::new(raw_ws.clone().into(), "message", {
+            _on_message: Rc::new(EventListener::new(raw_ws.clone().into(), "message", {
                 let event_queue = event_queue.clone();
                 let waker = waker.clone();
                 move |msg| {
@@ -149,7 +139,7 @@ impl WebsocketClientBuilder {
                     } else if let Ok(msg) = msg.data().dyn_into::<JsString>() {
                         event_queue
                             .borrow_mut()
-                            .push_back(Ok(Message::Text(msg.into())))
+                            .push_back(Ok(Message::Text(msg.into())));
                     } else {
                         // https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/message_event
                         unreachable!("invalid message data type");
@@ -160,7 +150,7 @@ impl WebsocketClientBuilder {
                     }
                 }
             })),
-            on_error: Rc::new(EventListener::new(raw_ws.clone().into(), "error", {
+            _on_error: Rc::new(EventListener::new(raw_ws.clone().into(), "error", {
                 let event_queue = event_queue.clone();
                 let waker = waker.clone();
                 move |_| {
@@ -173,7 +163,7 @@ impl WebsocketClientBuilder {
                     }
                 }
             })),
-            on_close: Rc::new(EventListener::new(raw_ws.clone().into(), "close", {
+            _on_close: Rc::new(EventListener::new(raw_ws.clone().into(), "close", {
                 let event_queue = event_queue.clone();
                 let waker = waker.clone();
                 move |event| {

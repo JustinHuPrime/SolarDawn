@@ -17,6 +17,8 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+pub mod game;
+
 use dioxus::prelude::*;
 use futures::StreamExt;
 use serde_cbor::from_slice;
@@ -24,7 +26,7 @@ use solar_dawn_common::{GameState, PlayerId};
 
 use crate::{
     ClientState,
-    websocket::{Message, WebsocketClient, WebsocketClientBuilder},
+    websocket::{Message, WebsocketClient, WebsocketClientBuilder, WebsocketError},
 };
 
 #[component]
@@ -109,8 +111,37 @@ pub fn Join(change_state: EventHandler<ClientState>) -> Element {
                                     );
                                 let message = match websocket.next().await {
                                     Some(Ok(message)) => message,
+                                    Some(
+                                        Err(ref error @ WebsocketError::ConnectionClosed { ref reason, .. }),
+                                    ) => {
+                                        match reason.as_str() {
+                                            "bad join code" => {
+                                                error_message.set(Some("Incorrect join code".to_string()));
+                                                *submitting.write() = false;
+                                                return;
+                                            }
+                                            "game full" => {
+                                                error_message.set(Some("No open seats".to_string()));
+                                                *submitting.write() = false;
+                                                return;
+                                            }
+                                            "user already connected" => {
+                                                error_message
+                                                    .set(Some("Username already connected".to_string()));
+                                                *submitting.write() = false;
+                                                return;
+                                            }
+                                            _ => {
+                                                error_message
+                                                    .set(Some(format!("Couldn't connect to server: {error}")));
+                                                *submitting.write() = false;
+                                                return;
+                                            }
+                                        }
+                                    }
                                     Some(Err(error)) => {
-                                        error_message.set(Some(format!("Couldn't connect to server: {error}")));
+                                        error_message
+                                            .set(Some(format!("Couldn't connect to server: {error}")));
                                         return;
                                     }
                                     None => {
@@ -118,35 +149,19 @@ pub fn Join(change_state: EventHandler<ClientState>) -> Element {
                                     }
                                 };
                                 match message {
-                                    Message::Text(message) => {
-                                        match message.as_str() {
-                                            "bad join code" => {
-                                                error_message.set(Some("Incorrect join code".to_string()));
-                                                *submitting.write() = false;
-                                            }
-                                            "game full" => {
-                                                error_message.set(Some("No open seats".to_string()));
-                                                *submitting.write() = false;
-                                            }
-                                            "user already connected" => {
-                                                error_message
-                                                    .set(Some("Username already connected".to_string()));
-                                                *submitting.write() = false;
-                                            }
-                                            _ => {
-                                                change_state(
-                                                    ClientState::Error(
-                                                        "Protocol error: bad response to login".to_owned(),
-                                                    ),
-                                                );
-                                            }
-                                        }
+                                    Message::Text(_) => {
+                                        change_state(
+                                            ClientState::Error(
+                                                "Protocol error: expected a player id: bad format".to_owned(),
+                                            ),
+                                        );
                                     }
                                     Message::Binary(bytes) => {
                                         let Ok(me) = from_slice::<PlayerId>(&bytes) else {
                                             change_state(
                                                 ClientState::Error(
-                                                    "Protocol error: expected a player id".to_owned(),
+                                                    "Protocol error: expected a player id: couldn't parse"
+                                                        .to_owned(),
                                                 ),
                                             );
                                             return;
@@ -200,30 +215,31 @@ pub fn WaitingForPlayers(
     websocket: WebsocketClient,
     change_state: EventHandler<ClientState>,
 ) -> Element {
-    spawn({
-        let mut websocket = websocket.clone();
-        async move {
-            match websocket.next().await {
-                Some(Ok(Message::Binary(bytes))) => {
-                    let Ok(game_state) = from_slice::<GameState>(&bytes) else {
-                        change_state(ClientState::Error(
-                            "Protocol error: bad state message: couldn't parse".to_owned(),
-                        ));
-                        return;
-                    };
-                    todo!() // enter game
-                }
-                Some(Ok(Message::Text(_))) => {
+    spawn(async move {
+        match websocket.next().await {
+            Some(Ok(Message::Binary(bytes))) => {
+                let Ok(game_state) = from_slice::<GameState>(&bytes) else {
                     change_state(ClientState::Error(
-                        "Protocol error: bad state message: bad format".to_owned(),
+                        "Protocol error: bad state message: couldn't parse".to_owned(),
                     ));
-                }
-                Some(Err(error)) => {
-                    change_state(ClientState::Error(format!("Connection lost: {error}")));
-                }
-                None => {
-                    unreachable!("we always give up upon seeing a close or error event");
-                }
+                    return;
+                };
+                change_state(ClientState::InGame {
+                    me,
+                    websocket,
+                    game_state,
+                })
+            }
+            Some(Ok(Message::Text(_))) => {
+                change_state(ClientState::Error(
+                    "Protocol error: bad state message: bad format".to_owned(),
+                ));
+            }
+            Some(Err(error)) => {
+                change_state(ClientState::Error(format!("Connection lost: {error}")));
+            }
+            None => {
+                unreachable!("we always give up upon seeing a close or error event");
             }
         }
     });

@@ -18,7 +18,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 //! Client for Solar Dawn
-//! 
+//!
 //! Is a dioxus app
 
 #![forbid(unsafe_code)]
@@ -27,27 +27,41 @@
 mod scenes;
 mod websocket;
 
-use dioxus::prelude::*;
-use solar_dawn_common::PlayerId;
+use dioxus::{logger::tracing::Level, prelude::*};
+use solar_dawn_common::{GameState, PlayerId};
 
-use crate::{scenes::{Error, Join, WaitingForPlayers}, websocket::WebsocketClient};
+use crate::{
+    scenes::{Error, Join, WaitingForPlayers, game::InGame},
+    websocket::WebsocketClient,
+};
 
 fn main() {
+    if cfg!(debug_assertions) {
+        dioxus::logger::init(Level::TRACE).unwrap();
+    } else {
+        dioxus::logger::init(Level::INFO).unwrap();
+    }
     dioxus::launch(App);
 }
 
+#[derive(Store)]
 enum ClientState {
     Error(String),
     Join,
     WaitingForPlayers {
         me: PlayerId,
-        websocket: WebsocketClient
-    }
+        websocket: WebsocketClient,
+    },
+    InGame {
+        me: PlayerId,
+        websocket: WebsocketClient,
+        game_state: GameState,
+    },
 }
 
 #[component]
 fn App() -> Element {
-    let mut state = use_signal(|| ClientState::Join);
+    let mut state = use_store(|| ClientState::Join);
 
     rsx! {
         document::Link {
@@ -102,13 +116,13 @@ fn App() -> Element {
                 )
             },
         }
-        match &*state.read() {
-            ClientState::Error(message) => {
+        match state.transpose() {
+            ClientStateStoreTransposed::Error(message) => {
                 rsx! {
                     Error { message }
                 }
             }
-            ClientState::Join => {
+            ClientStateStoreTransposed::Join => {
                 rsx! {
                     Join {
                         change_state: move |new_state| {
@@ -117,14 +131,26 @@ fn App() -> Element {
                     }
                 }
             }
-            ClientState::WaitingForPlayers { me, websocket } => {
+            ClientStateStoreTransposed::WaitingForPlayers { me, websocket } => {
                 rsx! {
                     WaitingForPlayers {
-                        me: *me,
-                        websocket: websocket.clone(),
+                        me: *me.read(),
+                        websocket: websocket.read().clone(),
                         change_state: move |new_state| {
                             *state.write() = new_state;
-                        }
+                        },
+                    }
+                }
+            }
+            ClientStateStoreTransposed::InGame { me, websocket, game_state } => {
+                rsx! {
+                    InGame {
+                        me: *me.read(),
+                        websocket: websocket.read().clone(),
+                        game_state,
+                        change_state: move |new_state| {
+                            *state.write() = new_state;
+                        },
                     }
                 }
             }

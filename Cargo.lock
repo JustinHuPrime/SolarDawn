@@ -2825,6 +2825,7 @@ name = "solar_dawn_client"
 version = "0.5.0"
 dependencies = [
  "anyhow",
+ "base64",
  "dioxus",
  "futures",
  "serde",
