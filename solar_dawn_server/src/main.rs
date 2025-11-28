@@ -63,6 +63,7 @@ use serde_cbor::{from_slice, to_vec};
 use solar_dawn_common::{GameState, GameStateInitializer, Phase, PlayerId, order::Order};
 use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
+use tracing::{Level, info, warn};
 
 use crate::model::{GameServerState, IdGenerator};
 
@@ -144,7 +145,7 @@ impl ServerState {
             ServerState::New { connections, .. }
             | ServerState::Load { connections, .. }
             | ServerState::Running { connections, .. } => {
-                eprintln!("dropping {player_id:?}");
+                info!("dropping {player_id:?}");
                 let _ = connections
                     .get_mut(&player_id)
                     .expect("should only drop connected players")
@@ -172,7 +173,7 @@ impl ServerState {
                     .collect::<HashMap<_, _>>();
                 let connections = take(connections);
                 let game_state = GameServerState::new(players, *scenario);
-                eprintln!("starting after new");
+                info!("starting after new");
                 *self = ServerState::Running {
                     join_code: take(join_code),
                     connections,
@@ -186,7 +187,7 @@ impl ServerState {
                 game_state,
                 save_file,
             } => {
-                eprintln!("starting after load");
+                info!("starting after load");
                 *self = ServerState::Running {
                     join_code: take(join_code),
                     connections: take(connections),
@@ -205,7 +206,7 @@ impl ServerState {
                 ..
             } => {
                 let mut lost_connections = Vec::new();
-                eprintln!(
+                info!(
                     "sending initial state to all {} believed-connected players",
                     connections.len()
                 );
@@ -238,7 +239,7 @@ impl ServerState {
                 game_state,
                 ..
             } => {
-                eprintln!(
+                info!(
                     "got orders from everyone, ticking from {:?}",
                     game_state.game_state.phase
                 );
@@ -253,7 +254,7 @@ impl ServerState {
                 game_state.game_state = game_state.game_state.apply(delta);
 
                 let mut lost_connections = Vec::new();
-                eprintln!(
+                info!(
                     "sending state delta to all {} believed-connected players",
                     connections.len()
                 );
@@ -279,20 +280,20 @@ impl ServerState {
                 save_file,
                 ..
             } => {
-                eprintln!("trying to save to {save_file:?}");
+                info!("trying to save to {save_file:?}");
                 let Ok(mut file) = OpenOptions::new()
                     .write(true)
                     .create(true)
                     .truncate(true)
                     .open(save_file)
                 else {
-                    eprintln!("couldn't save to {}", save_file.to_string_lossy());
+                    warn!("couldn't save to {}", save_file.to_string_lossy());
                     return;
                 };
                 let Ok(()) = file.write_all(
                     &to_vec(game_state).expect("game state should always be serializable"),
                 ) else {
-                    eprintln!("couldn't save to {}", save_file.to_string_lossy());
+                    warn!("couldn't save to {}", save_file.to_string_lossy());
                     return;
                 };
             }
@@ -355,6 +356,22 @@ async fn main() -> ExitCode {
     let args = Args::parse();
     println!("Solar Dawn server version {}", env!("CARGO_PKG_VERSION"));
 
+    if cfg!(debug_assertions) {
+        tracing::subscriber::set_global_default(
+            tracing_subscriber::fmt()
+                .with_max_level(Level::TRACE)
+                .finish(),
+        )
+        .unwrap();
+    } else {
+        tracing::subscriber::set_global_default(
+            tracing_subscriber::fmt()
+                .with_max_level(Level::INFO)
+                .finish(),
+        )
+        .unwrap();
+    }
+
     let (server_state, args) = match args {
         Args::New {
             num_players,
@@ -413,7 +430,7 @@ async fn ws_handler(
     ws: WebSocketUpgrade,
     State(server_state): State<Arc<Mutex<ServerState>>>,
 ) -> impl IntoResponse {
-    eprintln!("websocket connection");
+    info!("websocket connection");
     ws.on_upgrade(|socket| handle_socket(socket, server_state))
 }
 
@@ -463,7 +480,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
             player_id_generator,
             ..
         } => {
-            eprintln!(
+            info!(
                 "connection attempt from {attempt_username:?} with join code {attempt_join_code:?}"
             );
             if join_code != attempt_join_code {
@@ -481,13 +498,13 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                     let _ = send.send(user_already_connected).await;
                     return;
                 } else {
-                    eprintln!("recognized reconnection from {attempt_username:?} as {player_id:?}");
+                    info!("recognized reconnection from {attempt_username:?} as {player_id:?}");
                     *player_id
                 }
             } else if registered_players.len() < *num_players {
                 // player is not yet registered
                 let player_id = player_id_generator.next().expect("should be infinite");
-                eprintln!("registering {attempt_username:?} as {player_id:?}");
+                info!("registering {attempt_username:?} as {player_id:?}");
                 registered_players.insert(attempt_username.to_string(), player_id);
                 player_id
             } else {
@@ -499,7 +516,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
 
             // report login success
             if send.send(serialize(&player_id)).await.is_err() {
-                eprintln!("lost connection before confirmation could be sent to {player_id:?}");
+                info!("lost connection before confirmation could be sent to {player_id:?}");
                 return;
             }
 
@@ -519,7 +536,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
             game_state,
             ..
         } => {
-            eprintln!(
+            info!(
                 "connection attempt from {attempt_username:?} with join code {attempt_join_code:?}"
             );
             if join_code != attempt_join_code {
@@ -546,12 +563,12 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                 return;
             }
 
-            eprintln!("recognizing {attempt_username:?} as {player_id:?}");
+            info!("recognizing {attempt_username:?} as {player_id:?}");
 
             // report login success
             let Ok(()) = send.send(serialize(&player_id)).await else {
                 // couldn't reply - connection dropped?
-                eprintln!("lost connection before confirmation could be sent to {player_id:?}");
+                info!("lost connection before confirmation could be sent to {player_id:?}");
                 return;
             };
 
@@ -571,7 +588,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
             game_state,
             ..
         } => {
-            eprintln!(
+            info!(
                 "connection attempt from {attempt_username:?} with join code {attempt_join_code:?}"
             );
             if join_code != attempt_join_code {
@@ -598,12 +615,12 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                 return;
             }
 
-            eprintln!("recognizing {attempt_username:?} as {player_id:?}");
+            info!("recognizing {attempt_username:?} as {player_id:?}");
 
             // report login success
             let Ok(()) = send.send(serialize(&player_id)).await else {
                 // couldn't reply - connection dropped?
-                eprintln!("lost connection before confirmation could be sent to {player_id:?}");
+                info!("lost connection before confirmation could be sent to {player_id:?}");
                 return;
             };
 
@@ -644,7 +661,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                 .await;
             return;
         };
-        eprintln!("got {} orders from {player_id:?}", parsed.len());
+        info!("got {} orders from {player_id:?}", parsed.len());
 
         let mut server_state = server_state_mutex.lock().await;
         match &mut *server_state {
