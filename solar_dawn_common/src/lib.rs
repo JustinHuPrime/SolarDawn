@@ -204,6 +204,7 @@ impl GameState {
                 .filter_map(|(id, stack)| {
                     // for each stack, find the first celestial it collides with, if any
                     // note that the movement_collides method ignores landed stacks
+                    // TODO: consider pre-computing the list of collidable celestials
                     self.celestials
                         .values()
                         .filter_map(|celestial| {
@@ -265,6 +266,7 @@ impl GameState {
                         for stack in stacks.iter().filter_map(|(stack, stack_ref)| {
                             if !std::ptr::eq(missile_ref, stack_ref)
                                 && missile_ref.in_range(intercept, stack_ref)
+                                // TODO: consider pre-computing the list of collidable celestials
                                 && !self.celestials.values().any(|celestial| {
                                     celestial.blocks_weapons_effect(
                                         missile_ref.position.cartesian()
@@ -300,7 +302,7 @@ impl GameState {
                 missile, in_range, ..
             } in detonations
             {
-                let missile_ref = stacks.get_mut(&missile).expect("saved key");
+                let missile_ref = stacks.get_mut(&missile).unwrap();
                 let warhead_count = missile_ref
                     .modules
                     .values()
@@ -321,7 +323,7 @@ impl GameState {
                 detonated.push(missile);
 
                 for stack in in_range {
-                    let stack_ref = stacks.get_mut(&stack).expect("saved key");
+                    let stack_ref = stacks.get_mut(&stack).unwrap();
                     let module_count = stack_ref.modules.len() as u32;
                     let damaged_count = module_count
                         .div_ceil(ModuleDetails::WARHEAD_DAMAGE_FRACTION)
@@ -342,6 +344,7 @@ impl GameState {
             // apply movement
             for (_, stack) in stacks.iter_mut() {
                 let gravity = self
+                    // TODO: consider pre-computing the list of gravitating celestials
                     .celestials
                     .values()
                     .map(|celestial| celestial.gravity_to(stack.position, stack.velocity))

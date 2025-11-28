@@ -589,14 +589,14 @@ impl Order {
                     let Some(Ok(Order::ModuleTransfer { stack, .. })) = moves_iter.next() else {
                         unreachable!("constructed with at least one")
                     };
-                    let stack_ref = game_state.stacks.get(stack).expect("order is validated");
+                    let stack_ref = game_state.stacks.get(stack).unwrap();
                     let position = stack_ref.position;
                     let velocity = stack_ref.velocity;
                     if moves_iter.any(|move_order| {
                         let Ok(Order::ModuleTransfer { stack, .. }) = move_order else {
                             unreachable!("pre-filtered")
                         };
-                        let stack_ref = game_state.stacks.get(stack).expect("order is validated");
+                        let stack_ref = game_state.stacks.get(stack).unwrap();
                         stack_ref.position != position || stack_ref.velocity != velocity
                     }) {
                         for move_order in moves {
@@ -689,7 +689,7 @@ impl Order {
                     }
                 }
                 for (stack, orders) in miner_orders {
-                    let stack_ref = game_state.stacks.get(&stack).expect("order is validated");
+                    let stack_ref = game_state.stacks.get(&stack).unwrap();
                     let miner_count = stack_ref
                         .modules
                         .iter()
@@ -706,7 +706,7 @@ impl Order {
                         .count();
                     let required_miners = miner_capacity_used
                         .get(&stack)
-                        .expect("constructed with same key")
+                        .unwrap()
                         .div_ceil(ModuleDetails::MINER_PRODUCTION_RATE);
                     if required_miners as usize > miner_count {
                         for order in orders {
@@ -715,7 +715,7 @@ impl Order {
                     }
                 }
                 for (stack, orders) in skimmer_orders {
-                    let stack_ref = game_state.stacks.get(&stack).expect("order is validated");
+                    let stack_ref = game_state.stacks.get(&stack).unwrap();
                     let skimmer_count = stack_ref
                         .modules
                         .iter()
@@ -732,7 +732,7 @@ impl Order {
                         .count();
                     let required_skimmers = skimmer_capacity_used
                         .get(&stack)
-                        .expect("constructed with same key")
+                        .unwrap()
                         .div_ceil(ModuleDetails::FUEL_SKIMMER_PRODUCTION_RATE);
                     if required_skimmers as usize > skimmer_count {
                         for order in orders {
@@ -741,7 +741,7 @@ impl Order {
                     }
                 }
                 for (stack, orders) in refinery_orders {
-                    let stack_ref = game_state.stacks.get(&stack).expect("order is validated");
+                    let stack_ref = game_state.stacks.get(&stack).unwrap();
                     let refinery_count = stack_ref
                         .modules
                         .iter()
@@ -758,7 +758,7 @@ impl Order {
                         .count();
                     let required_refineries = refinery_capacity_used
                         .get(&stack)
-                        .expect("constructed with same key")
+                        .unwrap()
                         .div_ceil(ModuleDetails::REFINERY_CAPACITY);
                     if required_refineries as usize > refinery_count {
                         for order in orders {
@@ -767,7 +767,7 @@ impl Order {
                     }
                 }
                 for (stack, orders) in hab_or_factory_orders {
-                    let stack_ref = game_state.stacks.get(&stack).expect("order is validated");
+                    let stack_ref = game_state.stacks.get(&stack).unwrap();
                     let hab_and_factory_count = stack_ref
                         .modules
                         .iter()
@@ -792,7 +792,7 @@ impl Order {
                     }
                 }
                 for (stack, orders) in factory_only_orders {
-                    let stack_ref = game_state.stacks.get(&stack).expect("order is validated");
+                    let stack_ref = game_state.stacks.get(&stack).unwrap();
                     let factory_count = stack_ref
                         .modules
                         .iter()
@@ -953,10 +953,10 @@ impl Order {
                                 resource_pool.materials -= game_state
                                     .stacks
                                     .get(target_stack)
-                                    .expect("order is validated")
+                                    .unwrap()
                                     .modules
                                     .get(target_module)
-                                    .expect("order is validated")
+                                    .unwrap()
                                     .dry_mass()
                                     as i32
                                     * 10
@@ -993,10 +993,10 @@ impl Order {
                                 resource_pool.materials += game_state
                                     .stacks
                                     .get(stack)
-                                    .expect("order is validated")
+                                    .unwrap()
                                     .modules
                                     .get(salvaged)
-                                    .expect("order is validated")
+                                    .unwrap()
                                     .dry_mass()
                                     as i32
                                     * 10
@@ -1012,11 +1012,7 @@ impl Order {
                 }
                 for ((player, stack), delta) in resource_pools {
                     if !delta.empty() {
-                        for order in orders_by_player
-                            .get_mut(&player)
-                            .expect("constructed with same key")
-                            .iter_mut()
-                        {
+                        for order in orders_by_player.get_mut(&player).unwrap().iter_mut() {
                             **order = Err(OrderError::ResourcePoolResidual(stack))
                         }
                         break;
@@ -1026,10 +1022,10 @@ impl Order {
                     let module_ref = game_state
                         .stacks
                         .get(&stack)
-                        .expect("order is validated")
+                        .unwrap()
                         .modules
                         .get(&module)
-                        .expect("order is validated");
+                        .unwrap();
                     let problem = match module_ref {
                         Module {
                             health: Health::Intact,
@@ -1068,11 +1064,7 @@ impl Order {
                         _ => unreachable!("order id validated"),
                     };
                     if let Some(problem) = problem {
-                        for order in orders_by_player
-                            .get_mut(&player)
-                            .expect("constructed with same key")
-                            .iter_mut()
-                        {
+                        for order in orders_by_player.get_mut(&player).unwrap().iter_mut() {
                             **order = Err(problem);
                         }
                     }
@@ -1099,7 +1091,7 @@ impl Order {
                             *shots
                         })
                         .sum();
-                    let stack_ref = game_state.stacks.get(&stack).expect("order is validated");
+                    let stack_ref = game_state.stacks.get(&stack).unwrap();
                     let total_guns = stack_ref
                         .modules
                         .values()
@@ -1365,6 +1357,7 @@ impl Order {
                 let stack_ref = validate_stack(*stack, game_state, player)?;
 
                 if *ore > 0
+                    // TODO: consider adding a hash of position to celestials
                     && !game_state.celestials.values().any(|celestial| {
                         stack_ref.landed(celestial)
                             && matches!(
@@ -1376,6 +1369,7 @@ impl Order {
                     return Err(OrderError::NoResourceAccess);
                 }
                 if *water > 0
+                    // TODO: consider adding a hash of position to celestials
                     && !game_state.celestials.values().any(|celestial| {
                         stack_ref.landed(celestial)
                             && matches!(
@@ -1387,6 +1381,7 @@ impl Order {
                     return Err(OrderError::NoResourceAccess);
                 }
                 if *fuel > 0
+                    // TODO: consider adding a list of gravitating celestials
                     && !game_state.celestials.values().any(|celestial| {
                         stack_ref.orbiting(celestial)
                             && matches!(celestial.resources, Resources::Skimming)
@@ -1490,10 +1485,7 @@ impl Order {
                 validate_phase(game_state, Phase::Logistics)?;
                 let stack_ref = validate_stack(*stack, game_state, player)?;
                 if matches!(module, ModuleType::Habitat) {
-                    let earth = game_state
-                        .celestials
-                        .get(&game_state.earth)
-                        .expect("earth id should be valid");
+                    let earth = game_state.celestials.get(&game_state.earth).unwrap();
                     if !stack_ref.orbiting(earth) {
                         return Err(OrderError::NotInEarthOrbit);
                     }
@@ -1514,6 +1506,7 @@ impl Order {
                 if *stack == *target {
                     return Err(OrderError::InvalidTarget);
                 }
+                // TODO: consider pre-computing a list of gravitating celestials
                 if game_state.celestials.values().any(|celestial| {
                     celestial.blocks_weapons_effect(
                         stack_ref.position.cartesian(),
@@ -1559,13 +1552,13 @@ impl Order {
                 validate_burn(
                     *stack,
                     stack_ref,
-                    delta_v.norm().try_into().expect("absolute value applied"),
+                    delta_v.norm().try_into().unwrap(),
                     fuel_from,
                     0.0,
                 )?;
 
                 if game_state
-                    .celestials
+                    .celestials // TODO: consider pre-computing a list of gravitating celestials
                     .values()
                     .any(|celestial| stack_ref.landed_with_gravity(celestial))
                 {
@@ -1586,7 +1579,7 @@ impl Order {
                 validate_burn(*stack, stack_ref, 1, fuel_from, 0.0)?;
 
                 let Some(orbited) = game_state
-                    .celestials
+                    .celestials // TODO: consider pre-computing a list of gravitating celestials
                     .values()
                     .find(|celestial| stack_ref.orbiting(celestial))
                 else {
@@ -1668,7 +1661,7 @@ impl Order {
     ) {
         fn drain_fuel(stack: &mut Stack, fuel_from: &Vec<(ModuleId, u8)>) {
             for (module, quantity) in fuel_from {
-                match stack.modules.get_mut(module).expect("order is validated") {
+                match stack.modules.get_mut(module).unwrap() {
                     Module {
                         details: ModuleDetails::Tank { fuel, .. },
                         ..
@@ -1685,19 +1678,16 @@ impl Order {
 
         match self {
             Order::NameStack { stack, name } => {
-                stacks.get_mut(stack).expect("order is validated").name = name.clone();
+                stacks.get_mut(stack).unwrap().name = name.clone();
             }
             Order::ModuleTransfer { stack, module, to } => {
-                let stack = stacks.get_mut(stack).expect("order is validated");
-                let (module_id, module) = stack
-                    .modules
-                    .remove_entry(module)
-                    .expect("order is validated");
+                let stack = stacks.get_mut(stack).unwrap();
+                let (module_id, module) = stack.modules.remove_entry(module).unwrap();
                 match to {
                     ModuleTransferTarget::Existing(stack_id) => {
                         stacks
                             .get_mut(stack_id)
-                            .expect("order is validated")
+                            .unwrap()
                             .modules
                             .insert(module_id, module);
                     }
@@ -1716,14 +1706,8 @@ impl Order {
                 }
             }
             Order::Board { stack, target } => {
-                let transferred = std::mem::take(
-                    &mut stacks.get_mut(target).expect("order is validated").modules,
-                );
-                stacks
-                    .get_mut(stack)
-                    .expect("order is validated")
-                    .modules
-                    .extend(transferred);
+                let transferred = std::mem::take(&mut stacks.get_mut(target).unwrap().modules);
+                stacks.get_mut(stack).unwrap().modules.extend(transferred);
             }
             Order::Isru { .. } | Order::Refine { .. } => {
                 // no-op - creates resources in pool
@@ -1737,10 +1721,10 @@ impl Order {
                 water,
                 fuel,
             } => {
-                let stack = stacks.get_mut(stack).expect("order is validated");
+                let stack = stacks.get_mut(stack).unwrap();
                 match (from, to) {
                     (Some(from), ResourceTransferTarget::FloatingPool) => {
-                        let from = stack.modules.get_mut(from).expect("order is validated");
+                        let from = stack.modules.get_mut(from).unwrap();
                         match from {
                             Module {
                                 details:
@@ -1768,7 +1752,7 @@ impl Order {
                         }
                     }
                     (None, ResourceTransferTarget::Module(to)) => {
-                        let to = stack.modules.get_mut(to).expect("order is validated");
+                        let to = stack.modules.get_mut(to).unwrap();
                         match to {
                             Module {
                                 details:
@@ -1809,14 +1793,14 @@ impl Order {
             } => {
                 stacks
                     .get_mut(target_stack)
-                    .expect("order is validated")
+                    .unwrap()
                     .modules
                     .get_mut(target_module)
-                    .expect("order is validated")
+                    .unwrap()
                     .health = Health::Intact;
             }
             Order::Build { stack, module } => {
-                let stack = stacks.get_mut(stack).expect("order is validated");
+                let stack = stacks.get_mut(stack).unwrap();
                 stack.modules.insert(
                     module_id_generator.next().unwrap(),
                     match module {
@@ -1837,18 +1821,18 @@ impl Order {
             Order::Salvage { stack, salvaged } => {
                 stacks
                     .get_mut(stack)
-                    .expect("order is validated")
+                    .unwrap()
                     .modules
                     .remove(salvaged)
-                    .expect("order is validated");
+                    .unwrap();
             }
             Order::Shoot {
                 stack,
                 target,
                 shots,
             } => {
-                let start_pos = stacks.get(stack).expect("order is validated").position;
-                let target = stacks.get_mut(target).expect("order is validated");
+                let start_pos = stacks.get(stack).unwrap().position;
+                let target = stacks.get_mut(target).unwrap();
                 let hit_probability = ModuleDetails::GUN_RANGE_ONE_HIT_CHANCE
                     .powi((target.position - start_pos).norm());
 
@@ -1868,10 +1852,10 @@ impl Order {
             } => {
                 match stacks
                     .get_mut(stack)
-                    .expect("order is validated")
+                    .unwrap()
                     .modules
                     .get_mut(warhead)
-                    .expect("order is validated")
+                    .unwrap()
                 {
                     Module {
                         details:
@@ -1892,7 +1876,7 @@ impl Order {
                 delta_v,
                 fuel_from,
             } => {
-                let stack = stacks.get_mut(stack).expect("order is validated");
+                let stack = stacks.get_mut(stack).unwrap();
                 stack.velocity += *delta_v;
 
                 drain_fuel(stack, fuel_from);
@@ -1903,23 +1887,23 @@ impl Order {
                 clockwise,
                 fuel_from,
             } => {
-                let stack = stacks.get_mut(stack).expect("order is validated");
+                let stack = stacks.get_mut(stack).unwrap();
 
                 // Find the orbited body to get correct velocity for target position
                 let orbited = game_state
-                    .celestials
+                    .celestials // TODO: consider pre-computing a list of gravitating celestials
                     .values()
                     .find(|celestial| {
                         celestial.orbit_gravity && (stack.position - celestial.position).norm() == 1
                     })
-                    .expect("order is validated");
+                    .unwrap();
 
                 // Get the correct velocity for the target position
                 let orbit_params = orbited.orbit_parameters(*clockwise);
                 let (_, target_velocity) = orbit_params
                     .into_iter()
                     .find(|(pos, _)| pos == target_position)
-                    .expect("order is validated");
+                    .unwrap();
 
                 stack.position = *target_position;
                 stack.velocity = target_velocity;
@@ -1931,8 +1915,8 @@ impl Order {
                 on,
                 fuel_from,
             } => {
-                let stack = stacks.get_mut(stack).expect("order is validated");
-                let on = game_state.celestials.get(on).expect("order is validated");
+                let stack = stacks.get_mut(stack).unwrap();
+                let on = game_state.celestials.get(on).unwrap();
                 stack.position = on.position;
                 stack.velocity = Vec2::zero();
 
@@ -1945,15 +1929,15 @@ impl Order {
                 clockwise,
                 fuel_from,
             } => {
-                let stack = stacks.get_mut(stack).expect("order is validated");
+                let stack = stacks.get_mut(stack).unwrap();
                 let (position, velocity) = game_state
                     .celestials
                     .get(from)
-                    .expect("order is validated")
+                    .unwrap()
                     .orbit_parameters(*clockwise)
                     .into_iter()
                     .find(|(position, _)| position == destination)
-                    .expect("order is validated");
+                    .unwrap();
                 stack.position = position;
                 stack.velocity = velocity;
 

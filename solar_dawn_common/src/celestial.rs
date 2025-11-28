@@ -728,7 +728,7 @@ impl Celestial {
             )
             .collect::<Vec<_>>()
             .try_into()
-            .expect("base vector has exact number of args")
+            .unwrap()
     }
 
     fn intersects(&self, start: CartesianVec2, end: CartesianVec2) -> Option<(f32, f32)> {
