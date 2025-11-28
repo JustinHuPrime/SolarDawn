@@ -589,14 +589,14 @@ impl Order {
                     let Some(Ok(Order::ModuleTransfer { stack, .. })) = moves_iter.next() else {
                         unreachable!("constructed with at least one")
                     };
-                    let stack_ref = game_state.stacks.get(stack).unwrap();
+                    let stack_ref = &game_state.stacks[stack];
                     let position = stack_ref.position;
                     let velocity = stack_ref.velocity;
                     if moves_iter.any(|move_order| {
                         let Ok(Order::ModuleTransfer { stack, .. }) = move_order else {
                             unreachable!("pre-filtered")
                         };
-                        let stack_ref = game_state.stacks.get(stack).unwrap();
+                        let stack_ref = &game_state.stacks[stack];
                         stack_ref.position != position || stack_ref.velocity != velocity
                     }) {
                         for move_order in moves {
@@ -689,7 +689,7 @@ impl Order {
                     }
                 }
                 for (stack, orders) in miner_orders {
-                    let stack_ref = game_state.stacks.get(&stack).unwrap();
+                    let stack_ref = &game_state.stacks[&stack];
                     let miner_count = stack_ref
                         .modules
                         .iter()
@@ -704,10 +704,8 @@ impl Order {
                                 )
                         })
                         .count();
-                    let required_miners = miner_capacity_used
-                        .get(&stack)
-                        .unwrap()
-                        .div_ceil(ModuleDetails::MINER_PRODUCTION_RATE);
+                    let required_miners =
+                        miner_capacity_used[&stack].div_ceil(ModuleDetails::MINER_PRODUCTION_RATE);
                     if required_miners as usize > miner_count {
                         for order in orders {
                             *order = Err(OrderError::NotEnoughModules);
@@ -715,7 +713,7 @@ impl Order {
                     }
                 }
                 for (stack, orders) in skimmer_orders {
-                    let stack_ref = game_state.stacks.get(&stack).unwrap();
+                    let stack_ref = &game_state.stacks[&stack];
                     let skimmer_count = stack_ref
                         .modules
                         .iter()
@@ -730,9 +728,7 @@ impl Order {
                                 )
                         })
                         .count();
-                    let required_skimmers = skimmer_capacity_used
-                        .get(&stack)
-                        .unwrap()
+                    let required_skimmers = skimmer_capacity_used[&stack]
                         .div_ceil(ModuleDetails::FUEL_SKIMMER_PRODUCTION_RATE);
                     if required_skimmers as usize > skimmer_count {
                         for order in orders {
@@ -741,7 +737,7 @@ impl Order {
                     }
                 }
                 for (stack, orders) in refinery_orders {
-                    let stack_ref = game_state.stacks.get(&stack).unwrap();
+                    let stack_ref = &game_state.stacks[&stack];
                     let refinery_count = stack_ref
                         .modules
                         .iter()
@@ -756,10 +752,8 @@ impl Order {
                                 )
                         })
                         .count();
-                    let required_refineries = refinery_capacity_used
-                        .get(&stack)
-                        .unwrap()
-                        .div_ceil(ModuleDetails::REFINERY_CAPACITY);
+                    let required_refineries =
+                        refinery_capacity_used[&stack].div_ceil(ModuleDetails::REFINERY_CAPACITY);
                     if required_refineries as usize > refinery_count {
                         for order in orders {
                             *order = Err(OrderError::NotEnoughModules);
@@ -767,7 +761,7 @@ impl Order {
                     }
                 }
                 for (stack, orders) in hab_or_factory_orders {
-                    let stack_ref = game_state.stacks.get(&stack).unwrap();
+                    let stack_ref = &game_state.stacks[&stack];
                     let hab_and_factory_count = stack_ref
                         .modules
                         .iter()
@@ -792,7 +786,7 @@ impl Order {
                     }
                 }
                 for (stack, orders) in factory_only_orders {
-                    let stack_ref = game_state.stacks.get(&stack).unwrap();
+                    let stack_ref = &game_state.stacks[&stack];
                     let factory_count = stack_ref
                         .modules
                         .iter()
@@ -950,17 +944,11 @@ impl Order {
                             }) => {
                                 let resource_pool =
                                     resource_pools.entry((player, *stack)).or_default();
-                                resource_pool.materials -= game_state
-                                    .stacks
-                                    .get(target_stack)
-                                    .unwrap()
-                                    .modules
-                                    .get(target_module)
-                                    .unwrap()
-                                    .dry_mass()
-                                    as i32
-                                    * 10
-                                    / ModuleDetails::REPAIR_FRACTION;
+                                resource_pool.materials -=
+                                    game_state.stacks[target_stack].modules[target_module]
+                                        .dry_mass() as i32
+                                        * 10
+                                        / ModuleDetails::REPAIR_FRACTION;
 
                                 orders_by_player.entry(player).or_default().push(order);
                             }
@@ -990,17 +978,10 @@ impl Order {
                             Ok(Order::Salvage { stack, salvaged }) => {
                                 let resource_pool =
                                     resource_pools.entry((player, *stack)).or_default();
-                                resource_pool.materials += game_state
-                                    .stacks
-                                    .get(stack)
-                                    .unwrap()
-                                    .modules
-                                    .get(salvaged)
-                                    .unwrap()
-                                    .dry_mass()
-                                    as i32
-                                    * 10
-                                    / ModuleDetails::SALVAGE_FRACTION;
+                                resource_pool.materials +=
+                                    game_state.stacks[stack].modules[salvaged].dry_mass() as i32
+                                        * 10
+                                        / ModuleDetails::SALVAGE_FRACTION;
 
                                 orders_by_player.entry(player).or_default().push(order);
                             }
@@ -1019,13 +1000,7 @@ impl Order {
                     }
                 }
                 for ((player, stack, module), delta) in storage_deltas {
-                    let module_ref = game_state
-                        .stacks
-                        .get(&stack)
-                        .unwrap()
-                        .modules
-                        .get(&module)
-                        .unwrap();
+                    let module_ref = &game_state.stacks[&stack].modules[&module];
                     let problem = match module_ref {
                         Module {
                             health: Health::Intact,
@@ -1091,7 +1066,7 @@ impl Order {
                             *shots
                         })
                         .sum();
-                    let stack_ref = game_state.stacks.get(&stack).unwrap();
+                    let stack_ref = &game_state.stacks[&stack];
                     let total_guns = stack_ref
                         .modules
                         .values()
@@ -1833,7 +1808,7 @@ impl Order {
                 target,
                 shots,
             } => {
-                let start_pos = stacks.get(stack).unwrap().position;
+                let start_pos = stacks[stack].position;
                 let target = stacks.get_mut(target).unwrap();
                 let hit_probability = ModuleDetails::GUN_RANGE_ONE_HIT_CHANCE
                     .powi((target.position - start_pos).norm());
