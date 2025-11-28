@@ -17,17 +17,58 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+mod map;
 mod sidebar;
 
+use std::collections::HashMap;
+
+use base64::{Engine, prelude::BASE64_STANDARD};
 use dioxus::prelude::*;
 use futures::StreamExt;
-use serde_cbor::from_slice;
-use solar_dawn_common::{GameState, GameStateDelta, PlayerId};
+use serde::{Deserialize, Serialize};
+use serde_cbor::{from_slice, to_vec};
+use solar_dawn_common::{GameState, GameStateDelta, PlayerId, order::Order};
+use web_sys::window;
 
 use crate::{
     ClientState,
+    scenes::game::map::Map,
     websocket::{Message, WebsocketClient},
 };
+
+#[derive(Serialize, Deserialize)]
+enum DisplayHostility {
+    Own,
+    Friendly,
+    Neutral,
+    Hostile,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ClientGameSettings {
+    display_hostility: HashMap<PlayerId, DisplayHostility>,
+}
+impl ClientGameSettings {
+    fn new<'a>(me: PlayerId, players: impl Iterator<Item = &'a PlayerId>) -> Self {
+        Self {
+            display_hostility: players
+                .map(|&player| {
+                    if player == me {
+                        (player, DisplayHostility::Own)
+                    } else {
+                        (player, DisplayHostility::Neutral)
+                    }
+                })
+                .collect::<HashMap<_, _>>(),
+        }
+    }
+}
+
+struct ClientViewSettings {
+    x_offset: f32,
+    y_offset: f32,
+    zoom: f32,
+}
 
 #[component]
 pub fn InGame(
@@ -36,6 +77,49 @@ pub fn InGame(
     game_state: WriteSignal<GameState>,
     change_state: EventHandler<ClientState>,
 ) -> Element {
+    let client_view_settings = use_signal(|| ClientViewSettings {
+        x_offset: 0.0,
+        y_offset: 0.0,
+        zoom: 1.0,
+    });
+
+    let orders = use_signal(Vec::<Order>::new);
+
+    // Game settings (unit hostility display, etc)
+    let client_game_settings: Signal<ClientGameSettings> = use_signal(|| {
+        let storage = window().unwrap().local_storage().ok().flatten();
+        let game_settings = storage
+            .and_then(|storage| {
+                storage
+                    .get_item(&format!(
+                        "solar_dawn:game_settings:{}:{}",
+                        game_state.read().game_id,
+                        me
+                    ))
+                    .ok()
+            })
+            .flatten();
+        let parsed = game_settings
+            .and_then(|game_settings| BASE64_STANDARD.decode(&game_settings).ok())
+            .and_then(|game_settings| from_slice::<ClientGameSettings>(&game_settings).ok());
+        parsed.unwrap_or_else(|| ClientGameSettings::new(me, game_state.read().players.keys()))
+    });
+    use_effect(move || {
+        let stringified =
+            to_vec(&*client_game_settings.read()).expect("should always be serializable");
+        let storage = window().unwrap().local_storage().ok().flatten();
+        if let Some(storage) = storage {
+            let _ = storage.set(
+                &format!(
+                    "solar_dawn:game_settings:{}:{}",
+                    game_state.read().game_id,
+                    me
+                ),
+                &BASE64_STANDARD.encode(stringified),
+            );
+        }
+    });
+
     // New state updates
     spawn(async move {
         match websocket.next().await {
@@ -69,9 +153,15 @@ pub fn InGame(
             style: "width:100vw; height:100vh",
             div { class: "row h-100 m-0",
                 div { class: "col-9 h-100 p-0",
-                    h1 { "Map" }
+                    Map {
+                        game_state,
+                        orders,
+                        client_game_settings,
+                        client_view_settings,
+                        change_state,
+                    }
                 }
-                div { class: "col-3 h-100 overflow-y-auto",
+                div { class: "col-3 h-100 overflow-y-auto border-start border-black",
                     h1 { "Sidebar" }
                 }
             }

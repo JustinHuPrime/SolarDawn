@@ -493,8 +493,10 @@ impl From<PlayerId> for u8 {
 /// +q = down-right, +r = down
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub struct Vec2<T> {
-    q: T,
-    r: T,
+    /// +q = down-right
+    pub q: T,
+    /// +r = down
+    pub r: T,
 }
 
 impl Add for Vec2<i32> {
@@ -682,10 +684,14 @@ impl Vec2<i32> {
 /// A cartesian vector
 ///
 /// +x = right, +y = down
+/// 
+/// 1 unit = 1 hex major radius
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 pub struct CartesianVec2 {
-    x: f32,
-    y: f32,
+    /// x coordinate, where +x = right
+    pub x: f32,
+    /// y coordinate, where +y = down
+    pub y: f32,
 }
 impl CartesianVec2 {
     /// Convert to axial coordinates
