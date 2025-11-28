@@ -50,6 +50,8 @@ pub struct Celestial {
     ///
     /// Note: the minor radius is √3/2, or 0.866...
     pub radius: f32,
+    /// Colour to draw the celestial with
+    pub colour: String,
 }
 
 /// Key to refer to celestial bodies
@@ -98,33 +100,36 @@ impl Celestial {
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::zero(),
-                name: String::from("The Sun"),
+                name: "The Sun".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 274.0,
                 resources: Resources::None,
                 radius: 0.85,
+                colour: "#ffff00".to_owned(),
             },
         );
         map.insert(
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::from_polar(3.5, 170.0 * std::f32::consts::PI / 180.0),
-                name: String::from("Mercury"),
+                name: "Mercury".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 3.7,
                 resources: Resources::MiningOre,
                 radius: 0.15,
+                colour: "#888888".to_owned(),
             },
         );
         map.insert(
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::from_polar(7.2, 70.0 * std::f32::consts::PI / 180.0),
-                name: String::from("Venus"),
+                name: "Venus".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 8.9,
                 resources: Resources::MiningOre,
                 radius: 0.25,
+                colour: "#ffee99".to_owned(),
             },
         );
         let earth_id = celestial_id_generator.next().expect("should be infinite");
@@ -132,11 +137,12 @@ impl Celestial {
             earth_id,
             Celestial {
                 position: Vec2::from_polar(10.0, 0.0 * std::f32::consts::PI / 180.0),
-                name: String::from("Earth"),
+                name: "Earth".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 9.8,
                 resources: Resources::None,
                 radius: 0.25,
+                colour: "#0000ff".to_owned(),
             },
         );
         // TODO: The Moon
@@ -144,11 +150,12 @@ impl Celestial {
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::from_polar(14.8, 280.0 * std::f32::consts::PI / 180.0),
-                name: String::from("Mars"),
+                name: "Mars".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 3.7,
                 resources: Resources::MiningBoth,
                 radius: 0.20,
+                colour: "#cc5151".to_owned(),
             },
         );
         // TODO: Phobos, Deimos
@@ -156,11 +163,12 @@ impl Celestial {
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::from_polar(54.3, 45.0 * std::f32::consts::PI / 180.0),
-                name: String::from("Jupiter"),
+                name: "Jupiter".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 24.8,
                 resources: Resources::Skimming,
                 radius: 0.75,
+                colour: "#ffee99".to_owned(),
             },
         );
         // TODO: Io, Europa, Ganymede, Callisto
@@ -168,11 +176,12 @@ impl Celestial {
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::from_polar(100.4, 125.0 * std::f32::consts::PI / 180.0),
-                name: String::from("Saturn"),
+                name: "Saturn".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 10.4,
                 resources: Resources::Skimming,
                 radius: 0.70,
+                colour: "#ddcc77".to_owned(),
             },
         );
         // TODO: Titan, Rhea, Iapetus, Dione, Tethys
@@ -180,11 +189,12 @@ impl Celestial {
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::from_polar(194.7, 305.0 * std::f32::consts::PI / 180.0),
-                name: String::from("Uranus"),
+                name: "Uranus".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 8.9,
                 resources: Resources::Skimming,
                 radius: 0.45,
+                colour: "#00cccc".to_owned(),
             },
         );
         // TODO: Titania, Oberon, Umbriel, Ariel
@@ -192,11 +202,12 @@ impl Celestial {
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::from_polar(299.7, 235.0 * std::f32::consts::PI / 180.0),
-                name: String::from("Neptune"),
+                name: "Neptune".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 11.1,
                 resources: Resources::Skimming,
                 radius: 0.50,
+                colour: "#0055cc".to_owned(),
             },
         );
         // TODO: Triton
@@ -215,11 +226,12 @@ impl Celestial {
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::zero(),
-                name: String::from("The Sun"),
+                name: "The Sun".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 274.0,
                 resources: Resources::None,
                 radius: 0.85,
+                colour: "#ffff00".to_owned(),
             },
         );
 
@@ -228,11 +240,12 @@ impl Celestial {
             earth_id,
             Celestial {
                 position: Vec2::from_polar(10.0, 0.0),
-                name: String::from("Earth"),
+                name: "Earth".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 9.8,
                 resources: Resources::None,
                 radius: 0.25,
+                colour: "#0000ff".to_owned(),
             },
         );
 
@@ -240,11 +253,12 @@ impl Celestial {
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::from_polar(10.0, 0.0).up_right().up_right(),
-                name: String::from("Moon"),
+                name: "Moon".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 1.6,
                 resources: Resources::MiningIce,
                 radius: 0.1,
+                colour: "#aaaaaa".to_owned(),
             },
         );
 
@@ -252,11 +266,12 @@ impl Celestial {
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::from_polar(10.0, 0.0).down_left().down_left(),
-                name: String::from("1 Ceres"),
+                name: "1 Ceres".to_owned(),
                 orbit_gravity: false,
                 surface_gravity: 0.0,
                 resources: Resources::MiningOre,
                 radius: 0.05,
+                colour: "#888888".to_owned(),
             },
         );
 
@@ -264,22 +279,24 @@ impl Celestial {
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::from_polar(10.0, 0.0).down_left().down_left().down(),
-                name: String::from("2 Vesta"),
+                name: "2 Vesta".to_owned(),
                 orbit_gravity: false,
                 surface_gravity: 24.8,
                 resources: Resources::MiningBoth,
                 radius: 0.05,
+                colour: "#999999".to_owned(),
             },
         );
         map.insert(
             celestial_id_generator.next().expect("should be infinite"),
             Celestial {
                 position: Vec2::from_polar(15.0, 0.0),
-                name: String::from("Jupiter"),
+                name: "Jupiter".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 24.8,
                 resources: Resources::Skimming,
                 radius: 0.75,
+                colour: "#ffee99".to_owned(),
             },
         );
 
@@ -477,11 +494,12 @@ mod tests {
     fn test_orbit_parameters() {
         let celestial = Celestial {
             position: Vec2 { q: 1, r: 1 },
-            name: String::from("Test Body"),
+            name: "Test Body".to_owned(),
             orbit_gravity: true,
             surface_gravity: f32::NAN,
             resources: Resources::None,
             radius: f32::NAN,
+            colour: "#ffffff".to_owned(),
         };
 
         assert_eq!(
@@ -569,51 +587,56 @@ mod tests {
         // Create celestials with each resource type to test can_land
         let mining_both_body = Celestial {
             position: Vec2::zero(),
-            name: "Mining Both".to_string(),
+            name: "Mining Both".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: mining_both,
             radius: 0.5,
+            colour: "#ffffff".to_owned(),
         };
         assert!(mining_both_body.can_land());
 
         let mining_ice_body = Celestial {
             position: Vec2::zero(),
-            name: "Ice World".to_string(),
+            name: "Ice World".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: mining_ice,
             radius: 0.5,
+            colour: "#aaddff".to_owned(),
         };
         assert!(mining_ice_body.can_land());
 
         let mining_ore_body = Celestial {
             position: Vec2::zero(),
-            name: "Ore World".to_string(),
+            name: "Ore World".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: mining_ore,
             radius: 0.5,
+            colour: "#996633".to_owned(),
         };
         assert!(mining_ore_body.can_land());
 
         let gas_giant = Celestial {
             position: Vec2::zero(),
-            name: "Gas Giant".to_string(),
+            name: "Gas Giant".to_owned(),
             orbit_gravity: true,
             surface_gravity: 20.0,
             resources: skimming,
             radius: 1.0,
+            colour: "#ffaa77".to_owned(),
         };
         assert!(!gas_giant.can_land());
 
         let no_resources_body = Celestial {
             position: Vec2::zero(),
-            name: "Barren".to_string(),
+            name: "Barren".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: none,
             radius: 0.5,
+            colour: "#666666".to_owned(),
         };
         assert!(!no_resources_body.can_land());
     }
@@ -631,11 +654,12 @@ mod tests {
     fn test_orbit_parameters_clockwise_counterclockwise() {
         let celestial = Celestial {
             position: Vec2 { q: 2, r: 3 },
-            name: "Test Body".to_string(),
+            name: "Test Body".to_owned(),
             orbit_gravity: true,
             surface_gravity: 5.0,
             resources: Resources::None,
             radius: 0.4,
+            colour: "#ffffff".to_owned(),
         };
 
         let clockwise_params = celestial.orbit_parameters(true);
@@ -670,11 +694,12 @@ mod tests {
     fn test_collision_edge_cases() {
         let body = Celestial {
             position: Vec2 { q: 5, r: 5 },
-            name: "Test Body".to_string(),
+            name: "Test Body".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: Resources::None,
             radius: 1.0,
+            colour: "#ffffff".to_owned(),
         };
 
         // Line that starts and ends at the same point (zero length)
@@ -710,11 +735,12 @@ mod tests {
     fn test_collision_with_zero_radius() {
         let point_body = Celestial {
             position: Vec2::zero(),
-            name: "Point".to_string(),
+            name: "Point".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: Resources::None,
             radius: 0.0,
+            colour: "#ffffff".to_owned(),
         };
 
         // Only lines that pass exactly through the center should collide
@@ -785,52 +811,57 @@ mod tests {
         // Bodies with mining resources should allow landing
         let mining_both_body = Celestial {
             position: Vec2::zero(),
-            name: String::from("Mining Both"),
+            name: "Mining Both".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: Resources::MiningBoth,
             radius: 0.5,
+            colour: "#ffffff".to_owned(),
         };
         assert!(mining_both_body.can_land());
 
         let mining_ice_body = Celestial {
             position: Vec2::zero(),
-            name: String::from("Mining Ice"),
+            name: "Mining Ice".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: Resources::MiningIce,
             radius: 0.5,
+            colour: "#aaddff".to_owned(),
         };
         assert!(mining_ice_body.can_land());
 
         let mining_ore_body = Celestial {
             position: Vec2::zero(),
-            name: String::from("Mining Ore"),
+            name: "Mining Ore".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: Resources::MiningOre,
             radius: 0.5,
+            colour: "#996633".to_owned(),
         };
         assert!(mining_ore_body.can_land());
 
         // Bodies with skimming or no resources should not allow landing
         let skimming_body = Celestial {
             position: Vec2::zero(),
-            name: String::from("Gas Giant"),
+            name: "Gas Giant".to_owned(),
             orbit_gravity: true,
             surface_gravity: 20.0,
             resources: Resources::Skimming,
             radius: 1.0,
+            colour: "#ffaa77".to_owned(),
         };
         assert!(!skimming_body.can_land());
 
         let no_resources_body = Celestial {
             position: Vec2::zero(),
-            name: String::from("Earth"),
+            name: "Earth".to_owned(),
             orbit_gravity: true,
             surface_gravity: 9.8,
             resources: Resources::None,
             radius: 0.25,
+            colour: "#0000ff".to_owned(),
         };
         assert!(!no_resources_body.can_land());
     }
@@ -840,11 +871,12 @@ mod tests {
         // Body with gravity at origin with radius 1.0
         let body = Celestial {
             position: Vec2::zero(),
-            name: String::from("Test Body"),
+            name: "Test Body".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: Resources::None,
             radius: 1.0,
+            colour: "#ffffff".to_owned(),
         };
 
         // Line passing through center should collide
@@ -888,11 +920,12 @@ mod tests {
         // Body without gravity should never collide
         let no_gravity_body = Celestial {
             position: Vec2::zero(),
-            name: String::from("No Gravity"),
+            name: "No Gravity".to_owned(),
             orbit_gravity: false,
             surface_gravity: 0.0,
             resources: Resources::MiningIce,
             radius: 1.0,
+            colour: "#aaddff".to_owned(),
         };
 
         // Even a line passing through should not collide if no gravity
@@ -908,11 +941,12 @@ mod tests {
         // Test with body at different position
         let offset_body = Celestial {
             position: Vec2 { q: 3, r: 2 },
-            name: String::from("Offset Body"),
+            name: "Offset Body".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: Resources::None,
             radius: 0.5,
+            colour: "#ffffff".to_owned(),
         };
 
         // Line passing through offset body center should collide
@@ -937,11 +971,12 @@ mod tests {
         // Test edge case with very small body
         let small_body = Celestial {
             position: Vec2::zero(),
-            name: String::from("Small Body"),
+            name: "Small Body".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: Resources::None,
             radius: 0.1,
+            colour: "#ffffff".to_owned(),
         };
 
         // Line passing very close to center should collide
@@ -969,11 +1004,12 @@ mod tests {
         // Body with gravity at origin with radius 1.0
         let body = Celestial {
             position: Vec2::zero(),
-            name: String::from("Test Body"),
+            name: "Test Body".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: Resources::None,
             radius: 1.0,
+            colour: "#ffffff".to_owned(),
         };
 
         // Line passing completely through center should pass through
@@ -1012,11 +1048,12 @@ mod tests {
         // Body without gravity should never block
         let no_gravity_body = Celestial {
             position: Vec2::zero(),
-            name: String::from("No Gravity"),
+            name: "No Gravity".to_owned(),
             orbit_gravity: false,
             surface_gravity: 0.0,
             resources: Resources::MiningIce,
             radius: 1.0,
+            colour: "#aaddff".to_owned(),
         };
 
         // Even a line passing through should not block if no gravity
@@ -1028,11 +1065,12 @@ mod tests {
         // Test with body at different position
         let offset_body = Celestial {
             position: Vec2 { q: 3, r: 2 },
-            name: String::from("Offset Body"),
+            name: "Offset Body".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: Resources::None,
             radius: 0.5,
+            colour: "#ffffff".to_owned(),
         };
 
         // Line passing completely through offset body should pass through
@@ -1050,11 +1088,12 @@ mod tests {
         // Test with very small body - line passing through should still pass through
         let small_body = Celestial {
             position: Vec2::zero(),
-            name: String::from("Small Body"),
+            name: "Small Body".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: Resources::None,
             radius: 0.1,
+            colour: "#ffffff".to_owned(),
         };
 
         // Line passing completely through small body

@@ -505,7 +505,7 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                 // player is not yet registered
                 let player_id = player_id_generator.next().expect("should be infinite");
                 info!("registering {attempt_username:?} as {player_id:?}");
-                registered_players.insert(attempt_username.to_string(), player_id);
+                registered_players.insert(attempt_username.to_owned(), player_id);
                 player_id
             } else {
                 // game is full

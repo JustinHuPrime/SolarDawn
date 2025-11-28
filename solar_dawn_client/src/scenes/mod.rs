@@ -116,18 +116,18 @@ pub fn Join(change_state: EventHandler<ClientState>) -> Element {
                                     ) => {
                                         match reason.as_str() {
                                             "bad join code" => {
-                                                error_message.set(Some("Incorrect join code".to_string()));
+                                                error_message.set(Some("Incorrect join code".to_owned()));
                                                 *submitting.write() = false;
                                                 return;
                                             }
                                             "game full" => {
-                                                error_message.set(Some("No open seats".to_string()));
+                                                error_message.set(Some("No open seats".to_owned()));
                                                 *submitting.write() = false;
                                                 return;
                                             }
                                             "user already connected" => {
                                                 error_message
-                                                    .set(Some("Username already connected".to_string()));
+                                                    .set(Some("Username already connected".to_owned()));
                                                 *submitting.write() = false;
                                                 return;
                                             }

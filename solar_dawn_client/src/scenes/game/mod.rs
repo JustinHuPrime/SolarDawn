@@ -67,7 +67,21 @@ impl ClientGameSettings {
 struct ClientViewSettings {
     x_offset: f32,
     y_offset: f32,
-    zoom: f32,
+    zoom_level: i32,
+}
+impl ClientViewSettings {
+    fn zoom(&self) -> f32 {
+        1.1_f32.powi(self.zoom_level)
+    }
+}
+impl Default for ClientViewSettings {
+    fn default() -> Self {
+        Self {
+            x_offset: 0.0,
+            y_offset: 0.0,
+            zoom_level: 0,
+        }
+    }
 }
 
 #[component]
@@ -77,11 +91,7 @@ pub fn InGame(
     game_state: WriteSignal<GameState>,
     change_state: EventHandler<ClientState>,
 ) -> Element {
-    let client_view_settings = use_signal(|| ClientViewSettings {
-        x_offset: 0.0,
-        y_offset: 0.0,
-        zoom: 1.0,
-    });
+    let client_view_settings = use_signal(ClientViewSettings::default);
 
     let orders = use_signal(Vec::<Order>::new);
 

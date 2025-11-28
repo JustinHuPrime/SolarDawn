@@ -454,12 +454,12 @@ pub struct PlayerId(u8);
 impl PlayerId {
     fn starting_stack_name(&self) -> String {
         match self.0 {
-            1 => "Washington Station".to_string(),
-            2 => "Moscow Orbital".to_string(),
-            3 => "Beijing Highport".to_string(),
-            4 => "Paris Terminal".to_string(),
-            5 => "London Spacedock".to_string(),
-            6 => "New Delhi Platform".to_string(),
+            1 => "Washington Station".to_owned(),
+            2 => "Moscow Orbital".to_owned(),
+            3 => "Beijing Highport".to_owned(),
+            4 => "Paris Terminal".to_owned(),
+            5 => "London Spacedock".to_owned(),
+            6 => "New Delhi Platform".to_owned(),
             _ => panic!("Invalid player id"),
         }
     }
@@ -639,8 +639,8 @@ impl Vec2<i32> {
 
     /// Construct a vector from polar coordinates
     pub fn from_polar(r: f32, theta: f32) -> Self {
-        let x = r * theta.cos();
-        let y = r * -theta.sin();
+        let x = 2.0 * r * theta.cos();
+        let y = 2.0 * r * -theta.sin();
         CartesianVec2 { x, y }.to_axial()
     }
 
@@ -684,7 +684,7 @@ impl Vec2<i32> {
 /// A cartesian vector
 ///
 /// +x = right, +y = down
-/// 
+///
 /// 1 unit = 1 hex major radius
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq)]
 pub struct CartesianVec2 {
@@ -1040,7 +1040,7 @@ mod tests {
                 position: Vec2 { q: 1, r: 1 },
                 velocity: Vec2::zero(),
                 owner: PlayerId::from(1u8),
-                name: "Test Stack".to_string(),
+                name: "Test Stack".to_owned(),
                 modules: HashMap::new(),
             },
         );
@@ -1076,7 +1076,7 @@ mod tests {
             celestial_id,
             celestial::Celestial {
                 position: Vec2 { q: 5, r: 5 },
-                name: "Test Planet".to_string(),
+                name: "Test Planet".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 9.8,
                 resources: celestial::Resources::MiningBoth,
@@ -1098,7 +1098,7 @@ mod tests {
                 position: Vec2 { q: 5, r: 5 },
                 velocity: Vec2::zero(),
                 owner: PlayerId::from(1u8),
-                name: "Landed Stack".to_string(),
+                name: "Landed Stack".to_owned(),
                 modules,
             },
         );
@@ -1143,7 +1143,7 @@ mod tests {
             celestial_id,
             celestial::Celestial {
                 position: Vec2 { q: 5, r: 5 },
-                name: "Test Planet".to_string(),
+                name: "Test Planet".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 9.8,
                 resources: celestial::Resources::MiningBoth,
@@ -1165,7 +1165,7 @@ mod tests {
                 position: Vec2 { q: 3, r: 5 },
                 velocity: Vec2 { q: 2, r: 0 }, // Moving towards the planet
                 owner: PlayerId::from(1u8),
-                name: "Moving Stack".to_string(),
+                name: "Moving Stack".to_owned(),
                 modules,
             },
         );

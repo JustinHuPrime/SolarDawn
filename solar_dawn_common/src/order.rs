@@ -2062,8 +2062,8 @@ mod tests {
         let player_2 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
             HashMap::from([
-                (player_1, String::from("player 1")),
-                (player_2, String::from("player 2")),
+                (player_1, "player 1".to_owned()),
+                (player_2, "player 2".to_owned()),
             ]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
@@ -2073,7 +2073,7 @@ mod tests {
         let stack_1 = stack_id_generator.next().unwrap();
         let stack_2 = stack_id_generator.next().unwrap();
         let mut stack_1_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
-        stack_1_data.name = "original name".to_string();
+        stack_1_data.name = "original name".to_owned();
         game_state.stacks.insert(stack_1, stack_1_data);
         game_state
             .stacks
@@ -2084,7 +2084,7 @@ mod tests {
             player_1,
             vec![Order::NameStack {
                 stack: stack_1,
-                name: String::from("new name"),
+                name: "new name".to_owned(),
             }],
         )]);
 
@@ -2102,7 +2102,7 @@ mod tests {
             player_1,
             vec![Order::NameStack {
                 stack: 999_u32.into(),
-                name: String::from("new name"),
+                name: "new name".to_owned(),
             }],
         )]);
 
@@ -2115,7 +2115,7 @@ mod tests {
             player_1,
             vec![Order::NameStack {
                 stack: stack_2,
-                name: String::from("hacked name"),
+                name: "hacked name".to_owned(),
             }],
         )]);
 
@@ -2162,7 +2162,7 @@ mod tests {
             player_1,
             vec![Order::NameStack {
                 stack: stack_1,
-                name: special_name.to_string(),
+                name: special_name.to_owned(),
             }],
         )]);
 
@@ -2179,11 +2179,11 @@ mod tests {
             vec![
                 Order::NameStack {
                     stack: stack_1,
-                    name: String::from("first name"),
+                    name: "first name".to_owned(),
                 },
                 Order::NameStack {
                     stack: stack_1,
-                    name: String::from("second name"),
+                    name: "second name".to_owned(),
                 },
             ],
         )]);
@@ -2222,7 +2222,7 @@ mod tests {
             player_1,
             vec![Order::NameStack {
                 stack: stack_1,
-                name: unicode_name.to_string(),
+                name: unicode_name.to_owned(),
             }],
         )]);
 
@@ -2245,8 +2245,8 @@ mod tests {
         let player_2 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
             HashMap::from([
-                (player_1, String::from("player 1")),
-                (player_2, String::from("player 2")),
+                (player_1, "player 1".to_owned()),
+                (player_2, "player 2".to_owned()),
             ]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
@@ -2465,7 +2465,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, String::from("player 1"))]),
+            HashMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -2554,7 +2554,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, String::from("player 1"))]),
+            HashMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -2568,7 +2568,7 @@ mod tests {
             mining_world,
             Celestial {
                 position: Vec2 { q: 5, r: 5 },
-                name: "Mining World".to_string(),
+                name: "Mining World".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 3.0,
                 resources: Resources::MiningBoth,
@@ -2651,7 +2651,7 @@ mod tests {
             gas_giant,
             Celestial {
                 position: Vec2 { q: 10, r: 10 },
-                name: "Gas Giant".to_string(),
+                name: "Gas Giant".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 20.0,
                 resources: Resources::Skimming,
@@ -2705,7 +2705,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, String::from("player 1"))]),
+            HashMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -2873,7 +2873,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, String::from("player 1"))]),
+            HashMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -2993,7 +2993,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, String::from("player 1"))]),
+            HashMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3106,7 +3106,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, String::from("player 1"))]),
+            HashMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3275,7 +3275,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, String::from("player 1"))]),
+            HashMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3362,8 +3362,8 @@ mod tests {
         let player_2 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
             HashMap::from([
-                (player_1, String::from("player 1")),
-                (player_2, String::from("player 2")),
+                (player_1, "player 1".to_owned()),
+                (player_2, "player 2".to_owned()),
             ]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
@@ -3443,7 +3443,7 @@ mod tests {
             blocking_celestial,
             Celestial {
                 position: Vec2 { q: 21, r: 20 }, // Exactly between shooter at (20,20) and target at (22,20)
-                name: "Blocker".to_string(),
+                name: "Blocker".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 1.0,
                 resources: Resources::None,
@@ -3477,7 +3477,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, String::from("player 1"))]),
+            HashMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3615,7 +3615,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, String::from("player 1"))]),
+            HashMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3667,7 +3667,7 @@ mod tests {
             planet,
             Celestial {
                 position: Vec2 { q: 5, r: 5 }, // Same position as stack
-                name: "Planet".to_string(),
+                name: "Planet".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 9.8,
                 resources: Resources::MiningBoth,
@@ -3730,7 +3730,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, String::from("player 1"))]),
+            HashMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3836,7 +3836,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, String::from("player 1"))]),
+            HashMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3946,8 +3946,8 @@ mod tests {
         let player_2 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
             HashMap::from([
-                (player_1, String::from("player 1")),
-                (player_2, String::from("player 2")),
+                (player_1, "player 1".to_owned()),
+                (player_2, "player 2".to_owned()),
             ]),
             &mut celestial_id_generator,
             &mut stack_id_generator,

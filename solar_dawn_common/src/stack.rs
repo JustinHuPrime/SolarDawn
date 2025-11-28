@@ -595,7 +595,7 @@ mod tests {
         let owner = PlayerId::from(1u8);
         let position = Vec2 { q: 2, r: 3 };
         let velocity = Vec2 { q: 0, r: 1 };
-        let name = "Test Starter".to_string();
+        let name = "Test Starter".to_owned();
 
         let stack = Stack::starter_stack(owner, position, velocity, name.clone(), &mut id_gen);
 
@@ -674,7 +674,7 @@ mod tests {
     fn test_stack_orbiting() {
         let celestial = Celestial {
             position: Vec2 { q: 0, r: 0 },
-            name: "Test Planet".to_string(),
+            name: "Test Planet".to_owned(),
             orbit_gravity: true,
             surface_gravity: 9.8,
             resources: Resources::None,
@@ -733,7 +733,7 @@ mod tests {
         // Celestial without gravity
         let no_gravity_celestial = Celestial {
             position: Vec2 { q: 0, r: 0 },
-            name: "Asteroid".to_string(),
+            name: "Asteroid".to_owned(),
             orbit_gravity: false,
             surface_gravity: 0.0,
             resources: Resources::MiningOre,
@@ -747,7 +747,7 @@ mod tests {
     fn test_stack_landing() {
         let celestial = Celestial {
             position: Vec2 { q: 3, r: 2 },
-            name: "Landable Planet".to_string(),
+            name: "Landable Planet".to_owned(),
             orbit_gravity: true,
             surface_gravity: 9.8,
             resources: Resources::MiningBoth,
@@ -793,7 +793,7 @@ mod tests {
         // Test with no-gravity celestial
         let no_gravity_celestial = Celestial {
             position: Vec2 { q: 3, r: 2 },
-            name: "Asteroid".to_string(),
+            name: "Asteroid".to_owned(),
             orbit_gravity: false,
             surface_gravity: 0.0,
             resources: Resources::MiningOre,
