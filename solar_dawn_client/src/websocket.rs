@@ -27,13 +27,15 @@ use std::{
 
 use futures::Stream;
 use thiserror::Error;
-use wasm_bindgen::{JsCast, prelude::Closure};
+use wasm_bindgen::JsCast;
 use web_sys::{
-    CloseEvent, Event, MessageEvent, WebSocket,
+    CloseEvent, MessageEvent, WebSocket,
     js_sys::{ArrayBuffer, JsString, Uint8Array},
 };
 
 use dioxus::prelude::*;
+
+use crate::event_listener::EventListener;
 
 pub enum Message {
     Text(String),
@@ -129,9 +131,7 @@ impl WebsocketClientBuilder {
                 let event_queue = event_queue.clone();
                 let waker = waker.clone();
                 move |msg| {
-                    let msg = msg
-                        .dyn_into::<MessageEvent>()
-                        .expect("parameter of message callback");
+                    let msg = msg.unchecked_into::<MessageEvent>();
                     if let Ok(msg) = msg.data().dyn_into::<ArrayBuffer>() {
                         event_queue.borrow_mut().push_back(Ok(Message::Binary(
                             Uint8Array::new(&msg).to_vec().into_boxed_slice(),
@@ -167,9 +167,7 @@ impl WebsocketClientBuilder {
                 let event_queue = event_queue.clone();
                 let waker = waker.clone();
                 move |event| {
-                    let event = event
-                        .dyn_into::<CloseEvent>()
-                        .expect("parameter of close callback");
+                    let event = event.unchecked_into::<CloseEvent>();
                     event_queue
                         .borrow_mut()
                         .push_back(Err(WebsocketError::ConnectionClosed {
@@ -207,35 +205,5 @@ impl Future for WebsocketClientBuilder {
                 unreachable!("invalid ready_state")
             }
         }
-    }
-}
-
-struct EventListener {
-    target: web_sys::EventTarget,
-    name: &'static str,
-    callback: Closure<dyn FnMut(Event)>,
-}
-impl EventListener {
-    fn new<F>(target: web_sys::EventTarget, name: &'static str, callback: F) -> Self
-    where
-        F: FnMut(Event) + 'static,
-    {
-        let callback = Closure::wrap(Box::new(callback) as Box<dyn FnMut(Event)>);
-        target
-            .add_event_listener_with_callback(name, callback.as_ref().unchecked_ref())
-            .unwrap();
-
-        Self {
-            target,
-            name,
-            callback,
-        }
-    }
-}
-impl Drop for EventListener {
-    fn drop(&mut self) {
-        self.target
-            .remove_event_listener_with_callback(self.name, self.callback.as_ref().unchecked_ref())
-            .unwrap();
     }
 }

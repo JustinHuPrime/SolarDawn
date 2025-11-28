@@ -26,6 +26,7 @@
 
 mod scenes;
 mod websocket;
+mod event_listener;
 
 use dioxus::{logger::tracing::Level, prelude::*};
 use solar_dawn_common::{GameState, PlayerId};
