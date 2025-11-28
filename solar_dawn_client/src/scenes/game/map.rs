@@ -22,7 +22,9 @@ use dioxus::{
     html::{geometry::WheelDelta, input_data::MouseButton},
     prelude::*,
 };
-use solar_dawn_common::{CartesianVec2, GameState, Vec2, celestial::Celestial, order::Order};
+use solar_dawn_common::{
+    CartesianVec2, GameState, Vec2, celestial::Celestial, order::Order, stack::Stack,
+};
 use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, window};
 
@@ -98,23 +100,29 @@ pub fn Map(
         // Clear canvas
         ctx.clear_rect(0.0, 0.0, width as f64, height as f64);
 
-        let view_settings = &*client_view_settings.read();
+        let client_view_settings = &*client_view_settings.read();
 
         // Apply transformations: translate to center, apply offsets, then zoom
         ctx.translate(width as f64 / 2.0, height as f64 / 2.0)
             .unwrap();
-        ctx.scale(view_settings.zoom() as f64, view_settings.zoom() as f64)
-            .unwrap();
-        ctx.translate(view_settings.x_offset as f64, view_settings.y_offset as f64)
-            .unwrap();
+        ctx.scale(
+            client_view_settings.zoom() as f64,
+            client_view_settings.zoom() as f64,
+        )
+        .unwrap();
+        ctx.translate(
+            client_view_settings.x_offset as f64,
+            client_view_settings.y_offset as f64,
+        )
+        .unwrap();
 
         // Draw hex grid (if not zoomed too far out)
-        if view_settings.zoom_level >= -20 {
+        if client_view_settings.zoom_level >= -20 {
             // Find hex at center of screen (after inverse transform)
             // Center in canvas space is (width/2, height/2), which maps to (0, 0) in world space after our transforms
             let center_hex = CartesianVec2 {
-                x: -view_settings.x_offset / HEX_SCALE,
-                y: -view_settings.y_offset / HEX_SCALE,
+                x: -client_view_settings.x_offset / HEX_SCALE,
+                y: -client_view_settings.y_offset / HEX_SCALE,
             }
             .to_axial();
 
@@ -123,9 +131,11 @@ pub fn Map(
             // After transform: (0, 0) -> (-width/2, -height/2) in transformed space
             // Then apply inverse transforms: divide by zoom, subtract offsets
             let top_left_hex = CartesianVec2 {
-                x: (-view_settings.x_offset - (width as f32 / 2.0) / view_settings.zoom())
+                x: (-client_view_settings.x_offset
+                    - (width as f32 / 2.0) / client_view_settings.zoom())
                     / HEX_SCALE,
-                y: (-view_settings.y_offset - (height as f32 / 2.0) / view_settings.zoom())
+                y: (-client_view_settings.y_offset
+                    - (height as f32 / 2.0) / client_view_settings.zoom())
                     / HEX_SCALE,
             }
             .to_axial();
@@ -140,7 +150,7 @@ pub fn Map(
                     ..=i32::min(render_distance, -q + render_distance)
                 {
                     let hex = Vec2 { q, r } + center_hex;
-                    if view_settings.maybe_visible(hex, width, height) {
+                    if client_view_settings.maybe_visible(hex, width, height) {
                         draw_hex(&ctx, hex);
                     }
                 }
@@ -152,8 +162,8 @@ pub fn Map(
         let game_state = &*game_state.read();
 
         for celestial in game_state.celestials.all().values() {
-            if view_settings.maybe_visible(celestial.position, width, height) {
-                draw_celestial(&ctx, celestial);
+            if client_view_settings.maybe_visible(celestial.position, width, height) {
+                draw_celestial(&ctx, celestial, client_view_settings);
                 if celestial.orbit_gravity {
                     draw_gravity_arrows(&ctx, celestial.position);
                 }
@@ -174,7 +184,9 @@ pub fn Map(
 
         let client_game_settings = &*client_game_settings.read();
 
-        // TODO: draw stacks
+        for stack in game_state.stacks.values() {
+            draw_stack(&ctx, stack, client_view_settings, client_game_settings);
+        }
 
         ctx.restore();
     });
@@ -297,7 +309,11 @@ fn draw_hex(ctx: &CanvasRenderingContext2d, hex: Vec2<i32>) {
     ctx.stroke();
 }
 
-fn draw_celestial(ctx: &CanvasRenderingContext2d, celestial: &Celestial) {
+fn draw_celestial(
+    ctx: &CanvasRenderingContext2d,
+    celestial: &Celestial,
+    client_view_settings: &ClientViewSettings,
+) {
     // Convert hex coordinates to cartesian and scale
     let center = celestial.position.cartesian() * HEX_SCALE;
 
@@ -316,6 +332,25 @@ fn draw_celestial(ctx: &CanvasRenderingContext2d, celestial: &Celestial) {
     .unwrap();
     ctx.set_fill_style_str(&celestial.colour);
     ctx.fill();
+
+    // maybe label the celestial
+    if client_view_settings.zoom_level >= -10 {
+        ctx.set_font("12px \"Science Gothic\"");
+        ctx.set_fill_style_str("#000000");
+        ctx.set_text_align("center");
+        ctx.set_text_baseline("middle");
+
+        let text_y = if celestial.radius >= 0.5 {
+            // Draw the celestial's name in black text centered on the celestial
+            center.y as f64
+        } else {
+            // Draw the celestial's name in black text centered below the celestial
+            (center.y + HEX_SCALE * (0.2 + celestial.radius)) as f64
+        };
+
+        ctx.fill_text(&celestial.name, center.x as f64, text_y)
+            .unwrap();
+    }
     ctx.restore();
 }
 
@@ -753,4 +788,13 @@ fn outline_hex(ctx: &CanvasRenderingContext2d, hex: Vec2<i32>) {
     ctx.set_line_width(5.0);
     draw_hex(ctx, hex);
     ctx.restore();
+}
+
+fn draw_stack(
+    ctx: &CanvasRenderingContext2d,
+    stack: &Stack,
+    client_view_settings: &ClientViewSettings,
+    client_game_settings: &ClientGameSettings,
+) {
+    // todo!()
 }
