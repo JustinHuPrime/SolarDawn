@@ -19,7 +19,6 @@
 
 //! Celestial bodies
 
-#[cfg(feature = "server")]
 use std::collections::{HashMap, HashSet};
 
 #[cfg(feature = "server")]
@@ -76,6 +75,68 @@ impl From<u32> for CelestialId {
 impl From<CelestialId> for u32 {
     fn from(value: CelestialId) -> Self {
         value.0
+    }
+}
+
+/// HashMap with additional features for storing Celestials
+#[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "client", derive(Clone))]
+#[cfg_attr(feature = "server", derive(Default))]
+pub struct CelestialMap {
+    /// All celestials
+    all: HashMap<CelestialId, Celestial>,
+    /// All by position
+    by_position: HashMap<Vec2<i32>, CelestialId>,
+    /// All celestials with gravity (orbitable, landable, collidable, etc)
+    with_gravity: HashSet<CelestialId>,
+}
+
+impl CelestialMap {
+    /// View this as all celestials
+    pub fn all(&self) -> &HashMap<CelestialId, Celestial> {
+        &self.all
+    }
+    /// View this as only celestials with gravity
+    pub fn with_gravity(&self) -> impl Iterator<Item = &Celestial> {
+        self.with_gravity.iter().map(|id| &self.all[id])
+    }
+    /// Lookup a specific one by position
+    pub fn get_by_position(&self, position: Vec2<i32>) -> Option<&Celestial> {
+        self.by_position
+            .get(&position)
+            .and_then(|id| self.all.get(id))
+    }
+    /// Lookup a specific one by id
+    pub fn get(&self, id: CelestialId) -> Option<&Celestial> {
+        self.all.get(&id)
+    }
+}
+
+impl From<HashMap<CelestialId, Celestial>> for CelestialMap {
+    fn from(value: HashMap<CelestialId, Celestial>) -> Self {
+        Self {
+            by_position: value
+                .iter()
+                .map(|(&id, celestial)| (celestial.position, id))
+                .collect::<HashMap<_, _>>(),
+            with_gravity: value
+                .iter()
+                .filter_map(|(&id, celestial)| {
+                    if celestial.orbit_gravity {
+                        Some(id)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<HashSet<_>>(),
+            all: value,
+        }
+    }
+}
+
+impl From<CelestialMap> for HashMap<CelestialId, Celestial> {
+    fn from(value: CelestialMap) -> Self {
+        value.all
     }
 }
 

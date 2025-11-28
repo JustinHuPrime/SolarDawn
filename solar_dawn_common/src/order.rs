@@ -1221,7 +1221,7 @@ impl Order {
             celestial: CelestialId,
             game_state: &GameState,
         ) -> Result<&Celestial, OrderError> {
-            let Some(celestial_ref) = game_state.celestials.get(&celestial) else {
+            let Some(celestial_ref) = game_state.celestials.get(celestial) else {
                 return Err(OrderError::InvalidCelestialId(celestial));
             };
 
@@ -1357,32 +1357,35 @@ impl Order {
                 let stack_ref = validate_stack(*stack, game_state, player)?;
 
                 if *ore > 0
-                    // TODO: consider adding a hash of position to celestials
-                    && !game_state.celestials.values().any(|celestial| {
-                        stack_ref.landed(celestial)
-                            && matches!(
-                                celestial.resources,
-                                Resources::MiningBoth | Resources::MiningOre
-                            )
-                    })
+                    && !game_state
+                        .celestials
+                        .get_by_position(stack_ref.position)
+                        .is_some_and(|celestial| {
+                            stack_ref.landed(celestial)
+                                && matches!(
+                                    celestial.resources,
+                                    Resources::MiningBoth | Resources::MiningOre
+                                )
+                        })
                 {
                     return Err(OrderError::NoResourceAccess);
                 }
                 if *water > 0
-                    // TODO: consider adding a hash of position to celestials
-                    && !game_state.celestials.values().any(|celestial| {
-                        stack_ref.landed(celestial)
-                            && matches!(
-                                celestial.resources,
-                                Resources::MiningBoth | Resources::MiningIce
-                            )
-                    })
+                    && !game_state
+                        .celestials
+                        .get_by_position(stack_ref.position)
+                        .is_some_and(|celestial| {
+                            stack_ref.landed(celestial)
+                                && matches!(
+                                    celestial.resources,
+                                    Resources::MiningBoth | Resources::MiningIce
+                                )
+                        })
                 {
                     return Err(OrderError::NoResourceAccess);
                 }
                 if *fuel > 0
-                    // TODO: consider adding a list of gravitating celestials
-                    && !game_state.celestials.values().any(|celestial| {
+                    && !game_state.celestials.with_gravity().any(|celestial| {
                         stack_ref.orbiting(celestial)
                             && matches!(celestial.resources, Resources::Skimming)
                     })
@@ -1485,7 +1488,7 @@ impl Order {
                 validate_phase(game_state, Phase::Logistics)?;
                 let stack_ref = validate_stack(*stack, game_state, player)?;
                 if matches!(module, ModuleType::Habitat) {
-                    let earth = game_state.celestials.get(&game_state.earth).unwrap();
+                    let earth = game_state.celestials.get(game_state.earth).unwrap();
                     if !stack_ref.orbiting(earth) {
                         return Err(OrderError::NotInEarthOrbit);
                     }
@@ -1506,8 +1509,7 @@ impl Order {
                 if *stack == *target {
                     return Err(OrderError::InvalidTarget);
                 }
-                // TODO: consider pre-computing a list of gravitating celestials
-                if game_state.celestials.values().any(|celestial| {
+                if game_state.celestials.with_gravity().any(|celestial| {
                     celestial.blocks_weapons_effect(
                         stack_ref.position.cartesian(),
                         target_ref.position.cartesian(),
@@ -1558,8 +1560,8 @@ impl Order {
                 )?;
 
                 if game_state
-                    .celestials // TODO: consider pre-computing a list of gravitating celestials
-                    .values()
+                    .celestials
+                    .with_gravity()
                     .any(|celestial| stack_ref.landed_with_gravity(celestial))
                 {
                     return Err(OrderError::BurnWhileLanded);
@@ -1579,9 +1581,9 @@ impl Order {
                 validate_burn(*stack, stack_ref, 1, fuel_from, 0.0)?;
 
                 let Some(orbited) = game_state
-                    .celestials // TODO: consider pre-computing a list of gravitating celestials
-                    .values()
-                    .find(|celestial| stack_ref.orbiting(celestial))
+                    .celestials
+                    .with_gravity()
+                    .find(|&celestial| stack_ref.orbiting(celestial))
                 else {
                     return Err(OrderError::NotInOrbit);
                 };
@@ -1891,11 +1893,9 @@ impl Order {
 
                 // Find the orbited body to get correct velocity for target position
                 let orbited = game_state
-                    .celestials // TODO: consider pre-computing a list of gravitating celestials
-                    .values()
-                    .find(|celestial| {
-                        celestial.orbit_gravity && (stack.position - celestial.position).norm() == 1
-                    })
+                    .celestials
+                    .with_gravity()
+                    .find(|&celestial| stack.orbiting(celestial))
                     .unwrap();
 
                 // Get the correct velocity for the target position
@@ -1916,7 +1916,7 @@ impl Order {
                 fuel_from,
             } => {
                 let stack = stacks.get_mut(stack).unwrap();
-                let on = game_state.celestials.get(on).unwrap();
+                let on = game_state.celestials.get(*on).unwrap();
                 stack.position = on.position;
                 stack.velocity = Vec2::zero();
 
@@ -1932,7 +1932,7 @@ impl Order {
                 let stack = stacks.get_mut(stack).unwrap();
                 let (position, velocity) = game_state
                     .celestials
-                    .get(from)
+                    .get(*from)
                     .unwrap()
                     .orbit_parameters(*clockwise)
                     .into_iter()
@@ -2548,7 +2548,8 @@ mod tests {
 
         // Create a mining world and set up a stack there
         let mining_world = celestial_id_generator.next().unwrap();
-        let mut celestials = (*game_state.celestials).clone();
+        let mut celestials: HashMap<CelestialId, Celestial> =
+            Arc::into_inner(game_state.celestials).unwrap().into();
         celestials.insert(
             mining_world,
             Celestial {
@@ -2561,7 +2562,7 @@ mod tests {
                 colour: "#000000".to_owned(),
             },
         );
-        game_state.celestials = Arc::new(celestials);
+        game_state.celestials = Arc::new(celestials.into());
 
         let stack_id = stack_id_generator.next().unwrap();
         let miner_module = module_id_generator.next().unwrap();
@@ -2632,7 +2633,8 @@ mod tests {
 
         // Test fuel skimming
         let gas_giant = celestial_id_generator.next().unwrap();
-        let mut celestials = (*game_state.celestials).clone();
+        let mut celestials: HashMap<CelestialId, Celestial> =
+            Arc::into_inner(game_state.celestials).unwrap().into();
         celestials.insert(
             gas_giant,
             Celestial {
@@ -2645,7 +2647,7 @@ mod tests {
                 colour: "#000000".to_owned(),
             },
         );
-        game_state.celestials = Arc::new(celestials);
+        game_state.celestials = Arc::new(celestials.into());
 
         let orbiting_stack_id = stack_id_generator.next().unwrap();
         let skimmer_module = module_id_generator.next().unwrap();
@@ -3109,7 +3111,7 @@ mod tests {
         let cargo_hold_module = module_id_generator.next().unwrap();
 
         // Set up Earth for habitat building
-        let earth_celestial = game_state.celestials.get(&game_state.earth).unwrap();
+        let earth_celestial = game_state.celestials.get(game_state.earth).unwrap();
         let earth_position = earth_celestial.position;
         let earth_neighbors = earth_position.neighbours();
 
@@ -3431,7 +3433,8 @@ mod tests {
 
         // Test line of sight blocked by celestial
         let blocking_celestial = celestial_id_generator.next().unwrap();
-        let mut celestials = (*game_state.celestials).clone();
+        let mut celestials: HashMap<CelestialId, Celestial> =
+            Arc::into_inner(game_state.celestials).unwrap().into();
         celestials.insert(
             blocking_celestial,
             Celestial {
@@ -3444,7 +3447,7 @@ mod tests {
                 colour: "#000000".to_owned(),
             },
         );
-        game_state.celestials = Arc::new(celestials);
+        game_state.celestials = Arc::new(celestials.into());
 
         let orders = HashMap::from([(
             player_1,
@@ -3658,7 +3661,8 @@ mod tests {
 
         // Test burning while landed on a planet
         let planet = celestial_id_generator.next().unwrap();
-        let mut celestials = (*game_state.celestials).clone();
+        let mut celestials: HashMap<CelestialId, Celestial> =
+            Arc::into_inner(game_state.celestials).unwrap().into();
         celestials.insert(
             planet,
             Celestial {
@@ -3671,7 +3675,7 @@ mod tests {
                 colour: "#000000".to_owned(),
             },
         );
-        game_state.celestials = Arc::new(celestials);
+        game_state.celestials = Arc::new(celestials.into());
 
         // Move stack to be landed on planet
         game_state.stacks.get_mut(&stack_id).unwrap().velocity = Vec2::zero();
@@ -3746,7 +3750,7 @@ mod tests {
         }
 
         // Get Earth's actual position and set up orbital parameters
-        let earth_celestial = game_state.celestials.get(&game_state.earth).unwrap();
+        let earth_celestial = game_state.celestials.get(game_state.earth).unwrap();
         let earth_orbital_params = earth_celestial.orbit_parameters(true);
         let (orbital_pos_1, orbital_vel_1) = earth_orbital_params[0];
         let (orbital_pos_2, _orbital_vel_2) = earth_orbital_params[1];
@@ -3858,7 +3862,7 @@ mod tests {
         }
 
         // Get Earth's actual position and set up orbital parameters
-        let earth_celestial = game_state.celestials.get(&game_state.earth).unwrap();
+        let earth_celestial = game_state.celestials.get(game_state.earth).unwrap();
         let earth_orbital_params = earth_celestial.orbit_parameters(true);
         let (orbital_pos_1, orbital_vel_1) = earth_orbital_params[0];
         let (orbital_pos_2, orbital_vel_2) = earth_orbital_params[1];

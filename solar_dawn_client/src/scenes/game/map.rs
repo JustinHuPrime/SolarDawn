@@ -146,7 +146,7 @@ pub fn Map(
             }
         }
 
-        for celestial in game_state.celestials.values() {
+        for celestial in game_state.celestials.all().values() {
             if view_settings.maybe_visible(celestial.position, width, height) {
                 draw_celestial(&ctx, celestial);
                 if celestial.orbit_gravity {

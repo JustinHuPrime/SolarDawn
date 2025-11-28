@@ -39,11 +39,16 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "server")]
 use uuid::Uuid;
 
-use crate::celestial::{Celestial, CelestialId};
-use crate::order::{Order, OrderError};
 #[cfg(feature = "server")]
-use crate::stack::{Health, Module, ModuleDetails, ModuleId};
-use crate::stack::{Stack, StackId};
+use crate::{
+    celestial::Celestial,
+    stack::{Health, Module, ModuleDetails, ModuleId},
+};
+use crate::{
+    celestial::{CelestialId, CelestialMap},
+    order::{Order, OrderError},
+    stack::{Stack, StackId},
+};
 
 pub mod celestial;
 pub mod order;
@@ -60,7 +65,7 @@ pub struct GameState {
     /// Map from player id to username
     pub players: Arc<HashMap<PlayerId, String>>,
     /// Game board
-    pub celestials: Arc<HashMap<CelestialId, Celestial>>,
+    pub celestials: Arc<CelestialMap>,
     /// Which celestial is Earth (starting planet and allows habitat builds in orbit)
     pub earth: CelestialId,
     /// Game pieces
@@ -146,7 +151,7 @@ impl GameState {
                             phase: Phase::Logistics,
                             turn: 1,
                             players: Arc::new(players),
-                            celestials: Arc::new(celestials),
+                            celestials: Arc::new(celestials.into()),
                             earth,
                             stacks,
                             game_id: Uuid::new_v4().simple().to_string(),
@@ -169,7 +174,7 @@ impl GameState {
                             phase: Phase::Logistics,
                             turn: 1,
                             players: Arc::new(players),
-                            celestials: Arc::new(celestials),
+                            celestials: Arc::new(celestials.into()),
                             earth,
                             stacks: HashMap::new(),
                             game_id: Uuid::nil().simple().to_string(),
@@ -204,9 +209,8 @@ impl GameState {
                 .filter_map(|(id, stack)| {
                     // for each stack, find the first celestial it collides with, if any
                     // note that the movement_collides method ignores landed stacks
-                    // TODO: consider pre-computing the list of collidable celestials
                     self.celestials
-                        .values()
+                        .with_gravity()
                         .filter_map(|celestial| {
                             celestial.stack_movement_collides(
                                 stack.position.cartesian(),
@@ -266,8 +270,7 @@ impl GameState {
                         for stack in stacks.iter().filter_map(|(stack, stack_ref)| {
                             if !std::ptr::eq(missile_ref, stack_ref)
                                 && missile_ref.in_range(intercept, stack_ref)
-                                // TODO: consider pre-computing the list of collidable celestials
-                                && !self.celestials.values().any(|celestial| {
+                                && !self.celestials.with_gravity().any(|celestial| {
                                     celestial.blocks_weapons_effect(
                                         missile_ref.position.cartesian()
                                             + (missile_ref.velocity.cartesian() * intercept),
@@ -344,9 +347,8 @@ impl GameState {
             // apply movement
             for (_, stack) in stacks.iter_mut() {
                 let gravity = self
-                    // TODO: consider pre-computing the list of gravitating celestials
                     .celestials
-                    .values()
+                    .with_gravity()
                     .map(|celestial| celestial.gravity_to(stack.position, stack.velocity))
                     .sum();
                 stack.position += stack.velocity;
@@ -498,8 +500,7 @@ impl From<PlayerId> for u8 {
 /// Flat-topped hexes
 ///
 /// +q = down-right, +r = down
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "server", derive(Hash))]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Vec2<T> {
     /// +q = down-right
     pub q: T,
@@ -1035,7 +1036,7 @@ mod tests {
             phase: Phase::Logistics,
             turn: 1,
             players: Arc::new(HashMap::new()),
-            celestials: Arc::new(HashMap::new()),
+            celestials: Arc::new(HashMap::new().into()),
             earth: CelestialId::from(0u32),
             stacks: HashMap::new(),
             game_id: Uuid::nil().simple().to_string(),
@@ -1117,7 +1118,7 @@ mod tests {
             phase: Phase::Movement,
             turn: 1,
             players: Arc::new(HashMap::new()),
-            celestials: Arc::new(celestials),
+            celestials: Arc::new(celestials.into()),
             earth: CelestialId::from(0u32),
             stacks,
             game_id: Uuid::nil().simple().to_string(),
@@ -1185,7 +1186,7 @@ mod tests {
             phase: Phase::Movement,
             turn: 1,
             players: Arc::new(HashMap::new()),
-            celestials: Arc::new(celestials),
+            celestials: Arc::new(celestials.into()),
             earth: CelestialId::from(0u32),
             stacks,
             game_id: Uuid::nil().simple().to_string(),
