@@ -93,13 +93,12 @@ pub fn Map(
         };
         let ctx = ctx.unchecked_into::<CanvasRenderingContext2d>();
 
-        let game_state = game_state.read();
         ctx.save();
 
         // Clear canvas
         ctx.clear_rect(0.0, 0.0, width as f64, height as f64);
 
-        let view_settings = client_view_settings.read();
+        let view_settings = &*client_view_settings.read();
 
         // Apply transformations: translate to center, apply offsets, then zoom
         ctx.translate(width as f64 / 2.0, height as f64 / 2.0)
@@ -133,7 +132,9 @@ pub fn Map(
 
             // Calculate distance between center and top-left hex, add 1 for safety margin
             let render_distance = (center_hex - top_left_hex).norm() + 1;
-            debug!(render_distance = render_distance);
+            ctx.save();
+            ctx.set_stroke_style_str("#666666");
+            ctx.set_line_width(1.0);
             for q in -render_distance..=render_distance {
                 for r in i32::max(-render_distance, -q - render_distance)
                     ..=i32::min(render_distance, -q + render_distance)
@@ -144,7 +145,11 @@ pub fn Map(
                     }
                 }
             }
+            ctx.restore();
         }
+
+        // draw celestials
+        let game_state = &*game_state.read();
 
         for celestial in game_state.celestials.all().values() {
             if view_settings.maybe_visible(celestial.position, width, height) {
@@ -155,15 +160,23 @@ pub fn Map(
             }
         }
 
-        // TODO: draw orders
+        // draw orders
+        let orders = &*orders.read();
+        let auto_orders = &*auto_orders.read();
+
+        for order in auto_orders
+            .iter()
+            .map(|(order, _)| order)
+            .chain(orders.iter())
+        {
+            draw_order(&ctx, order, game_state);
+        }
+
+        let client_game_settings = &*client_game_settings.read();
 
         // TODO: draw stacks
 
-        // Restore canvas context
         ctx.restore();
-
-        let _ = orders.read();
-        let _ = client_game_settings.read();
     });
 
     let mut dragging = use_signal(|| Option::<(f64, f64)>::None);
@@ -227,13 +240,11 @@ pub fn Map(
                 let canvas_width = canvas.client_width() as f32;
                 let canvas_height = canvas.client_height() as f32;
 
-                // Calculate world position under mouse before zoom
+                // Update zoom level
+
+                // Calculate world position under mouse after zoom
                 let old_zoom = client_view_settings.zoom();
                 let world_x_before = (mouse_x - canvas_width / 2.0) / old_zoom
-
-                    // Update zoom level
-
-                    // Calculate world position under mouse after zoom
                     - client_view_settings.x_offset;
 
                 // Adjust view offset to keep the world position under the mouse the same
@@ -283,8 +294,6 @@ fn draw_hex(ctx: &CanvasRenderingContext2d, hex: Vec2<i32>) {
     }
 
     ctx.close_path();
-    ctx.set_stroke_style_str("#000000");
-    ctx.set_line_width(1.0);
     ctx.stroke();
 }
 
@@ -295,6 +304,7 @@ fn draw_celestial(ctx: &CanvasRenderingContext2d, celestial: &Celestial) {
     // Draw circle with radius scaled by HEX_SCALE
     let radius = HEX_SCALE * celestial.radius;
 
+    ctx.save();
     ctx.begin_path();
     ctx.arc(
         center.x as f64,
@@ -306,12 +316,15 @@ fn draw_celestial(ctx: &CanvasRenderingContext2d, celestial: &Celestial) {
     .unwrap();
     ctx.set_fill_style_str(&celestial.colour);
     ctx.fill();
+    ctx.restore();
 }
 
 fn draw_gravity_arrows(ctx: &CanvasRenderingContext2d, celestial_position: Vec2<i32>) {
     let celestial_center = celestial_position.cartesian() * HEX_SCALE;
 
     // Draw arrows in all 6 neighboring hexes pointing toward the celestial
+    ctx.save();
+    ctx.set_fill_style_str("#000000");
     for neighbor in celestial_position.neighbours() {
         let neighbor_center = neighbor.cartesian() * HEX_SCALE;
 
@@ -389,7 +402,355 @@ fn draw_gravity_arrows(ctx: &CanvasRenderingContext2d, celestial_position: Vec2<
         // Top-left of head base back to start (top-left of shaft)
         ctx.close_path();
 
-        ctx.set_fill_style_str("#000000");
         ctx.fill();
     }
+    ctx.restore();
+}
+
+fn draw_order(ctx: &CanvasRenderingContext2d, order: &Order, game_state: &GameState) {
+    match order {
+        // Hostility
+        Order::Shoot { stack, target, .. } | Order::Board { stack, target } => {
+            draw_arrow(
+                ctx,
+                &ArrowOptions {
+                    from: game_state.stacks[stack].position,
+                    to: game_state.stacks[target].position,
+                    stop_short: true,
+                    stem_width: 5.0,
+                    head_style: ArrowHeadOptions::OpenV,
+                    colour: "#ff0000",
+                },
+            );
+        }
+        // Misc Logistics
+        Order::Repair {
+            stack,
+            target_stack,
+            ..
+        } => {
+            draw_arrow(
+                ctx,
+                &ArrowOptions {
+                    from: game_state.stacks[stack].position,
+                    to: game_state.stacks[target_stack].position,
+                    stop_short: true,
+                    stem_width: 5.0,
+                    head_style: ArrowHeadOptions::OpenV,
+                    colour: "#00ff00",
+                },
+            );
+        }
+        // Resource transfers
+        Order::ModuleTransfer { stack, to, .. } => match to {
+            solar_dawn_common::order::ModuleTransferTarget::Existing(stack_id) => {
+                draw_arrow(
+                    ctx,
+                    &ArrowOptions {
+                        from: game_state.stacks[stack].position,
+                        to: game_state.stacks[stack_id].position,
+                        stop_short: true,
+                        stem_width: 1.0,
+                        head_style: ArrowHeadOptions::TriangleOutline,
+                        colour: "#0000ff",
+                    },
+                );
+            }
+            solar_dawn_common::order::ModuleTransferTarget::New(_) => {
+                outline_hex(ctx, game_state.stacks[stack].position);
+            }
+        },
+        Order::ResourceTransfer { stack, to, .. } => match to {
+            solar_dawn_common::order::ResourceTransferTarget::FloatingPool
+            | solar_dawn_common::order::ResourceTransferTarget::Jettison
+            | solar_dawn_common::order::ResourceTransferTarget::Module(_) => {
+                outline_hex(ctx, game_state.stacks[stack].position);
+            }
+            solar_dawn_common::order::ResourceTransferTarget::Stack(stack_id) => {
+                draw_arrow(
+                    ctx,
+                    &ArrowOptions {
+                        from: game_state.stacks[stack].position,
+                        to: game_state.stacks[stack_id].position,
+                        stop_short: true,
+                        stem_width: 1.0,
+                        head_style: ArrowHeadOptions::TriangleOutline,
+                        colour: "#0000ff",
+                    },
+                );
+            }
+        },
+        // Generic "something's happening here"
+        Order::Isru { stack, .. }
+        | Order::Refine { stack, .. }
+        | Order::Build { stack, .. }
+        | Order::Salvage { stack, .. }
+        | Order::Arm { stack, .. } => {
+            outline_hex(ctx, game_state.stacks[stack].position);
+        }
+        // Movement
+        Order::Burn { stack, delta_v, .. } => {
+            let stack_ref = &game_state.stacks[stack];
+            draw_arrow(
+                ctx,
+                &ArrowOptions {
+                    from: stack_ref.position + stack_ref.velocity,
+                    to: stack_ref.position + *delta_v + stack_ref.velocity,
+                    stop_short: false,
+                    stem_width: 10.0,
+                    head_style: ArrowHeadOptions::FilledTriangle,
+                    colour: "#000000",
+                },
+            );
+        }
+        Order::OrbitAdjust {
+            stack,
+            target_position,
+            clockwise,
+            ..
+        } => {
+            let stack = &game_state.stacks[stack];
+            let orbited = game_state
+                .celestials
+                .with_gravity()
+                .find(|&celestial| stack.orbiting(celestial))
+                .unwrap();
+            let orbit_params = orbited.orbit_parameters(*clockwise);
+            let (_, target_velocity) = orbit_params
+                .into_iter()
+                .find(|(pos, _)| pos == target_position)
+                .unwrap();
+            draw_arrow(
+                ctx,
+                &ArrowOptions {
+                    from: stack.position,
+                    to: *target_position,
+                    stop_short: false,
+                    stem_width: 1.0,
+                    head_style: ArrowHeadOptions::None,
+                    colour: "#000000",
+                },
+            );
+            draw_arrow(
+                ctx,
+                &ArrowOptions {
+                    from: *target_position,
+                    to: *target_position + target_velocity,
+                    stop_short: false,
+                    stem_width: 10.0,
+                    head_style: ArrowHeadOptions::FilledTriangle,
+                    colour: "#000000",
+                },
+            );
+        }
+        Order::Land { stack, on, .. } => {
+            draw_arrow(
+                ctx,
+                &ArrowOptions {
+                    from: game_state.stacks[stack].position,
+                    to: game_state.celestials.get(*on).unwrap().position,
+                    stop_short: false,
+                    stem_width: 10.0,
+                    head_style: ArrowHeadOptions::FilledTriangle,
+                    colour: "#000000",
+                },
+            );
+        }
+        Order::TakeOff {
+            stack,
+            from,
+            destination,
+            clockwise,
+            ..
+        } => {
+            let stack = &game_state.stacks[stack];
+            let (position, velocity) = game_state
+                .celestials
+                .get(*from)
+                .unwrap()
+                .orbit_parameters(*clockwise)
+                .into_iter()
+                .find(|(position, _)| position == destination)
+                .unwrap();
+            draw_arrow(
+                ctx,
+                &ArrowOptions {
+                    from: stack.position,
+                    to: position,
+                    stop_short: false,
+                    stem_width: 1.0,
+                    head_style: ArrowHeadOptions::None,
+                    colour: "#000000",
+                },
+            );
+            draw_arrow(
+                ctx,
+                &ArrowOptions {
+                    from: position,
+                    to: position + velocity,
+                    stop_short: false,
+                    stem_width: 10.0,
+                    head_style: ArrowHeadOptions::FilledTriangle,
+                    colour: "#000000",
+                },
+            );
+        }
+        // Misc
+        Order::NameStack { .. } => {
+            // pass
+        }
+    }
+}
+
+/// Options for drawing an arrow
+struct ArrowOptions {
+    /// Starting space - always starts at the center of this space
+    from: Vec2<i32>,
+    /// Ending space - either ends here or stops a hex radius short
+    to: Vec2<i32>,
+    /// Controls if the arrow ends at the center of the destination or stops short
+    stop_short: bool,
+    /// How to draw the stem of the arrow
+    stem_width: f64,
+    /// How to draw the head of the arrow
+    head_style: ArrowHeadOptions,
+    /// Colour of all parts of the arrow
+    colour: &'static str,
+}
+/// Styles for rendering the head of an arrow.
+enum ArrowHeadOptions {
+    /// No arrow head; the arrow ends with just the stem.
+    None,
+    /// An open "V" shape at the end of the arrow (like >).
+    OpenV,
+    /// An outlined triangle at the end of the arrow.
+    TriangleOutline,
+    /// A filled triangle at the end of the arrow.
+    FilledTriangle,
+}
+
+/// Draw an arrow
+fn draw_arrow(ctx: &CanvasRenderingContext2d, options: &ArrowOptions) {
+    // Convert hex coordinates to cartesian and scale
+    let from_center = options.from.cartesian() * HEX_SCALE;
+    let to_center = options.to.cartesian() * HEX_SCALE;
+
+    // Calculate direction from 'from' to 'to'
+    let dx = to_center.x - from_center.x;
+    let dy = to_center.y - from_center.y;
+    let length = (dx * dx + dy * dy).sqrt();
+
+    if length == 0.0 {
+        return; // Can't draw arrow to same position
+    }
+
+    // Normalize direction
+    let norm_dx = dx / length;
+    let norm_dy = dy / length;
+
+    // Calculate arrow end position
+    let arrow_end_x = if options.stop_short {
+        to_center.x - norm_dx * HEX_SCALE
+    } else {
+        to_center.x
+    };
+    let arrow_end_y = if options.stop_short {
+        to_center.y - norm_dy * HEX_SCALE
+    } else {
+        to_center.y
+    };
+
+    // Arrow head parameters
+    let arrow_head_length = HEX_SCALE * 0.3;
+    let arrow_head_width = HEX_SCALE * 0.3;
+
+    // Calculate arrow head base position
+    let head_base_x = arrow_end_x - norm_dx * arrow_head_length;
+    let head_base_y = arrow_end_y - norm_dy * arrow_head_length;
+
+    // Calculate perpendicular vector for arrow head
+    let perp_x = -norm_dy;
+    let perp_y = norm_dx;
+
+    ctx.save();
+    ctx.set_stroke_style_str(options.colour);
+    ctx.set_fill_style_str(options.colour);
+    ctx.set_line_width(options.stem_width);
+
+    // Draw the line (shaft)
+    ctx.begin_path();
+    ctx.move_to(from_center.x as f64, from_center.y as f64);
+    if matches!(
+        options.head_style,
+        ArrowHeadOptions::OpenV | ArrowHeadOptions::None
+    ) {
+        // Continue shaft to the tip of the arrow head for OpenV and None styles
+        ctx.line_to(arrow_end_x as f64, arrow_end_y as f64);
+    } else {
+        // Stop shaft at the base of the arrow head for filled/outlined triangle styles
+        ctx.line_to(head_base_x as f64, head_base_y as f64);
+    }
+    ctx.stroke();
+
+    // Draw the arrow head based on style
+    match options.head_style {
+        ArrowHeadOptions::OpenV => {
+            // Draw two lines forming a V
+            ctx.begin_path();
+            ctx.move_to(
+                (head_base_x + perp_x * arrow_head_width) as f64,
+                (head_base_y + perp_y * arrow_head_width) as f64,
+            );
+            ctx.line_to(arrow_end_x as f64, arrow_end_y as f64);
+            ctx.line_to(
+                (head_base_x - perp_x * arrow_head_width) as f64,
+                (head_base_y - perp_y * arrow_head_width) as f64,
+            );
+            ctx.stroke();
+        }
+        ArrowHeadOptions::TriangleOutline => {
+            // Draw triangle outline
+            ctx.begin_path();
+            ctx.move_to(arrow_end_x as f64, arrow_end_y as f64);
+            ctx.line_to(
+                (head_base_x + perp_x * arrow_head_width) as f64,
+                (head_base_y + perp_y * arrow_head_width) as f64,
+            );
+            ctx.line_to(
+                (head_base_x - perp_x * arrow_head_width) as f64,
+                (head_base_y - perp_y * arrow_head_width) as f64,
+            );
+            ctx.close_path();
+            ctx.stroke();
+        }
+        ArrowHeadOptions::FilledTriangle => {
+            // Draw filled triangle
+            ctx.begin_path();
+            ctx.move_to(arrow_end_x as f64, arrow_end_y as f64);
+            ctx.line_to(
+                (head_base_x + perp_x * arrow_head_width) as f64,
+                (head_base_y + perp_y * arrow_head_width) as f64,
+            );
+            ctx.line_to(
+                (head_base_x - perp_x * arrow_head_width) as f64,
+                (head_base_y - perp_y * arrow_head_width) as f64,
+            );
+            ctx.close_path();
+            ctx.fill();
+        }
+        ArrowHeadOptions::None => {
+            // pass
+        }
+    }
+
+    ctx.restore();
+}
+
+/// Draw the hex again, but with a thick black border
+fn outline_hex(ctx: &CanvasRenderingContext2d, hex: Vec2<i32>) {
+    ctx.save();
+    ctx.set_stroke_style_str("#000000");
+    ctx.set_line_width(5.0);
+    draw_hex(ctx, hex);
+    ctx.restore();
 }

@@ -44,6 +44,18 @@ enum DisplayHostility {
     Hostile,
 }
 
+impl DisplayHostility {
+    fn display_colour(&self) -> &'static str {
+        // value from APP-6D
+        match self {
+            DisplayHostility::Own => "#80e0ff",
+            DisplayHostility::Friendly => "#aaffaa",
+            DisplayHostility::Neutral => "#ffff80",
+            DisplayHostility::Hostile => "#ff8080",
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 struct ClientGameSettings {
     display_hostility: HashMap<PlayerId, DisplayHostility>,

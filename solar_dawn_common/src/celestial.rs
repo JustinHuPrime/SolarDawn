@@ -772,26 +772,6 @@ impl Celestial {
         )
     }
 
-    /// Generate orbital parameters; assumes body has gravity
-    pub fn orbit_parameters(&self, clockwise: bool) -> [(Vec2<i32>, Vec2<i32>); 6] {
-        debug_assert!(self.orbit_gravity);
-        self.position
-            .neighbours()
-            .iter()
-            .cloned()
-            .zip(
-                Vec2::zero()
-                    .neighbours()
-                    .iter()
-                    .cycle()
-                    .skip(if clockwise { 2 } else { 4 })
-                    .cloned(),
-            )
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap()
-    }
-
     fn intersects(&self, start: CartesianVec2, end: CartesianVec2) -> Option<(f32, f32)> {
         // find t such that self.radius^2 = (start - self.position + t*(end - start))^2
         let dp = start - self.position.cartesian();
@@ -917,6 +897,28 @@ impl Celestial {
                     .then(|| self.position - gravity_hex)
             })
             .sum()
+    }
+}
+
+impl Celestial {
+    /// Generate orbital parameters; assumes body has gravity
+    pub fn orbit_parameters(&self, clockwise: bool) -> [(Vec2<i32>, Vec2<i32>); 6] {
+        debug_assert!(self.orbit_gravity);
+        self.position
+            .neighbours()
+            .iter()
+            .cloned()
+            .zip(
+                Vec2::zero()
+                    .neighbours()
+                    .iter()
+                    .cycle()
+                    .skip(if clockwise { 2 } else { 4 })
+                    .cloned(),
+            )
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap()
     }
 }
 

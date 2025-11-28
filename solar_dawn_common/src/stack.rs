@@ -27,9 +27,7 @@ use std::collections::HashMap;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "server")]
-use crate::celestial::Celestial;
-use crate::{PlayerId, Vec2};
+use crate::{PlayerId, Vec2, celestial::Celestial};
 
 /// A stack - a collection of modules docked to one another
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,14 +100,6 @@ impl Stack {
     /// Is this stack rendezvoused with the other stack?
     pub fn rendezvoused_with(&self, other: &Stack) -> bool {
         self.position == other.position && self.velocity == other.velocity
-    }
-
-    /// Is this stack orbiting the target celestial?
-    pub fn orbiting(&self, celestial: &Celestial) -> bool {
-        celestial.orbit_gravity
-            && (self.position - celestial.position).norm() == 1
-            && self.velocity.norm() == 1
-            && (self.position + self.velocity - celestial.position).norm() == 1
     }
 
     /// Is this stack landed on the target celestial?
@@ -213,6 +203,16 @@ impl Stack {
 
             hits -= 1;
         }
+    }
+}
+
+impl Stack {
+    /// Is this stack orbiting the target celestial?
+    pub fn orbiting(&self, celestial: &Celestial) -> bool {
+        celestial.orbit_gravity
+            && (self.position - celestial.position).norm() == 1
+            && self.velocity.norm() == 1
+            && (self.position + self.velocity - celestial.position).norm() == 1
     }
 }
 
