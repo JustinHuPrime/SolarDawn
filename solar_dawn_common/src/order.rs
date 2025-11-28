@@ -26,7 +26,6 @@ use std::collections::HashMap;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-use crate::celestial::CelestialId;
 #[cfg(feature = "server")]
 use crate::{
     GameState, Phase, PlayerId,
@@ -35,6 +34,7 @@ use crate::{
 };
 use crate::{
     Vec2,
+    celestial::CelestialId,
     stack::{ModuleDetails, ModuleId, StackId},
 };
 
@@ -1702,12 +1702,9 @@ impl Order {
                             .insert(module_id, module);
                     }
                     ModuleTransferTarget::New(new_count) => {
-                        let new_id =
-                            *new_stack_ids
-                                .entry((player, *new_count))
-                                .or_insert_with(|| {
-                                    stack_id_generator.next().expect("should be infinite")
-                                });
+                        let new_id = *new_stack_ids
+                            .entry((player, *new_count))
+                            .or_insert_with(|| stack_id_generator.next().unwrap());
                         let position = stack.position;
                         let velocity = stack.velocity;
                         let owner = stack.owner;
@@ -1821,7 +1818,7 @@ impl Order {
             Order::Build { stack, module } => {
                 let stack = stacks.get_mut(stack).expect("order is validated");
                 stack.modules.insert(
-                    module_id_generator.next().expect("should be infinite"),
+                    module_id_generator.next().unwrap(),
                     match module {
                         ModuleType::Miner => Module::new_miner(),
                         ModuleType::FuelSkimmer => Module::new_fuel_skimmer(),
@@ -2003,10 +2000,10 @@ impl ValidatedOrders<'_> {
 
 #[cfg(test)]
 mod tests {
-    use rand::{SeedableRng, rngs::StdRng};
-    use std::{marker::PhantomData, sync::Arc};
-
     use super::*;
+
+    use rand::{SeedableRng, rng, rngs::StdRng};
+    use std::{marker::PhantomData, sync::Arc};
 
     struct ShortIdGen<T: From<u8>> {
         next: u8,
@@ -2055,7 +2052,7 @@ mod tests {
     fn test_rename_stack() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -2068,6 +2065,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
 
         let stack_1 = stack_id_generator.next().unwrap();
@@ -2238,7 +2236,7 @@ mod tests {
     fn test_module_transfer() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -2251,6 +2249,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Logistics;
 
@@ -2460,7 +2459,7 @@ mod tests {
 
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -2469,6 +2468,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Logistics;
 
@@ -2549,7 +2549,7 @@ mod tests {
     fn test_isru_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -2558,6 +2558,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Logistics;
 
@@ -2573,6 +2574,7 @@ mod tests {
                 surface_gravity: 3.0,
                 resources: Resources::MiningBoth,
                 radius: 0.3,
+                colour: "#000000".to_owned(),
             },
         );
         game_state.celestials = Arc::new(celestials);
@@ -2656,6 +2658,7 @@ mod tests {
                 surface_gravity: 20.0,
                 resources: Resources::Skimming,
                 radius: 1.0,
+                colour: "#000000".to_owned(),
             },
         );
         game_state.celestials = Arc::new(celestials);
@@ -2700,7 +2703,7 @@ mod tests {
     fn test_resource_transfer_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -2709,6 +2712,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Logistics;
 
@@ -2868,7 +2872,7 @@ mod tests {
     fn test_repair_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -2877,6 +2881,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Logistics;
 
@@ -2988,7 +2993,7 @@ mod tests {
     fn test_refine_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -2997,6 +3002,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Logistics;
 
@@ -3101,7 +3107,7 @@ mod tests {
     fn test_build_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -3110,6 +3116,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Logistics;
 
@@ -3270,7 +3277,7 @@ mod tests {
     fn test_salvage_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -3279,6 +3286,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Logistics;
 
@@ -3355,7 +3363,7 @@ mod tests {
     fn test_shoot_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -3368,6 +3376,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Combat;
 
@@ -3448,6 +3457,7 @@ mod tests {
                 surface_gravity: 1.0,
                 resources: Resources::None,
                 radius: 1.0, // Reasonable blocking radius
+                colour: "#000000".to_owned(),
             },
         );
         game_state.celestials = Arc::new(celestials);
@@ -3472,7 +3482,7 @@ mod tests {
     fn test_arm_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -3481,6 +3491,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Combat;
 
@@ -3610,7 +3621,7 @@ mod tests {
     fn test_burn_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -3619,6 +3630,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Movement;
 
@@ -3672,6 +3684,7 @@ mod tests {
                 surface_gravity: 9.8,
                 resources: Resources::MiningBoth,
                 radius: 0.3,
+                colour: "#000000".to_owned(),
             },
         );
         game_state.celestials = Arc::new(celestials);
@@ -3725,7 +3738,7 @@ mod tests {
     fn test_movement_order_conflicts() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -3734,6 +3747,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Movement;
 
@@ -3747,18 +3761,23 @@ mod tests {
             *fuel = 100;
         }
 
-        // Place both stacks in orbit around Earth at (6, -3)
-        // Use proper orbital parameters from Earth.orbit_parameters(true)
-        let mut stack_data = Stack::new(Vec2 { q: 7, r: -3 }, Vec2 { q: -1, r: 1 }, player_1);
+        // Get Earth's actual position and set up orbital parameters
+        let earth_celestial = game_state.celestials.get(&game_state.earth).unwrap();
+        let earth_orbital_params = earth_celestial.orbit_parameters(true);
+        let (orbital_pos_1, orbital_vel_1) = earth_orbital_params[0];
+        let (orbital_pos_2, _orbital_vel_2) = earth_orbital_params[1];
+
+        // Place both stacks in orbit around Earth using actual orbital parameters
+        let mut stack_data = Stack::new(orbital_pos_1, orbital_vel_1, player_1);
         stack_data
             .modules
             .insert(engine_module, Module::new_engine());
         stack_data.modules.insert(tank_module, fuel_tank);
         game_state.stacks.insert(stack_id, stack_data);
 
-        // Target stack at (5, -3) with proper orbital velocity
-        let mut target_data = Stack::new(Vec2 { q: 5, r: -3 }, Vec2 { q: 1, r: -1 }, player_1);
+        // Target stack at a different orbital position (not needed for this test, but keeping for completeness)
         let target_engine = module_id_generator.next().unwrap();
+        let mut target_data = Stack::new(orbital_pos_2, Vec2 { q: 0, r: 1 }, player_1);
         target_data
             .modules
             .insert(target_engine, Module::new_engine());
@@ -3773,16 +3792,16 @@ mod tests {
                     delta_v: Vec2 { q: 1, r: 0 },
                     fuel_from: vec![(tank_module, 6)], // Correct fuel calculation
                 },
-                Order::OrbitAdjust {
+                Order::Burn {
                     stack: stack_id,
-                    target_position: Vec2 { q: 5, r: -3 },
-                    clockwise: true,
-                    fuel_from: vec![(tank_module, 6)], // Correct fuel calculation
+                    delta_v: Vec2 { q: 0, r: 1 },
+                    fuel_from: vec![(tank_module, 6)], // Another burn order for same stack
                 },
             ],
         )]);
 
         let (_, errors) = Order::validate(&game_state, &orders);
+        // Both burn orders should fail with MultipleMoves
         assert!(matches!(
             errors[&player_1][0].unwrap(),
             OrderError::MultipleMoves
@@ -3797,7 +3816,7 @@ mod tests {
             player_1,
             vec![Order::OrbitAdjust {
                 stack: stack_id,
-                target_position: Vec2 { q: 5, r: -3 },
+                target_position: orbital_pos_2,
                 clockwise: true,
                 fuel_from: vec![(tank_module, 6)],
             }],
@@ -3809,12 +3828,13 @@ mod tests {
             "Valid orbit adjustment should succeed"
         );
 
-        // Test invalid orbit adjustment - target too far
+        // Test invalid orbit adjustment - target too far (use a position not in orbit)
+        let far_position = earth_celestial.position + Vec2 { q: 10, r: 0 };
         let orders = HashMap::from([(
             player_1,
             vec![Order::OrbitAdjust {
                 stack: stack_id,
-                target_position: Vec2 { q: 10, r: -3 }, // Not an orbital position
+                target_position: far_position, // Not an orbital position
                 clockwise: true,
                 fuel_from: vec![(tank_module, 6)],
             }],
@@ -3831,7 +3851,7 @@ mod tests {
     fn test_orbit_adjust_application() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -3840,6 +3860,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Movement;
 
@@ -3852,9 +3873,14 @@ mod tests {
             *fuel = 100;
         }
 
-        // Place stack in orbit around Earth at (7, -3) with velocity (-1, 1)
-        // This is a valid clockwise orbital position
-        let mut stack_data = Stack::new(Vec2 { q: 7, r: -3 }, Vec2 { q: -1, r: 1 }, player_1);
+        // Get Earth's actual position and set up orbital parameters
+        let earth_celestial = game_state.celestials.get(&game_state.earth).unwrap();
+        let earth_orbital_params = earth_celestial.orbit_parameters(true);
+        let (orbital_pos_1, orbital_vel_1) = earth_orbital_params[0];
+        let (orbital_pos_2, orbital_vel_2) = earth_orbital_params[1];
+
+        // Place stack in orbit around Earth using actual orbital parameters
+        let mut stack_data = Stack::new(orbital_pos_1, orbital_vel_1, player_1);
         stack_data
             .modules
             .insert(engine_module, Module::new_engine());
@@ -3866,7 +3892,7 @@ mod tests {
             player_1,
             vec![Order::OrbitAdjust {
                 stack: stack_id,
-                target_position: Vec2 { q: 5, r: -3 }, // Another valid orbital position
+                target_position: orbital_pos_2, // Another valid orbital position
                 clockwise: true,
                 fuel_from: vec![(tank_module, 6)],
             }],
@@ -3888,26 +3914,27 @@ mod tests {
         // Check that the stack moved to the correct position with correct velocity
         let updated_stack = updated_stacks.get(&stack_id).expect("Stack should exist");
         assert_eq!(
-            updated_stack.position,
-            Vec2 { q: 5, r: -3 },
+            updated_stack.position, orbital_pos_2,
             "Stack should be at target position"
         );
-        // For clockwise orbit at (5, -3), velocity should be (1, -1)
         assert_eq!(
-            updated_stack.velocity,
-            Vec2 { q: 1, r: -1 },
+            updated_stack.velocity, orbital_vel_2,
             "Stack should have correct orbital velocity"
         );
 
-        // Test counterclockwise orbit
-        game_state.stacks.get_mut(&stack_id).unwrap().position = Vec2 { q: 7, r: -3 };
-        game_state.stacks.get_mut(&stack_id).unwrap().velocity = Vec2 { q: 0, r: -1 };
+        // Test counterclockwise orbit - get counterclockwise parameters
+        let earth_ccw_params = earth_celestial.orbit_parameters(false);
+        let (ccw_pos_1, ccw_vel_1) = earth_ccw_params[0];
+        let (ccw_pos_2, ccw_vel_2) = earth_ccw_params[1];
+
+        game_state.stacks.get_mut(&stack_id).unwrap().position = ccw_pos_1;
+        game_state.stacks.get_mut(&stack_id).unwrap().velocity = ccw_vel_1;
 
         let orders = HashMap::from([(
             player_1,
             vec![Order::OrbitAdjust {
                 stack: stack_id,
-                target_position: Vec2 { q: 5, r: -3 },
+                target_position: ccw_pos_2,
                 clockwise: false, // counterclockwise
                 fuel_from: vec![(tank_module, 6)],
             }],
@@ -3923,14 +3950,11 @@ mod tests {
             validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
         let updated_stack = updated_stacks.get(&stack_id).expect("Stack should exist");
         assert_eq!(
-            updated_stack.position,
-            Vec2 { q: 5, r: -3 },
+            updated_stack.position, ccw_pos_2,
             "Stack should be at target position"
         );
-        // For counterclockwise orbit at (5, -3), velocity should be (0, 1)
         assert_eq!(
-            updated_stack.velocity,
-            Vec2 { q: 0, r: 1 },
+            updated_stack.velocity, ccw_vel_2,
             "Stack should have correct counterclockwise orbital velocity"
         );
     }
@@ -3939,7 +3963,7 @@ mod tests {
     fn test_board_orders() {
         // setup game state
         let mut player_id_generator = ShortIdGen::<PlayerId>::new();
-        let mut celestial_id_generator = ShortIdGen::<CelestialId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
         let mut stack_id_generator = LongIdGen::<StackId>::new();
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
@@ -3952,6 +3976,7 @@ mod tests {
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
+            &mut rng(),
         );
         game_state.phase = Phase::Logistics;
 

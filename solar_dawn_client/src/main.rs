@@ -24,10 +24,6 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
-mod event_listener;
-mod scenes;
-mod websocket;
-
 use dioxus::{logger::tracing::Level, prelude::*};
 use solar_dawn_common::{GameState, PlayerId};
 
@@ -35,6 +31,10 @@ use crate::{
     scenes::{Error, Join, WaitingForPlayers, game::InGame},
     websocket::WebsocketClient,
 };
+
+mod event_listener;
+mod scenes;
+mod websocket;
 
 fn main() {
     if cfg!(debug_assertions) {

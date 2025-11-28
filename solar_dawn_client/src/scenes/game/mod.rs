@@ -17,9 +17,6 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-mod map;
-mod sidebar;
-
 use std::collections::HashMap;
 
 use base64::{Engine, prelude::BASE64_STANDARD};
@@ -35,6 +32,9 @@ use crate::{
     scenes::game::map::Map,
     websocket::{Message, WebsocketClient},
 };
+
+mod map;
+mod sidebar;
 
 #[derive(Serialize, Deserialize)]
 enum DisplayHostility {
@@ -94,6 +94,7 @@ pub fn InGame(
     let client_view_settings = use_signal(ClientViewSettings::default);
 
     let orders = use_signal(Vec::<Order>::new);
+    let auto_orders = use_signal(Vec::<(Order, bool)>::new);
 
     // Game settings (unit hostility display, etc)
     let client_game_settings: Signal<ClientGameSettings> = use_signal(|| {
@@ -166,6 +167,7 @@ pub fn InGame(
                     Map {
                         game_state,
                         orders,
+                        auto_orders,
                         client_game_settings,
                         client_view_settings,
                         change_state,

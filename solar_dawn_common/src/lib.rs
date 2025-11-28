@@ -33,17 +33,17 @@ use std::{
     sync::Arc,
 };
 
-use celestial::{Celestial, CelestialId};
 #[cfg(feature = "server")]
-use rand::Rng;
+use rand::{Rng, RngCore};
 use serde::{Deserialize, Serialize};
-use stack::{ModuleId, Stack, StackId};
 #[cfg(feature = "server")]
 use uuid::Uuid;
 
+use crate::celestial::{Celestial, CelestialId};
 use crate::order::{Order, OrderError};
 #[cfg(feature = "server")]
-use crate::stack::{Health, Module, ModuleDetails};
+use crate::stack::{Health, Module, ModuleDetails, ModuleId};
+use crate::stack::{Stack, StackId};
 
 pub mod celestial;
 pub mod order;
@@ -83,11 +83,13 @@ impl PartialEq for GameState {
 impl Eq for GameState {}
 
 /// Constructor function for some starting game state
+#[cfg(feature = "server")]
 pub type GameStateInitializer = fn(
     players: HashMap<PlayerId, String>,
     celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
     stack_id_generator: &mut dyn Iterator<Item = StackId>,
     module_id_generator: &mut dyn Iterator<Item = ModuleId>,
+    rng: &mut dyn RngCore,
 ) -> GameState;
 
 /// A game state delta
@@ -119,17 +121,18 @@ impl GameState {
                 |players: HashMap<PlayerId, String>,
                  celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
                  stack_id_generator: &mut dyn Iterator<Item = StackId>,
-                 module_id_generator: &mut dyn Iterator<Item = ModuleId>| {
+                 module_id_generator: &mut dyn Iterator<Item = ModuleId>,
+                 rng: &mut dyn RngCore| {
                     {
                         let (celestials, earth) =
-                            Celestial::solar_system_balanced_positions(celestial_id_generator);
+                            Celestial::solar_system_balanced_positions(celestial_id_generator, rng);
                         let earth_ref = celestials.get(&earth).expect("earth id should be valid");
                         let mut stacks = HashMap::new();
                         for ((owner, _), (position, velocity)) in
                             players.iter().zip(earth_ref.orbit_parameters(true))
                         {
                             stacks.insert(
-                                stack_id_generator.next().expect("should be infinite"),
+                                stack_id_generator.next().unwrap(),
                                 Stack::starter_stack(
                                     *owner,
                                     position,
@@ -156,7 +159,8 @@ impl GameState {
                 |players: HashMap<PlayerId, String>,
                  celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
                  _stack_id_generator: &mut dyn Iterator<Item = StackId>,
-                 _module_id_generator: &mut dyn Iterator<Item = ModuleId>| {
+                 _module_id_generator: &mut dyn Iterator<Item = ModuleId>,
+                 _rng: &mut dyn RngCore| {
                     {
                         let (celestials, earth) =
                             Celestial::solar_system_for_testing(celestial_id_generator);
@@ -492,6 +496,7 @@ impl From<PlayerId> for u8 {
 ///
 /// +q = down-right, +r = down
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "server", derive(Hash))]
 pub struct Vec2<T> {
     /// +q = down-right
     pub q: T,
@@ -907,7 +912,8 @@ mod tests {
             let CartesianVec2 { x, y } = point.cartesian();
             let r = (x * x + y * y).sqrt();
             let theta = (-y).atan2(x); // Note: y is negated in from_polar
-            let converted_back = Vec2::from_polar(r, theta);
+            // Note: from_polar multiplies radius by 2, so we divide by 2 for round-trip
+            let converted_back = Vec2::from_polar(r / 2.0, theta);
             assert_eq!(
                 converted_back, point,
                 "Round-trip conversion failed for {:?}",
@@ -1027,7 +1033,7 @@ mod tests {
             turn: 1,
             players: Arc::new(HashMap::new()),
             celestials: Arc::new(HashMap::new()),
-            earth: CelestialId::from(0u8),
+            earth: CelestialId::from(0u32),
             stacks: HashMap::new(),
             game_id: Uuid::nil().simple().to_string(),
         };
@@ -1071,7 +1077,7 @@ mod tests {
 
         // Create a celestial body with gravity
         let mut celestials = HashMap::new();
-        let celestial_id = CelestialId::from(1u8);
+        let celestial_id = CelestialId::from(1u32);
         celestials.insert(
             celestial_id,
             celestial::Celestial {
@@ -1081,6 +1087,7 @@ mod tests {
                 surface_gravity: 9.8,
                 resources: celestial::Resources::MiningBoth,
                 radius: 0.5,
+                colour: "#000000".to_owned(),
             },
         );
 
@@ -1108,7 +1115,7 @@ mod tests {
             turn: 1,
             players: Arc::new(HashMap::new()),
             celestials: Arc::new(celestials),
-            earth: CelestialId::from(0u8),
+            earth: CelestialId::from(0u32),
             stacks,
             game_id: Uuid::nil().simple().to_string(),
         };
@@ -1138,7 +1145,7 @@ mod tests {
 
         // Create a celestial body with gravity
         let mut celestials = HashMap::new();
-        let celestial_id = CelestialId::from(1u8);
+        let celestial_id = CelestialId::from(1u32);
         celestials.insert(
             celestial_id,
             celestial::Celestial {
@@ -1148,6 +1155,7 @@ mod tests {
                 surface_gravity: 9.8,
                 resources: celestial::Resources::MiningBoth,
                 radius: 0.5,
+                colour: "#000000".to_owned(),
             },
         );
 
@@ -1175,7 +1183,7 @@ mod tests {
             turn: 1,
             players: Arc::new(HashMap::new()),
             celestials: Arc::new(celestials),
-            earth: CelestialId::from(0u8),
+            earth: CelestialId::from(0u32),
             stacks,
             game_id: Uuid::nil().simple().to_string(),
         };

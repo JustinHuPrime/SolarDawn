@@ -20,8 +20,14 @@
 //! Celestial bodies
 
 #[cfg(feature = "server")]
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
+#[cfg(feature = "server")]
+use rand::{
+    Rng, RngCore,
+    distr::{Distribution, weighted::WeightedIndex},
+    seq::SliceRandom,
+};
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "server")]
@@ -57,17 +63,17 @@ pub struct Celestial {
 /// Key to refer to celestial bodies
 #[repr(transparent)]
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct CelestialId(u8);
+pub struct CelestialId(u32);
 
 #[cfg(feature = "server")]
-impl From<u8> for CelestialId {
-    fn from(value: u8) -> Self {
+impl From<u32> for CelestialId {
+    fn from(value: u32) -> Self {
         CelestialId(value)
     }
 }
 
 #[cfg(feature = "server")]
-impl From<CelestialId> for u8 {
+impl From<CelestialId> for u32 {
     fn from(value: CelestialId) -> Self {
         value.0
     }
@@ -94,10 +100,11 @@ impl Celestial {
     /// Create a map of the solar system but with curated phase angles for the planets
     pub fn solar_system_balanced_positions(
         celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
+        rng: &mut dyn RngCore,
     ) -> (HashMap<CelestialId, Celestial>, CelestialId) {
         let mut map = HashMap::new();
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::zero(),
                 name: "The Sun".to_owned(),
@@ -109,7 +116,7 @@ impl Celestial {
             },
         );
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::from_polar(3.5, 170.0 * std::f32::consts::PI / 180.0),
                 name: "Mercury".to_owned(),
@@ -121,7 +128,7 @@ impl Celestial {
             },
         );
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::from_polar(7.2, 70.0 * std::f32::consts::PI / 180.0),
                 name: "Venus".to_owned(),
@@ -132,7 +139,7 @@ impl Celestial {
                 colour: "#ffee99".to_owned(),
             },
         );
-        let earth_id = celestial_id_generator.next().expect("should be infinite");
+        let earth_id = celestial_id_generator.next().unwrap();
         map.insert(
             earth_id,
             Celestial {
@@ -145,9 +152,23 @@ impl Celestial {
                 colour: "#0000ff".to_owned(),
             },
         );
-        // TODO: The Moon
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(10.0, 0.0 * std::f32::consts::PI / 180.0)
+                    .up()
+                    .up_right()
+                    .up_right(),
+                name: "The Moon".to_owned(),
+                orbit_gravity: true,
+                surface_gravity: 1.6,
+                resources: Resources::MiningBoth,
+                radius: 0.15,
+                colour: "#888888".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::from_polar(14.8, 280.0 * std::f32::consts::PI / 180.0),
                 name: "Mars".to_owned(),
@@ -158,9 +179,38 @@ impl Celestial {
                 colour: "#cc5151".to_owned(),
             },
         );
-        // TODO: Phobos, Deimos
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(14.8, 280.0 * std::f32::consts::PI / 180.0)
+                    .up_left()
+                    .up_left(),
+                name: "Phobos".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.0,
+                resources: Resources::MiningOre,
+                radius: 0.10,
+                colour: "#888888".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(14.8, 280.0 * std::f32::consts::PI / 180.0)
+                    .down()
+                    .down()
+                    .down()
+                    .down(),
+                name: "Deimos".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.0,
+                resources: Resources::MiningOre,
+                radius: 0.10,
+                colour: "#666666".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::from_polar(54.3, 45.0 * std::f32::consts::PI / 180.0),
                 name: "Jupiter".to_owned(),
@@ -171,9 +221,74 @@ impl Celestial {
                 colour: "#ffee99".to_owned(),
             },
         );
-        // TODO: Io, Europa, Ganymede, Callisto
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(54.3, 45.0 * std::f32::consts::PI / 180.0)
+                    .down_left()
+                    .down_left()
+                    .down_left(),
+                name: "Io".to_owned(),
+                orbit_gravity: true,
+                surface_gravity: 1.8,
+                resources: Resources::MiningOre,
+                radius: 0.15,
+                colour: "#ffff00".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(54.3, 45.0 * std::f32::consts::PI / 180.0)
+                    .up_right()
+                    .up_right()
+                    .up_right()
+                    .up_right(),
+                name: "Europa".to_owned(),
+                orbit_gravity: true,
+                surface_gravity: 1.3,
+                resources: Resources::MiningIce,
+                radius: 0.15,
+                colour: "#88bbdd".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(54.3, 45.0 * std::f32::consts::PI / 180.0)
+                    .up()
+                    .up()
+                    .up()
+                    .up()
+                    .up(),
+                name: "Ganymede".to_owned(),
+                orbit_gravity: true,
+                surface_gravity: 1.4,
+                resources: Resources::MiningBoth,
+                radius: 0.15,
+                colour: "#888888".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(54.3, 45.0 * std::f32::consts::PI / 180.0)
+                    .down()
+                    .down()
+                    .down()
+                    .down()
+                    .down()
+                    .down(),
+                name: "Callisto".to_owned(),
+                orbit_gravity: true,
+                surface_gravity: 1.2,
+                resources: Resources::MiningBoth,
+                radius: 0.15,
+                colour: "#666666".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::from_polar(100.4, 125.0 * std::f32::consts::PI / 180.0),
                 name: "Saturn".to_owned(),
@@ -184,9 +299,91 @@ impl Celestial {
                 colour: "#ddcc77".to_owned(),
             },
         );
-        // TODO: Titan, Rhea, Iapetus, Dione, Tethys
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(100.4, 125.0 * std::f32::consts::PI / 180.0)
+                    .down_left()
+                    .down_left(),
+                name: "Tethys".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.1,
+                resources: Resources::MiningIce,
+                radius: 0.1,
+                colour: "#888888".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(100.4, 125.0 * std::f32::consts::PI / 180.0)
+                    .down_right()
+                    .down()
+                    .down(),
+                name: "Dione".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.2,
+                resources: Resources::MiningBoth,
+                radius: 0.1,
+                colour: "#888888".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(100.4, 125.0 * std::f32::consts::PI / 180.0)
+                    .up()
+                    .up()
+                    .up()
+                    .up(),
+                name: "Rhea".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.3,
+                resources: Resources::MiningBoth,
+                radius: 0.1,
+                colour: "#888888".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(100.4, 125.0 * std::f32::consts::PI / 180.0)
+                    .up()
+                    .up()
+                    .up()
+                    .up()
+                    .up_right()
+                    .up_right(),
+                name: "Titan".to_owned(),
+                orbit_gravity: true,
+                surface_gravity: 1.4,
+                resources: Resources::MiningBoth,
+                radius: 0.15,
+                colour: "#ddcc77".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(100.4, 125.0 * std::f32::consts::PI / 180.0)
+                    .up_left()
+                    .up_left()
+                    .up_left()
+                    .up_left()
+                    .up_left()
+                    .up_left()
+                    .up_left()
+                    .up_left(),
+                name: "Iapetus".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.2,
+                resources: Resources::MiningIce,
+                radius: 0.1,
+                colour: "#444444".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::from_polar(194.7, 305.0 * std::f32::consts::PI / 180.0),
                 name: "Uranus".to_owned(),
@@ -197,9 +394,84 @@ impl Celestial {
                 colour: "#00cccc".to_owned(),
             },
         );
-        // TODO: Titania, Oberon, Umbriel, Ariel
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(194.7, 305.0 * std::f32::consts::PI / 180.0)
+                    .up()
+                    .up(),
+                name: "Miranda".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.1,
+                resources: Resources::MiningBoth,
+                radius: 0.1,
+                colour: "#aaaaaa".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(194.7, 305.0 * std::f32::consts::PI / 180.0)
+                    .down()
+                    .down(),
+                name: "Ariel".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.2,
+                resources: Resources::MiningBoth,
+                radius: 0.1,
+                colour: "#666666".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(194.7, 305.0 * std::f32::consts::PI / 180.0)
+                    .down_right()
+                    .down_right()
+                    .down_right(),
+                name: "Umbriel".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.2,
+                resources: Resources::MiningBoth,
+                radius: 0.1,
+                colour: "#666666".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(194.7, 305.0 * std::f32::consts::PI / 180.0)
+                    .up_left()
+                    .up_left()
+                    .up_left()
+                    .up_left(),
+                name: "Titania".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.4,
+                resources: Resources::MiningBoth,
+                radius: 0.1,
+                colour: "#888888".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(194.7, 305.0 * std::f32::consts::PI / 180.0)
+                    .up_right()
+                    .up_right()
+                    .up_right()
+                    .up_right()
+                    .up_right(),
+                name: "Oberon".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.4,
+                resources: Resources::MiningBoth,
+                radius: 0.1,
+                colour: "#888888".to_owned(),
+            },
+        );
+        map.insert(
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::from_polar(299.7, 235.0 * std::f32::consts::PI / 180.0),
                 name: "Neptune".to_owned(),
@@ -210,9 +482,135 @@ impl Celestial {
                 colour: "#0055cc".to_owned(),
             },
         );
-        // TODO: Triton
-        // TODO: asteroid belt
-        // TODO: kuiper belt
+        map.insert(
+            celestial_id_generator.next().unwrap(),
+            Celestial {
+                position: Vec2::from_polar(299.7, 235.0 * std::f32::consts::PI / 180.0)
+                    .up_right()
+                    .up_right()
+                    .up_right()
+                    .up_right()
+                    .up_right(),
+                name: "Triton".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.8,
+                resources: Resources::MiningBoth,
+                radius: 0.1,
+                colour: "#888888".to_owned(),
+            },
+        );
+
+        // minor bodies
+        let mut minor_body_numbers = (1_u32..=875150).collect::<Vec<_>>();
+        minor_body_numbers.shuffle(rng);
+
+        // generate asteroid belt
+        let asteroid_belt_start = 21;
+        let asteroid_belt_end = 32;
+        let asteroid_belt_resources = [
+            (0.8, Resources::MiningOre),
+            (0.1, Resources::MiningBoth),
+            (0.1, Resources::MiningIce),
+        ];
+        let asteroid_belt_distribution =
+            WeightedIndex::new(asteroid_belt_resources.iter().map(|&(weight, _)| weight)).unwrap();
+        let mut considered_positions = HashSet::new();
+        for r in asteroid_belt_start..=asteroid_belt_end {
+            for theta in 0..(asteroid_belt_end as f32 * 2.0 * std::f32::consts::PI).ceil() as i32 {
+                let candidate_position =
+                    Vec2::from_polar(r as f32, theta as f32 / 201.0 * 2.0 * std::f32::consts::PI);
+                if !considered_positions.insert(candidate_position) {
+                    continue;
+                }
+
+                // Calculate probability using semicircle distribution
+                // Normalize r to range [0, 1] where 0.5 is the middle of the belt
+                let belt_width = asteroid_belt_end - asteroid_belt_start + 1;
+                let normalized_r = (r - asteroid_belt_start) as f32 / belt_width as f32;
+                // Semicircle formula: y = sqrt(1 - (x - 1)^2) where x is in [0, 1]
+                // This gives maximum value of 1 at x = 0.5 and 0 at x = 0 and x = 1
+                let semicircle_value = (1.0 - (normalized_r - 1.0).powi(2)).max(0.0).sqrt();
+                // Scale to maximum probability of 0.5
+                let probability = semicircle_value * 0.5;
+
+                if !rng.random_bool(probability as f64) {
+                    continue;
+                }
+
+                let resources = asteroid_belt_resources[asteroid_belt_distribution.sample(rng)].1;
+                map.insert(
+                    celestial_id_generator.next().unwrap(),
+                    Celestial {
+                        position: candidate_position,
+                        name: format!("MBO {}", minor_body_numbers.pop().unwrap()),
+                        orbit_gravity: false,
+                        surface_gravity: 0.0,
+                        resources,
+                        radius: 0.1,
+                        colour: match resources {
+                            Resources::MiningBoth => "#888888".to_owned(),
+                            Resources::MiningIce => "#aaaaaa".to_owned(),
+                            Resources::MiningOre => "#666666".to_owned(),
+                            _ => unreachable!(),
+                        },
+                    },
+                );
+            }
+        }
+
+        // generate kuiper belt
+        let kuiper_belt_start = 395;
+        let kuiper_belt_end = 487;
+        let kuiper_belt_resources = [
+            (0.9, Resources::MiningIce),
+            (0.05, Resources::MiningBoth),
+            (0.05, Resources::MiningOre),
+        ];
+        let kuiper_belt_distribution =
+            WeightedIndex::new(kuiper_belt_resources.iter().map(|&(weight, _)| weight)).unwrap();
+        let mut considered_positions = HashSet::new();
+        for r in kuiper_belt_start..=kuiper_belt_end {
+            for theta in 0..(kuiper_belt_end as f32 * 2.0 * std::f32::consts::PI).ceil() as i32 {
+                let candidate_position =
+                    Vec2::from_polar(r as f32, theta as f32 / 3047.0 * 2.0 * std::f32::consts::PI);
+                if !considered_positions.insert(candidate_position) {
+                    continue;
+                }
+
+                // Calculate probability using semicircle distribution
+                // Normalize r to range [0, 1] where 0.5 is the middle of the belt
+                let belt_width = kuiper_belt_end - kuiper_belt_start + 1;
+                let normalized_r = (r - kuiper_belt_start) as f32 / belt_width as f32;
+                // Semicircle formula: y = sqrt(1 - (x - 1)^2) where x is in [0, 1]
+                // This gives maximum value of 1 at x = 0.5 and 0 at x = 0 and x = 1
+                let semicircle_value = (1.0 - (normalized_r - 1.0).powi(2)).max(0.0).sqrt();
+                // Scale to maximum probability of 0.5
+                let probability = semicircle_value * 0.5;
+
+                if !rng.random_bool(probability as f64) {
+                    continue;
+                }
+
+                let resources = kuiper_belt_resources[kuiper_belt_distribution.sample(rng)].1;
+                map.insert(
+                    celestial_id_generator.next().unwrap(),
+                    Celestial {
+                        position: candidate_position,
+                        name: format!("KBO {}", minor_body_numbers.pop().unwrap()),
+                        orbit_gravity: false,
+                        surface_gravity: 0.0,
+                        resources,
+                        radius: 0.1,
+                        colour: match resources {
+                            Resources::MiningBoth => "#888888".to_owned(),
+                            Resources::MiningIce => "#aaaaaa".to_owned(),
+                            Resources::MiningOre => "#666666".to_owned(),
+                            _ => unreachable!(),
+                        },
+                    },
+                );
+            }
+        }
         (map, earth_id)
     }
 
@@ -223,7 +621,7 @@ impl Celestial {
     ) -> (HashMap<CelestialId, Celestial>, CelestialId) {
         let mut map = HashMap::new();
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::zero(),
                 name: "The Sun".to_owned(),
@@ -235,7 +633,7 @@ impl Celestial {
             },
         );
 
-        let earth_id = celestial_id_generator.next().expect("should be infinite");
+        let earth_id = celestial_id_generator.next().unwrap();
         map.insert(
             earth_id,
             Celestial {
@@ -250,7 +648,7 @@ impl Celestial {
         );
 
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::from_polar(10.0, 0.0).up_right().up_right(),
                 name: "Moon".to_owned(),
@@ -263,7 +661,7 @@ impl Celestial {
         );
 
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::from_polar(10.0, 0.0).down_left().down_left(),
                 name: "1 Ceres".to_owned(),
@@ -276,7 +674,7 @@ impl Celestial {
         );
 
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::from_polar(10.0, 0.0).down_left().down_left().down(),
                 name: "2 Vesta".to_owned(),
@@ -288,7 +686,7 @@ impl Celestial {
             },
         );
         map.insert(
-            celestial_id_generator.next().expect("should be infinite"),
+            celestial_id_generator.next().unwrap(),
             Celestial {
                 position: Vec2::from_polar(15.0, 0.0),
                 name: "Jupiter".to_owned(),
@@ -463,15 +861,17 @@ impl Celestial {
 
 #[cfg(test)]
 mod tests {
-    use std::marker::PhantomData;
-
     use super::*;
 
-    struct IdGen<T: From<u8>> {
-        next: u8,
+    use std::marker::PhantomData;
+
+    use rand::rng;
+
+    struct IdGen<T: From<u32>> {
+        next: u32,
         _t: PhantomData<T>,
     }
-    impl<T: From<u8>> IdGen<T> {
+    impl<T: From<u32>> IdGen<T> {
         pub fn new() -> Self {
             Self {
                 next: 0,
@@ -479,7 +879,7 @@ mod tests {
             }
         }
     }
-    impl<T: From<u8>> Iterator for IdGen<T> {
+    impl<T: From<u32>> Iterator for IdGen<T> {
         type Item = T;
 
         fn next(&mut self) -> Option<Self::Item> {
@@ -643,10 +1043,10 @@ mod tests {
 
     #[test]
     fn test_celestial_id_conversions() {
-        let id_val = 42u8;
+        let id_val = 42u32;
         let celestial_id = CelestialId::from(id_val);
-        let back_to_u8: u8 = celestial_id.into();
-        assert_eq!(id_val, back_to_u8);
+        let back_to_u32: u32 = celestial_id.into();
+        assert_eq!(id_val, back_to_u32);
     }
 
     #[cfg(feature = "server")]
@@ -766,7 +1166,8 @@ mod tests {
     #[test]
     fn test_balanced_solar_system_properties() {
         let mut id_gen = IdGen::<CelestialId>::new();
-        let (celestials, earth_id) = Celestial::solar_system_balanced_positions(&mut id_gen);
+        let (celestials, earth_id) =
+            Celestial::solar_system_balanced_positions(&mut id_gen, &mut rng());
 
         // Should have at least 8 celestials (Sun through Neptune)
         assert!(celestials.len() >= 8);

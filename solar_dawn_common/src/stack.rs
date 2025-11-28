@@ -65,49 +65,25 @@ impl Stack {
             name,
             modules: HashMap::from([
                 (
-                    module_id_generator.next().expect("should be infinite"),
+                    module_id_generator.next().unwrap(),
                     Module::new_habitat(owner),
                 ),
                 (
-                    module_id_generator.next().expect("should be infinite"),
+                    module_id_generator.next().unwrap(),
                     Module::new_habitat(owner),
                 ),
+                (module_id_generator.next().unwrap(), Module::new_factory()),
+                (module_id_generator.next().unwrap(), Module::new_refinery()),
+                (module_id_generator.next().unwrap(), Module::new_miner()),
                 (
-                    module_id_generator.next().expect("should be infinite"),
-                    Module::new_factory(),
-                ),
-                (
-                    module_id_generator.next().expect("should be infinite"),
-                    Module::new_refinery(),
-                ),
-                (
-                    module_id_generator.next().expect("should be infinite"),
-                    Module::new_miner(),
-                ),
-                (
-                    module_id_generator.next().expect("should be infinite"),
+                    module_id_generator.next().unwrap(),
                     Module::new_cargo_hold(),
                 ),
-                (
-                    module_id_generator.next().expect("should be infinite"),
-                    Module::new_fuel_tank(),
-                ),
-                (
-                    module_id_generator.next().expect("should be infinite"),
-                    Module::new_engine(),
-                ),
-                (
-                    module_id_generator.next().expect("should be infinite"),
-                    Module::new_engine(),
-                ),
-                (
-                    module_id_generator.next().expect("should be infinite"),
-                    Module::new_engine(),
-                ),
-                (
-                    module_id_generator.next().expect("should be infinite"),
-                    Module::new_engine(),
-                ),
+                (module_id_generator.next().unwrap(), Module::new_fuel_tank()),
+                (module_id_generator.next().unwrap(), Module::new_engine()),
+                (module_id_generator.next().unwrap(), Module::new_engine()),
+                (module_id_generator.next().unwrap(), Module::new_engine()),
+                (module_id_generator.next().unwrap(), Module::new_engine()),
             ]),
         }
     }
@@ -679,6 +655,7 @@ mod tests {
             surface_gravity: 9.8,
             resources: Resources::None,
             radius: 0.5,
+            colour: "#000000".to_owned(),
         };
 
         // For a stack to be in orbit, it needs:
@@ -738,6 +715,7 @@ mod tests {
             surface_gravity: 0.0,
             resources: Resources::MiningOre,
             radius: 0.1,
+            colour: "#000000".to_owned(),
         };
 
         assert!(!orbiting_stack.orbiting(&no_gravity_celestial));
@@ -752,6 +730,7 @@ mod tests {
             surface_gravity: 9.8,
             resources: Resources::MiningBoth,
             radius: 0.3,
+            colour: "#000000".to_owned(),
         };
 
         // Stack landed (same position, zero velocity)
@@ -798,6 +777,7 @@ mod tests {
             surface_gravity: 0.0,
             resources: Resources::MiningOre,
             radius: 0.1,
+            colour: "#000000".to_owned(),
         };
 
         assert!(landed_stack.landed(&no_gravity_celestial));

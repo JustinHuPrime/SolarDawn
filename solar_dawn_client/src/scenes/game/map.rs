@@ -22,7 +22,7 @@ use dioxus::{
     html::{geometry::WheelDelta, input_data::MouseButton},
     prelude::*,
 };
-use solar_dawn_common::{CartesianVec2, GameState, Vec2, order::Order};
+use solar_dawn_common::{CartesianVec2, GameState, Vec2, celestial::Celestial, order::Order};
 use wasm_bindgen::JsCast;
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, window};
 
@@ -67,6 +67,7 @@ impl ClientViewSettings {
 pub fn Map(
     game_state: ReadSignal<GameState>,
     orders: ReadSignal<Vec<Order>>,
+    auto_orders: ReadSignal<Vec<(Order, bool)>>,
     client_game_settings: ReadSignal<ClientGameSettings>,
     client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<ClientState>,
@@ -212,6 +213,32 @@ pub fn Map(
                     WheelDelta::Pages(delta) => delta.y > 0.0,
                 };
                 let mut client_view_settings = client_view_settings.write();
+                let mouse_x = event.coordinates().element().x as f32;
+                let mouse_y = event.coordinates().element().y as f32;
+
+                // Get canvas dimensions
+                let canvas = window()
+                    .unwrap()
+                    .document()
+                    .unwrap()
+                    .get_element_by_id("canvas")
+                    .unwrap()
+                    .unchecked_into::<HtmlCanvasElement>();
+                let canvas_width = canvas.client_width() as f32;
+                let canvas_height = canvas.client_height() as f32;
+
+                // Calculate world position under mouse before zoom
+                let old_zoom = client_view_settings.zoom();
+                let world_x_before = (mouse_x - canvas_width / 2.0) / old_zoom
+
+                    // Update zoom level
+
+                    // Calculate world position under mouse after zoom
+                    - client_view_settings.x_offset;
+
+                // Adjust view offset to keep the world position under the mouse the same
+                let world_y_before = (mouse_y - canvas_height / 2.0) / old_zoom
+                    - client_view_settings.y_offset;
                 if is_down {
                     client_view_settings.zoom_level = i32::max(
                         client_view_settings.zoom_level - 1,
@@ -223,6 +250,13 @@ pub fn Map(
                         MAX_ZOOM,
                     );
                 }
+                let new_zoom = client_view_settings.zoom();
+                let world_x_after = (mouse_x - canvas_width / 2.0) / new_zoom
+                    - client_view_settings.x_offset;
+                let world_y_after = (mouse_y - canvas_height / 2.0) / new_zoom
+                    - client_view_settings.y_offset;
+                client_view_settings.x_offset += world_x_after - world_x_before;
+                client_view_settings.y_offset += world_y_after - world_y_before;
             },
         }
     }
@@ -254,10 +288,7 @@ fn draw_hex(ctx: &CanvasRenderingContext2d, hex: Vec2<i32>) {
     ctx.stroke();
 }
 
-fn draw_celestial(
-    ctx: &CanvasRenderingContext2d,
-    celestial: &solar_dawn_common::celestial::Celestial,
-) {
+fn draw_celestial(ctx: &CanvasRenderingContext2d, celestial: &Celestial) {
     // Convert hex coordinates to cartesian and scale
     let center = celestial.position.cartesian() * HEX_SCALE;
 

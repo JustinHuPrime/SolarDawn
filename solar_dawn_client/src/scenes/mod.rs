@@ -17,8 +17,6 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-pub mod game;
-
 use dioxus::prelude::*;
 use futures::StreamExt;
 use serde_cbor::from_slice;
@@ -28,6 +26,8 @@ use crate::{
     ClientState,
     websocket::{Message, WebsocketClient, WebsocketClientBuilder, WebsocketError},
 };
+
+pub mod game;
 
 #[component]
 pub fn Error(message: String) -> Element {

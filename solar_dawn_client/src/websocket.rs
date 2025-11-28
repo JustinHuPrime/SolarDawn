@@ -25,6 +25,7 @@ use std::{
     task::{Context, Poll, Waker},
 };
 
+use dioxus::prelude::*;
 use futures::Stream;
 use thiserror::Error;
 use wasm_bindgen::JsCast;
@@ -32,8 +33,6 @@ use web_sys::{
     CloseEvent, MessageEvent, WebSocket,
     js_sys::{ArrayBuffer, JsString, Uint8Array},
 };
-
-use dioxus::prelude::*;
 
 use crate::event_listener::EventListener;
 
