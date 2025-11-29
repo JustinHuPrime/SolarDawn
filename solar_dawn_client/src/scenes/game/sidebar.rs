@@ -21,15 +21,15 @@ use dioxus::prelude::*;
 use serde_cbor::to_vec;
 use solar_dawn_common::{
     GameState, PlayerId,
-    celestial::CelestialId,
+    celestial::{CelestialId, Resources},
     order::{Order, OrderError},
     stack::StackId,
 };
 
 use crate::{
     scenes::game::{
-        ClientGameSettings, OutlinerState, SidebarState, SidebarStateStoreExt,
-        SidebarStateStoreTransposed,
+        ClientGameSettings, ClientViewSettings, OutlinerState, SidebarState, SidebarStateStoreExt,
+        SidebarStateStoreTransposed, map::HEX_SCALE,
     },
     websocket::{Message, WebsocketClient},
 };
@@ -45,6 +45,7 @@ pub fn Sidebar(
     order_errors: ReadSignal<Vec<Option<OrderError>>>,
     submitting_orders: Signal<bool>,
     client_game_settings: WriteSignal<ClientGameSettings>,
+    client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
     websocket: WebsocketClient,
 ) -> Element {
@@ -71,6 +72,7 @@ pub fn Sidebar(
                 CelestialDetails {
                     id: *celestial_id.read(),
                     game_state,
+                    client_view_settings,
                     change_state,
                 }
             }
@@ -83,6 +85,7 @@ pub fn Sidebar(
                     game_state,
                     orders,
                     auto_orders,
+                    client_view_settings,
                     change_state,
                 }
             }
@@ -93,6 +96,7 @@ pub fn Sidebar(
                     celestial_id: *celestial_id.read(),
                     stack_ids: stack_ids.read().clone(),
                     game_state,
+                    client_view_settings,
                     change_state,
                 }
             }
@@ -194,15 +198,72 @@ pub fn OutlinerOverview(
     game_state: ReadSignal<GameState>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
+    let game_state = &*game_state.read();
     rsx! {
-        h2 { "Celestial Bodies" }
-        // for &celestial_id in game_state.read().celestials.majors() {
-        //     {
-        //         let celestial = game_state.read().celestials.get(celestial_id).unwrap();
-        //     }
-        // }
-        h2 { "Your Ships" }
-        h2 { "Other Ships" }
+        h2 { "Major Bodies" }
+        p {
+            for & celestial_id in game_state.celestials.majors().iter() {
+                {
+                    let celestial = game_state.celestials.get(celestial_id).unwrap();
+                    rsx! {
+                        Fragment { key: "{celestial_id:?}",
+                            a {
+                                href: "#",
+                                role: "button",
+                                onclick: move |event| {
+                                    event.prevent_default();
+                                    change_state(SidebarState::CelestialDetails(celestial_id));
+                                },
+                                "{celestial.name}"
+                            }
+                            br {}
+                        }
+                    }
+                }
+            }
+        }
+        h2 { "Your Stacks" }
+        p {
+            for (& stack_id , stack) in game_state.stacks.iter().filter(|(_, stack)| stack.owner == me) {
+                {
+                    rsx! {
+                        Fragment { key: "{stack_id:?}",
+                            a {
+                                href: "#",
+                                role: "button",
+                                onclick: move |event| {
+                                    event.prevent_default();
+                                    change_state(SidebarState::StackDetails(stack_id));
+                                },
+                                "{stack.name}"
+                            }
+                            br {}
+                        }
+                    }
+                }
+            }
+        }
+        h2 { "Other Stacks" }
+        p {
+            for (& stack_id , stack) in game_state.stacks.iter().filter(|(_, stack)| stack.owner != me) {
+                {
+                    rsx! {
+                        Fragment { key: "{stack_id:?}",
+                            a {
+                                href: "#",
+                                role: "button",
+                                onclick: move |event| {
+                                    event.prevent_default();
+                                    change_state(SidebarState::StackDetails(stack_id));
+                                },
+                                "{stack.name}"
+                            }
+                            br {}
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -214,6 +275,7 @@ pub fn OutlinerOrders(
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
+    // TODO
     rsx! {
         h2 { "Orders" }
         h2 { "Automatic Orders" }
@@ -226,6 +288,7 @@ pub fn OutlinerSettings(
     game_state: ReadSignal<GameState>,
     client_game_settings: WriteSignal<ClientGameSettings>,
 ) -> Element {
+    // TODO
     rsx! {
         h2 { "Display Settings" }
     }
@@ -235,9 +298,99 @@ pub fn OutlinerSettings(
 pub fn CelestialDetails(
     id: CelestialId,
     game_state: ReadSignal<GameState>,
+    client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
-    rsx! {}
+    let game_state_ref = &*game_state.read();
+    let Some(celestial) = game_state_ref.celestials.get(id) else {
+        return rsx! {
+            h1 { "Unknown Celestial Body" }
+        };
+    };
+
+    let stacks_nearby = game_state_ref
+        .stacks
+        .iter()
+        .filter(|(_, stack)| (stack.position - celestial.position).norm() <= 1)
+        .collect::<Vec<_>>();
+
+    rsx! {
+        h1 {
+            "{celestial.name} "
+            button {
+                r#type: "button",
+                class: "btn btn-secondary btn-sm regular-font",
+                onclick: {
+                    let position = celestial.position.cartesian() * HEX_SCALE;
+                    move |_| {
+                        client_view_settings
+                            .set(ClientViewSettings {
+                                x_offset: -position.x,
+                                y_offset: -position.y,
+                                zoom_level: 0,
+                            })
+                    }
+                },
+                "Go To"
+            }
+        }
+        if celestial.orbit_gravity {
+            p {
+                "Can orbit"
+                br {}
+                if celestial.can_land() {
+                    "Surface gravity: {celestial.surface_gravity:.1} m/s² ({celestial.surface_gravity / 2.0:.1} hex/turn)²"
+                } else {
+                    "Can't land"
+                }
+            }
+        } else {
+            p { "Low gravity" }
+        }
+        match celestial.resources {
+            Resources::MiningBoth => rsx! {
+                p { "May mine ice and ore" }
+            },
+            Resources::MiningIce => rsx! {
+                p { "May mine ice" }
+            },
+            Resources::MiningOre => rsx! {
+                p { "May mine ore" }
+            },
+            Resources::Skimming => rsx! {
+                p { "May skim fuel" }
+            },
+            Resources::None => rsx! {
+                p { "No available resources" }
+            },
+        }
+        if celestial.is_minor {
+            p { "Minor body" }
+        }
+        if !stacks_nearby.is_empty() {
+            h2 { "Stacks Nearby" }
+            p {
+                for (& stack_id , stack) in stacks_nearby {
+                    {
+                        rsx! {
+                            Fragment { key: "{stack_id:?}",
+                                a {
+                                    href: "#",
+                                    role: "button",
+                                    onclick: move |event| {
+                                        event.prevent_default();
+                                        change_state(SidebarState::StackDetails(stack_id));
+                                    },
+                                    "{stack.name}"
+                                }
+                                br {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[component]
@@ -247,8 +400,10 @@ pub fn StackDetails(
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
+    client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
+    // TODO
     rsx! {}
 }
 
@@ -257,7 +412,50 @@ pub fn Disambiguate(
     celestial_id: Option<CelestialId>,
     stack_ids: Vec<StackId>,
     game_state: ReadSignal<GameState>,
+    client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
-    rsx! {}
+    let game_state = &*game_state.read();
+
+    rsx! {
+        h1 { "Multiple Objects" }
+        if let Some(celestial_id) = celestial_id {
+            {
+                let celestial = game_state.celestials.get(celestial_id).unwrap();
+                rsx! {
+                    Fragment { key: "{celestial_id:?}",
+                        a {
+                            href: "#",
+                            role: "button",
+                            onclick: move |event| {
+                                event.prevent_default();
+                                change_state(SidebarState::CelestialDetails(celestial_id));
+                            },
+                            "{celestial.name}"
+                        }
+                        br {}
+                    }
+                }
+            }
+        }
+        for stack_id in stack_ids {
+            {
+                let stack = game_state.stacks.get(&stack_id).unwrap();
+                rsx! {
+                    Fragment { key: "{stack_id:?}",
+                        a {
+                            href: "#",
+                            role: "button",
+                            onclick: move |event| {
+                                event.prevent_default();
+                                change_state(SidebarState::StackDetails(stack_id));
+                            },
+                            "{stack.name}"
+                        }
+                        br {}
+                    }
+                }
+            }
+        }
+    }
 }

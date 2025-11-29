@@ -35,8 +35,8 @@ use crate::{
     scenes::game::{ClientGameSettings, ClientViewSettings, DisplayHostility},
 };
 
-// Major (left-right) radius of a hex
-const HEX_SCALE: f32 = 60.0;
+// Major radius of a hex
+pub const HEX_SCALE: f32 = 60.0;
 
 const MIN_ZOOM: i32 = -40;
 const MAX_ZOOM: i32 = 10;

@@ -20,7 +20,7 @@
 use std::collections::HashMap;
 
 use base64::{Engine, prelude::BASE64_STANDARD};
-use dioxus::{core::needs_update, prelude::*};
+use dioxus::prelude::*;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_cbor::{from_slice, to_vec};
@@ -118,6 +118,7 @@ impl ClickBroker {
         }
     }
 
+    #[expect(dead_code)]
     fn register(&mut self, action: Box<dyn FnOnce(Vec2<i32>)>) {
         self.listeners.push(action);
     }
@@ -195,7 +196,7 @@ pub fn InGame(
                 .celestials
                 .get_by_position(location)
                 .map(|(id, _)| id);
-            let selected_stacks = game_state
+            let mut selected_stacks = game_state
                 .stacks
                 .iter()
                 .filter_map(|(&id, stack)| {
@@ -206,6 +207,7 @@ pub fn InGame(
                     }
                 })
                 .collect::<Vec<_>>();
+            selected_stacks.sort();
             match (selected_celestial, selected_stacks.len()) {
                 (None, 0) => {
                     if !matches!(&*sidebar_state.read(), SidebarState::Outliner(_)) {
@@ -274,7 +276,6 @@ pub fn InGame(
 
                     let mut game_state = game_state.write();
                     *game_state = game_state.apply(delta);
-                    needs_update();
                 }
                 Some(Ok(Message::Text(_))) => {
                     change_state(ClientState::Error(
@@ -290,6 +291,8 @@ pub fn InGame(
             }
         }
     });
+    // subscribe to signal to ensure next state listener respawns
+    let _ = game_state.read();
 
     rsx! {
         div {
@@ -320,6 +323,7 @@ pub fn InGame(
                         order_errors,
                         submitting_orders,
                         client_game_settings,
+                        client_view_settings,
                         change_state: move |new_state| {
                             sidebar_state.set(new_state);
                         },

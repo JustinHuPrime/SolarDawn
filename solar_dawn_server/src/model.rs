@@ -17,7 +17,7 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::read;
 use std::marker::PhantomData;
 use std::path::Path;
@@ -48,7 +48,7 @@ pub struct GameServerState {
     pub rng: Pcg64,
 }
 impl GameServerState {
-    pub fn new(players: HashMap<PlayerId, String>, initializer: GameStateInitializer) -> Self {
+    pub fn new(players: BTreeMap<PlayerId, String>, initializer: GameStateInitializer) -> Self {
         let mut celestial_id_generator = IdGenerator::default();
         let mut stack_id_generator = IdGenerator::default();
         let mut module_id_generator = IdGenerator::default();

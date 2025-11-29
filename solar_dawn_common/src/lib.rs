@@ -27,7 +27,7 @@
 #[cfg(feature = "client")]
 use std::fmt::Display;
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     iter::Sum,
     ops::{Add, AddAssign, Mul, MulAssign, Sub, SubAssign},
     sync::Arc,
@@ -63,7 +63,7 @@ pub struct GameState {
     /// Which turn is this - starts at one
     pub turn: u32,
     /// Map from player id to username
-    pub players: Arc<HashMap<PlayerId, String>>,
+    pub players: Arc<BTreeMap<PlayerId, String>>,
     /// Game board
     pub celestials: Arc<CelestialMap>,
     /// Which celestial is Earth (starting planet and allows habitat builds in orbit)
@@ -90,7 +90,7 @@ impl Eq for GameState {}
 /// Constructor function for some starting game state
 #[cfg(feature = "server")]
 pub type GameStateInitializer = fn(
-    players: HashMap<PlayerId, String>,
+    players: BTreeMap<PlayerId, String>,
     celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
     stack_id_generator: &mut dyn Iterator<Item = StackId>,
     module_id_generator: &mut dyn Iterator<Item = ModuleId>,
@@ -124,7 +124,7 @@ impl GameState {
     pub fn new(scenario: &str) -> Result<GameStateInitializer, &str> {
         match scenario {
             "campaign" => Ok(
-                |players: HashMap<PlayerId, String>,
+                |players: BTreeMap<PlayerId, String>,
                  celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
                  stack_id_generator: &mut dyn Iterator<Item = StackId>,
                  module_id_generator: &mut dyn Iterator<Item = ModuleId>,
@@ -162,7 +162,7 @@ impl GameState {
             ),
             #[cfg(test)]
             "test" => Ok(
-                |players: HashMap<PlayerId, String>,
+                |players: BTreeMap<PlayerId, String>,
                  celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
                  _stack_id_generator: &mut dyn Iterator<Item = StackId>,
                  _module_id_generator: &mut dyn Iterator<Item = ModuleId>,
@@ -469,7 +469,7 @@ impl Display for Phase {
 ///
 /// 0 is special - refers to unowned stacks (shouldn't be possible)
 #[repr(transparent)]
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct PlayerId(u8);
 
 impl PlayerId {
@@ -1048,7 +1048,7 @@ mod tests {
         let game_state = GameState {
             phase: Phase::Logistics,
             turn: 1,
-            players: Arc::new(HashMap::new()),
+            players: Arc::new(BTreeMap::new()),
             celestials: Arc::new(HashMap::new().into()),
             earth: CelestialId::from(0u32),
             stacks: HashMap::new(),
@@ -1131,7 +1131,7 @@ mod tests {
         let game_state = GameState {
             phase: Phase::Movement,
             turn: 1,
-            players: Arc::new(HashMap::new()),
+            players: Arc::new(BTreeMap::new()),
             celestials: Arc::new(celestials.into()),
             earth: CelestialId::from(0u32),
             stacks,
@@ -1200,7 +1200,7 @@ mod tests {
         let game_state = GameState {
             phase: Phase::Movement,
             turn: 1,
-            players: Arc::new(HashMap::new()),
+            players: Arc::new(BTreeMap::new()),
             celestials: Arc::new(celestials.into()),
             earth: CelestialId::from(0u32),
             stacks,

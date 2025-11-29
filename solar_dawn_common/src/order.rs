@@ -2004,7 +2004,7 @@ mod tests {
         let player_1 = player_id_generator.next().unwrap();
         let player_2 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([
+            BTreeMap::from([
                 (player_1, "player 1".to_owned()),
                 (player_2, "player 2".to_owned()),
             ]),

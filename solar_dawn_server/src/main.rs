@@ -29,7 +29,7 @@
 #![warn(missing_docs)]
 
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     fs::OpenOptions,
     io::Write,
     mem::{replace, take},
@@ -170,7 +170,7 @@ impl ServerState {
                 let players = take(registered_players)
                     .into_iter()
                     .map(|(username, id)| (id, username))
-                    .collect::<HashMap<_, _>>();
+                    .collect::<BTreeMap<_, _>>();
                 let connections = take(connections);
                 let game_state = GameServerState::new(players, *scenario);
                 info!("starting after new");
