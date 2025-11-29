@@ -28,8 +28,8 @@ use solar_dawn_common::{
 
 use crate::{
     scenes::game::{
-        ClientGameSettings, ClientViewSettings, OutlinerState, SidebarState, SidebarStateStoreExt,
-        SidebarStateStoreTransposed, map::HEX_SCALE,
+        ClientGameSettings, ClientViewSettings, DisplayHostility, OutlinerState, SidebarState,
+        SidebarStateStoreExt, SidebarStateStoreTransposed, map::HEX_SCALE,
     },
     websocket::{Message, WebsocketClient},
 };
@@ -288,9 +288,77 @@ pub fn OutlinerSettings(
     game_state: ReadSignal<GameState>,
     client_game_settings: WriteSignal<ClientGameSettings>,
 ) -> Element {
-    // TODO
+    let game_state = &*game_state.read();
     rsx! {
-        h2 { "Display Settings" }
+        h2 { "Icon Settings" }
+        table { class: "table",
+            thead {
+                tr {
+                    th { scope: "col", "Player" }
+                    th { scope: "col", "Hostile" }
+                    th { scope: "col", "Neutral" }
+                    th { scope: "col", "Friendly" }
+                }
+            }
+            tbody {
+                for (& player , name) in game_state.players.iter().filter(|&(&player, _)| player != me) {
+                    tr { key: "{player:?}",
+                        td { "{name}" }
+                        td {
+                            input {
+                                class: "form-check-input",
+                                r#type: "radio",
+                                name: "hostility-{player:?}",
+                                checked: matches!(
+                                    client_game_settings.read().display_hostility[&player],
+                                    DisplayHostility::Hostile
+                                ),
+                                onchange: move |_| {
+                                    client_game_settings
+                                        .write()
+                                        .display_hostility
+                                        .insert(player, DisplayHostility::Hostile);
+                                },
+                            }
+                        }
+                        td {
+                            input {
+                                class: "form-check-input",
+                                r#type: "radio",
+                                name: "hostility-{player:?}",
+                                checked: matches!(
+                                    client_game_settings.read().display_hostility[&player],
+                                    DisplayHostility::Neutral
+                                ),
+                                onchange: move |_| {
+                                    client_game_settings
+                                        .write()
+                                        .display_hostility
+                                        .insert(player, DisplayHostility::Neutral);
+                                },
+                            }
+                        }
+                        td {
+                            input {
+                                class: "form-check-input",
+                                r#type: "radio",
+                                name: "hostility-{player:?}",
+                                checked: matches!(
+                                    client_game_settings.read().display_hostility[&player],
+                                    DisplayHostility::Friendly
+                                ),
+                                onchange: move |_| {
+                                    client_game_settings
+                                        .write()
+                                        .display_hostility
+                                        .insert(player, DisplayHostility::Friendly);
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
