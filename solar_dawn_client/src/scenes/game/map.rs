@@ -1073,7 +1073,7 @@ fn draw_stack(
             "{:.1}/{:.1} @ {:.1}",
             stack.current_dv(),
             stack.max_dv(),
-            stack.acceleration()
+            stack.acceleration() / 2.0
         );
         ctx.set_text_align("center");
         ctx.set_text_baseline("top");

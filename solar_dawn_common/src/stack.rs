@@ -495,7 +495,7 @@ pub enum ModuleDetails {
         /// How much fuel is held, in 0.1 tonnes
         fuel: u8,
     },
-    /// Engine - produces 20 kN of thrust using 1 tonne of fuel; 1 m/s^2 = 1 hex/turn/turn
+    /// Engine - produces 20 kN of thrust using 1 tonne of fuel; 1 m/s^2 = 0.5 hex/turn/turn
     ///
     /// Can burn fractional points of fuel, down to the 0.1 tonne
     Engine,
