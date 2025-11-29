@@ -1949,7 +1949,7 @@ mod tests {
     use super::*;
 
     use rand::{SeedableRng, rng, rngs::StdRng};
-    use std::{marker::PhantomData, sync::Arc};
+    use std::{collections::BTreeMap, marker::PhantomData, sync::Arc};
 
     struct ShortIdGen<T: From<u8>> {
         next: u8,
@@ -2188,7 +2188,7 @@ mod tests {
         let player_1 = player_id_generator.next().unwrap();
         let player_2 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([
+            BTreeMap::from([
                 (player_1, "player 1".to_owned()),
                 (player_2, "player 2".to_owned()),
             ]),
@@ -2410,7 +2410,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, "player 1".to_owned())]),
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -2500,7 +2500,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, "player 1".to_owned())]),
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -2658,7 +2658,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, "player 1".to_owned())]),
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -2827,7 +2827,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, "player 1".to_owned())]),
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -2948,7 +2948,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, "player 1".to_owned())]),
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3062,7 +3062,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, "player 1".to_owned())]),
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3232,7 +3232,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, "player 1".to_owned())]),
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3319,7 +3319,7 @@ mod tests {
         let player_1 = player_id_generator.next().unwrap();
         let player_2 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([
+            BTreeMap::from([
                 (player_1, "player 1".to_owned()),
                 (player_2, "player 2".to_owned()),
             ]),
@@ -3439,7 +3439,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, "player 1".to_owned())]),
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3578,7 +3578,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, "player 1".to_owned())]),
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3697,7 +3697,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, "player 1".to_owned())]),
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3810,7 +3810,7 @@ mod tests {
         let mut module_id_generator = LongIdGen::<ModuleId>::new();
         let player_1 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([(player_1, "player 1".to_owned())]),
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
             &mut celestial_id_generator,
             &mut stack_id_generator,
             &mut module_id_generator,
@@ -3923,7 +3923,7 @@ mod tests {
         let player_1 = player_id_generator.next().unwrap();
         let player_2 = player_id_generator.next().unwrap();
         let mut game_state = (GameState::new("test").unwrap())(
-            HashMap::from([
+            BTreeMap::from([
                 (player_1, "player 1".to_owned()),
                 (player_2, "player 2".to_owned()),
             ]),

@@ -11,7 +11,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
 jobs:
-  build-and-deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
