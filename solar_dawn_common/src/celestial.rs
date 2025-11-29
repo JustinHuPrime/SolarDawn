@@ -29,9 +29,7 @@ use rand::{
 };
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "server")]
-use crate::CartesianVec2;
-use crate::Vec2;
+use crate::{CartesianVec2, Vec2};
 
 /// A celestial body
 #[derive(Debug, Serialize, Deserialize)]
@@ -57,11 +55,13 @@ pub struct Celestial {
     pub radius: f32,
     /// Colour to draw the celestial with
     pub colour: String,
+    /// Is this a minor body (asteroid, kuiper belt object)
+    pub is_minor: bool,
 }
 
 /// Key to refer to celestial bodies
 #[repr(transparent)]
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CelestialId(u32);
 
 #[cfg(feature = "server")]
@@ -89,6 +89,8 @@ pub struct CelestialMap {
     by_position: HashMap<Vec2<i32>, CelestialId>,
     /// All celestials with gravity (orbitable, landable, collidable, etc)
     with_gravity: HashSet<CelestialId>,
+    /// Major celestials, in creation order (significant)
+    majors: Vec<CelestialId>,
 }
 
 impl CelestialMap {
@@ -101,14 +103,18 @@ impl CelestialMap {
         self.with_gravity.iter().map(|id| &self.all[id])
     }
     /// Lookup a specific one by position
-    pub fn get_by_position(&self, position: Vec2<i32>) -> Option<&Celestial> {
+    pub fn get_by_position(&self, position: Vec2<i32>) -> Option<(CelestialId, &Celestial)> {
         self.by_position
             .get(&position)
-            .and_then(|id| self.all.get(id))
+            .and_then(|&id| self.all.get(&id).map(|celestial| (id, celestial)))
     }
     /// Lookup a specific one by id
     pub fn get(&self, id: CelestialId) -> Option<&Celestial> {
         self.all.get(&id)
+    }
+    /// Get list of major celestials
+    pub fn majors(&self) -> &[CelestialId] {
+        &self.majors
     }
 }
 
@@ -130,6 +136,18 @@ impl From<HashMap<CelestialId, Celestial>> for CelestialMap {
                     }
                 })
                 .collect::<HashSet<_>>(),
+            majors: {
+                let mut majors = value
+                    .iter()
+                    .filter_map(
+                        |(&id, celestial)| {
+                            if !celestial.is_minor { Some(id) } else { None }
+                        },
+                    )
+                    .collect::<Vec<_>>();
+                majors.sort();
+                majors
+            },
             all: value,
         }
     }
@@ -176,6 +194,7 @@ impl Celestial {
                 resources: Resources::None,
                 radius: 0.85,
                 colour: "#ffff00".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -188,6 +207,7 @@ impl Celestial {
                 resources: Resources::MiningOre,
                 radius: 0.15,
                 colour: "#888888".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -200,6 +220,7 @@ impl Celestial {
                 resources: Resources::MiningOre,
                 radius: 0.25,
                 colour: "#ffee99".to_owned(),
+                is_minor: false,
             },
         );
         let earth_id = celestial_id_generator.next().unwrap();
@@ -213,6 +234,7 @@ impl Celestial {
                 resources: Resources::None,
                 radius: 0.25,
                 colour: "#0000ff".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -228,6 +250,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.15,
                 colour: "#888888".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -240,6 +263,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.20,
                 colour: "#cc5151".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -254,6 +278,7 @@ impl Celestial {
                 resources: Resources::MiningOre,
                 radius: 0.10,
                 colour: "#888888".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -270,6 +295,7 @@ impl Celestial {
                 resources: Resources::MiningOre,
                 radius: 0.10,
                 colour: "#666666".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -282,6 +308,7 @@ impl Celestial {
                 resources: Resources::Skimming,
                 radius: 0.75,
                 colour: "#ffee99".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -297,6 +324,7 @@ impl Celestial {
                 resources: Resources::MiningOre,
                 radius: 0.15,
                 colour: "#ffff00".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -313,6 +341,7 @@ impl Celestial {
                 resources: Resources::MiningIce,
                 radius: 0.15,
                 colour: "#88bbdd".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -330,6 +359,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.15,
                 colour: "#888888".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -348,6 +378,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.15,
                 colour: "#666666".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -360,6 +391,7 @@ impl Celestial {
                 resources: Resources::Skimming,
                 radius: 0.70,
                 colour: "#ddcc77".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -374,6 +406,7 @@ impl Celestial {
                 resources: Resources::MiningIce,
                 radius: 0.1,
                 colour: "#888888".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -389,6 +422,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.1,
                 colour: "#888888".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -405,6 +439,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.1,
                 colour: "#888888".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -423,6 +458,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.15,
                 colour: "#ddcc77".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -443,6 +479,7 @@ impl Celestial {
                 resources: Resources::MiningIce,
                 radius: 0.1,
                 colour: "#444444".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -455,6 +492,7 @@ impl Celestial {
                 resources: Resources::Skimming,
                 radius: 0.45,
                 colour: "#00cccc".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -469,6 +507,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.1,
                 colour: "#aaaaaa".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -483,6 +522,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.1,
                 colour: "#666666".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -498,6 +538,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.1,
                 colour: "#666666".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -514,6 +555,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.1,
                 colour: "#888888".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -531,6 +573,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.1,
                 colour: "#888888".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -543,6 +586,7 @@ impl Celestial {
                 resources: Resources::Skimming,
                 radius: 0.50,
                 colour: "#0055cc".to_owned(),
+                is_minor: false,
             },
         );
         map.insert(
@@ -560,6 +604,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.1,
                 colour: "#888888".to_owned(),
+                is_minor: false,
             },
         );
 
@@ -616,6 +661,7 @@ impl Celestial {
                             Resources::MiningOre => "#666666".to_owned(),
                             _ => unreachable!(),
                         },
+                        is_minor: true,
                     },
                 );
             }
@@ -670,6 +716,7 @@ impl Celestial {
                             Resources::MiningOre => "#666666".to_owned(),
                             _ => unreachable!(),
                         },
+                        is_minor: true,
                     },
                 );
             }
@@ -694,6 +741,7 @@ impl Celestial {
                 resources: Resources::None,
                 radius: 0.85,
                 colour: "#ffff00".to_owned(),
+                is_minor: false,
             },
         );
 
@@ -708,6 +756,7 @@ impl Celestial {
                 resources: Resources::None,
                 radius: 0.25,
                 colour: "#0000ff".to_owned(),
+                is_minor: false,
             },
         );
 
@@ -721,6 +770,7 @@ impl Celestial {
                 resources: Resources::MiningIce,
                 radius: 0.1,
                 colour: "#aaaaaa".to_owned(),
+                is_minor: false,
             },
         );
 
@@ -734,6 +784,7 @@ impl Celestial {
                 resources: Resources::MiningOre,
                 radius: 0.05,
                 colour: "#888888".to_owned(),
+                is_minor: true,
             },
         );
 
@@ -747,6 +798,7 @@ impl Celestial {
                 resources: Resources::MiningBoth,
                 radius: 0.05,
                 colour: "#999999".to_owned(),
+                is_minor: true,
             },
         );
         map.insert(
@@ -759,6 +811,7 @@ impl Celestial {
                 resources: Resources::Skimming,
                 radius: 0.75,
                 colour: "#ffee99".to_owned(),
+                is_minor: false,
             },
         );
 
@@ -768,7 +821,6 @@ impl Celestial {
     /// Can only land on bodies you can get resources from via mining
     ///
     /// So you can't land on Earth, the Sun, or gas giants
-    #[cfg(feature = "server")]
     pub fn can_land(&self) -> bool {
         matches!(
             self.resources,
@@ -776,7 +828,6 @@ impl Celestial {
         )
     }
 
-    #[cfg(feature = "server")]
     fn intersects(&self, start: CartesianVec2, end: CartesianVec2) -> Option<(f32, f32)> {
         // find t such that self.radius^2 = (start - self.position + t*(end - start))^2
         let dp = start - self.position.cartesian();
@@ -822,7 +873,6 @@ impl Celestial {
     /// Is a weapons effect originating from start blocked for a stack at end?
     ///
     /// Note bodies without gravity don't block
-    #[cfg(feature = "server")]
     pub fn blocks_weapons_effect(&self, start: CartesianVec2, end: CartesianVec2) -> bool {
         if !self.orbit_gravity {
             return false;
@@ -868,16 +918,16 @@ impl Celestial {
                     return None;
                 }
 
-                // this hex is effectively traversed if, at the point of closest approach, the distance is less than:
+                // this hex is effectively traversed if, at the point of closest approach to this hex, the distance is less than:
                 // - the distance to any neighbouring hex, except the planet's own hex
                 // - the distance to any other gravity hex
 
                 let closest_approach =
-                    Vec2::closest_approach(position, velocity, self.position, Vec2::zero());
+                    Vec2::closest_approach(position, velocity, gravity_hex, Vec2::zero());
                 let closest_distance = Vec2::squared_distance_at_time(
                     position,
                     velocity,
-                    self.position,
+                    gravity_hex,
                     Vec2::zero(),
                     closest_approach,
                 );
@@ -969,6 +1019,7 @@ mod tests {
             resources: Resources::None,
             radius: f32::NAN,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
 
         assert_eq!(
@@ -1062,6 +1113,7 @@ mod tests {
             resources: mining_both,
             radius: 0.5,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
         assert!(mining_both_body.can_land());
 
@@ -1073,6 +1125,7 @@ mod tests {
             resources: mining_ice,
             radius: 0.5,
             colour: "#aaddff".to_owned(),
+            is_minor: false,
         };
         assert!(mining_ice_body.can_land());
 
@@ -1084,6 +1137,7 @@ mod tests {
             resources: mining_ore,
             radius: 0.5,
             colour: "#996633".to_owned(),
+            is_minor: false,
         };
         assert!(mining_ore_body.can_land());
 
@@ -1095,6 +1149,7 @@ mod tests {
             resources: skimming,
             radius: 1.0,
             colour: "#ffaa77".to_owned(),
+            is_minor: false,
         };
         assert!(!gas_giant.can_land());
 
@@ -1106,6 +1161,7 @@ mod tests {
             resources: none,
             radius: 0.5,
             colour: "#666666".to_owned(),
+            is_minor: false,
         };
         assert!(!no_resources_body.can_land());
     }
@@ -1129,6 +1185,7 @@ mod tests {
             resources: Resources::None,
             radius: 0.4,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
 
         let clockwise_params = celestial.orbit_parameters(true);
@@ -1169,6 +1226,7 @@ mod tests {
             resources: Resources::None,
             radius: 1.0,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
 
         // Line that starts and ends at the same point (zero length)
@@ -1210,6 +1268,7 @@ mod tests {
             resources: Resources::None,
             radius: 0.0,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
 
         // Only lines that pass exactly through the center should collide
@@ -1287,6 +1346,7 @@ mod tests {
             resources: Resources::MiningBoth,
             radius: 0.5,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
         assert!(mining_both_body.can_land());
 
@@ -1298,6 +1358,7 @@ mod tests {
             resources: Resources::MiningIce,
             radius: 0.5,
             colour: "#aaddff".to_owned(),
+            is_minor: false,
         };
         assert!(mining_ice_body.can_land());
 
@@ -1309,6 +1370,7 @@ mod tests {
             resources: Resources::MiningOre,
             radius: 0.5,
             colour: "#996633".to_owned(),
+            is_minor: false,
         };
         assert!(mining_ore_body.can_land());
 
@@ -1321,6 +1383,7 @@ mod tests {
             resources: Resources::Skimming,
             radius: 1.0,
             colour: "#ffaa77".to_owned(),
+            is_minor: false,
         };
         assert!(!skimming_body.can_land());
 
@@ -1332,6 +1395,7 @@ mod tests {
             resources: Resources::None,
             radius: 0.25,
             colour: "#0000ff".to_owned(),
+            is_minor: false,
         };
         assert!(!no_resources_body.can_land());
     }
@@ -1347,6 +1411,7 @@ mod tests {
             resources: Resources::None,
             radius: 1.0,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
 
         // Line passing through center should collide
@@ -1396,6 +1461,7 @@ mod tests {
             resources: Resources::MiningIce,
             radius: 1.0,
             colour: "#aaddff".to_owned(),
+            is_minor: false,
         };
 
         // Even a line passing through should not collide if no gravity
@@ -1417,6 +1483,7 @@ mod tests {
             resources: Resources::None,
             radius: 0.5,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
 
         // Line passing through offset body center should collide
@@ -1447,6 +1514,7 @@ mod tests {
             resources: Resources::None,
             radius: 0.1,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
 
         // Line passing very close to center should collide
@@ -1480,6 +1548,7 @@ mod tests {
             resources: Resources::None,
             radius: 1.0,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
 
         // Line passing completely through center should pass through
@@ -1524,6 +1593,7 @@ mod tests {
             resources: Resources::MiningIce,
             radius: 1.0,
             colour: "#aaddff".to_owned(),
+            is_minor: false,
         };
 
         // Even a line passing through should not block if no gravity
@@ -1541,6 +1611,7 @@ mod tests {
             resources: Resources::None,
             radius: 0.5,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
 
         // Line passing completely through offset body should pass through
@@ -1564,6 +1635,7 @@ mod tests {
             resources: Resources::None,
             radius: 0.1,
             colour: "#ffffff".to_owned(),
+            is_minor: false,
         };
 
         // Line passing completely through small body

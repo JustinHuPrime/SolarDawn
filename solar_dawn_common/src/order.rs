@@ -19,27 +19,23 @@
 
 //! Orders that may be given to stacks
 
-#[cfg(feature = "server")]
 use std::collections::HashMap;
 
 #[cfg(feature = "server")]
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "server")]
 use crate::{
-    GameState, Phase, PlayerId,
+    GameState, Phase, PlayerId, Vec2,
+    celestial::CelestialId,
     celestial::{Celestial, Resources},
     stack::{Health, Module, Stack},
-};
-use crate::{
-    Vec2,
-    celestial::CelestialId,
     stack::{ModuleDetails, ModuleId, StackId},
 };
 
 /// An order that can be given
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "client", derive(Clone, PartialEq, Eq))]
 pub enum Order {
     /// Name a stack
     ///
@@ -252,6 +248,7 @@ pub enum Order {
 
 /// Where a transferred module should go
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "client", derive(Clone, PartialEq, Eq))]
 pub enum ModuleTransferTarget {
     /// An existing stack
     Existing(StackId),
@@ -261,6 +258,7 @@ pub enum ModuleTransferTarget {
 
 /// Where a resource transfer should go
 #[derive(Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "client", derive(Clone, PartialEq, Eq))]
 pub enum ResourceTransferTarget {
     /// This stack's floating pool
     FloatingPool,
@@ -273,6 +271,7 @@ pub enum ResourceTransferTarget {
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "client", derive(PartialEq, Eq))]
 #[expect(missing_docs)]
 /// Type of module to build
 pub enum ModuleType {
@@ -309,6 +308,7 @@ impl ModuleType {
 
 /// Why an order could not be applied
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "client", derive(PartialEq, Eq))]
 pub enum OrderError {
     /// Order issued during invalid phase
     WrongPhase,
@@ -402,7 +402,6 @@ impl Order {
     /// validates that orders can be carried out given some game state
     ///
     /// returns a token of said validity and the reasons why any invalid orders couldn't be carried out
-    #[cfg(feature = "server")]
     pub fn validate<'a>(
         game_state: &'a GameState,
         orders: &'a HashMap<PlayerId, Vec<Order>>,
@@ -1153,7 +1152,6 @@ impl Order {
     }
 
     /// Validate all that can be validated for a single order
-    #[cfg(feature = "server")]
     fn validate_single(&self, game_state: &GameState, player: PlayerId) -> Result<(), OrderError> {
         fn validate_stack(
             stack: StackId,
@@ -1323,7 +1321,7 @@ impl Order {
                     && !game_state
                         .celestials
                         .get_by_position(stack_ref.position)
-                        .is_some_and(|celestial| {
+                        .is_some_and(|(_, celestial)| {
                             stack_ref.landed(celestial)
                                 && matches!(
                                     celestial.resources,
@@ -1337,7 +1335,7 @@ impl Order {
                     && !game_state
                         .celestials
                         .get_by_position(stack_ref.position)
-                        .is_some_and(|celestial| {
+                        .is_some_and(|(_, celestial)| {
                             stack_ref.landed(celestial)
                                 && matches!(
                                     celestial.resources,
@@ -1911,16 +1909,16 @@ impl Order {
     }
 }
 
-#[cfg(feature = "server")]
 /// A set of orders that can be applied to the referenced game state
+#[cfg_attr(all(feature = "client", not(feature = "server")), expect(dead_code))]
 pub struct ValidatedOrders<'a> {
     orders: HashMap<PlayerId, Vec<&'a Order>>,
     game_state: &'a GameState,
 }
 
-#[cfg(feature = "server")]
 impl ValidatedOrders<'_> {
     /// Apply orders
+    #[cfg(feature = "server")]
     pub fn apply(
         &self,
         stack_id_generator: &mut impl Iterator<Item = StackId>,
@@ -2524,6 +2522,7 @@ mod tests {
                 resources: Resources::MiningBoth,
                 radius: 0.3,
                 colour: "#000000".to_owned(),
+                is_minor: false,
             },
         );
         game_state.celestials = Arc::new(celestials.into());
@@ -2609,6 +2608,7 @@ mod tests {
                 resources: Resources::Skimming,
                 radius: 1.0,
                 colour: "#000000".to_owned(),
+                is_minor: false,
             },
         );
         game_state.celestials = Arc::new(celestials.into());
@@ -3409,6 +3409,7 @@ mod tests {
                 resources: Resources::None,
                 radius: 1.0, // Reasonable blocking radius
                 colour: "#000000".to_owned(),
+                is_minor: false,
             },
         );
         game_state.celestials = Arc::new(celestials.into());
@@ -3637,6 +3638,7 @@ mod tests {
                 resources: Resources::MiningBoth,
                 radius: 0.3,
                 colour: "#000000".to_owned(),
+                is_minor: false,
             },
         );
         game_state.celestials = Arc::new(celestials.into());

@@ -454,6 +454,17 @@ impl Phase {
     }
 }
 
+#[cfg(feature = "client")]
+impl Display for Phase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Phase::Logistics => write!(f, "Logistics"),
+            Phase::Combat => write!(f, "Combat"),
+            Phase::Movement => write!(f, "Movement"),
+        }
+    }
+}
+
 /// Refers to a player
 ///
 /// 0 is special - refers to unowned stacks (shouldn't be possible)
@@ -1094,6 +1105,7 @@ mod tests {
                 resources: celestial::Resources::MiningBoth,
                 radius: 0.5,
                 colour: "#000000".to_owned(),
+                is_minor: false,
             },
         );
 
@@ -1162,6 +1174,7 @@ mod tests {
                 resources: celestial::Resources::MiningBoth,
                 radius: 0.5,
                 colour: "#000000".to_owned(),
+                is_minor: false,
             },
         );
 

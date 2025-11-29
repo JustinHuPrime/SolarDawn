@@ -87,12 +87,15 @@ impl Stream for WebsocketClient {
 
     fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         if let Some(event) = self.event_queue.borrow_mut().pop_front() {
+            trace!("websocket ready on poll with event");
             Poll::Ready(Some(event))
         } else if self.raw_ws.ready_state() == 3 {
             // out of events and the socket is closed
             // must be exactly 3 - see https://websockets.spec.whatwg.org/#closeWebSocket
+            trace!("websocket ready on poll with end of stream");
             Poll::Ready(None)
         } else {
+            trace!("websocket not ready on poll");
             self.waker.borrow_mut().replace(cx.waker().clone());
             Poll::Pending
         }
@@ -121,7 +124,9 @@ impl WebsocketClientBuilder {
             _on_open: Rc::new(EventListener::new(raw_ws.clone().into(), "open", {
                 let waker = waker.clone();
                 move |_| {
+                    trace!("websocket got open event");
                     if let Some(waker) = waker.borrow_mut().take() {
+                        trace!("websocket waking on open event");
                         waker.wake();
                     }
                 }
@@ -130,6 +135,7 @@ impl WebsocketClientBuilder {
                 let event_queue = event_queue.clone();
                 let waker = waker.clone();
                 move |msg| {
+                    trace!("websocket got message event");
                     let msg = msg.unchecked_into::<MessageEvent>();
                     if let Ok(msg) = msg.data().dyn_into::<ArrayBuffer>() {
                         event_queue.borrow_mut().push_back(Ok(Message::Binary(
@@ -145,6 +151,7 @@ impl WebsocketClientBuilder {
                     }
 
                     if let Some(waker) = waker.borrow_mut().take() {
+                        trace!("websocket waking on message event");
                         waker.wake();
                     }
                 }
@@ -153,11 +160,13 @@ impl WebsocketClientBuilder {
                 let event_queue = event_queue.clone();
                 let waker = waker.clone();
                 move |_| {
+                    trace!("websocket got error event");
                     event_queue
                         .borrow_mut()
                         .push_back(Err(WebsocketError::ConnectionFailed));
 
                     if let Some(waker) = waker.borrow_mut().take() {
+                        trace!("websocket waking on error event");
                         waker.wake();
                     }
                 }
@@ -166,6 +175,7 @@ impl WebsocketClientBuilder {
                 let event_queue = event_queue.clone();
                 let waker = waker.clone();
                 move |event| {
+                    trace!("websocket got close event");
                     let event = event.unchecked_into::<CloseEvent>();
                     event_queue
                         .borrow_mut()
@@ -176,6 +186,7 @@ impl WebsocketClientBuilder {
                         }));
 
                     if let Some(waker) = waker.borrow_mut().take() {
+                        trace!("websocket waking on close event");
                         waker.wake();
                     }
                 }

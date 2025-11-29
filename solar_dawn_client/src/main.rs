@@ -127,7 +127,7 @@ fn App() -> Element {
                 rsx! {
                     Join {
                         change_state: move |new_state| {
-                            *state.write() = new_state;
+                            state.set(new_state);
                         },
                     }
                 }
@@ -138,7 +138,7 @@ fn App() -> Element {
                         me: *me.read(),
                         websocket: websocket.read().clone(),
                         change_state: move |new_state| {
-                            *state.write() = new_state;
+                            state.set(new_state);
                         },
                     }
                 }
@@ -150,7 +150,7 @@ fn App() -> Element {
                         websocket: websocket.read().clone(),
                         game_state,
                         change_state: move |new_state| {
-                            *state.write() = new_state;
+                            state.set(new_state);
                         },
                     }
                 }

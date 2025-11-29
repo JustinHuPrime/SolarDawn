@@ -63,7 +63,7 @@ use serde_cbor::{from_slice, to_vec};
 use solar_dawn_common::{GameState, GameStateInitializer, Phase, PlayerId, order::Order};
 use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
-use tracing::{Level, info, warn};
+use tracing::{Level, info, trace, warn};
 
 use crate::model::{GameServerState, IdGenerator};
 
@@ -240,8 +240,8 @@ impl ServerState {
                 ..
             } => {
                 info!(
-                    "got orders from everyone, ticking from {:?}",
-                    game_state.game_state.phase
+                    "got orders from everyone, ticking from turn {} {:?}",
+                    game_state.game_state.turn, game_state.game_state.phase
                 );
                 let delta = game_state.game_state.next(
                     take(&mut game_state.orders),
@@ -251,6 +251,7 @@ impl ServerState {
                 );
                 let delta_bytes =
                     to_vec(&delta).expect("game state delta should always be serializable");
+                trace!(delta = ?delta);
                 game_state.game_state = game_state.game_state.apply(delta);
 
                 let mut lost_connections = Vec::new();

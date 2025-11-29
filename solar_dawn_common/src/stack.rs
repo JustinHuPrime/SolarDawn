@@ -99,7 +99,6 @@ impl Stack {
     }
 
     /// Is this stack rendezvoused with the other stack?
-    #[cfg(feature = "server")]
     pub fn rendezvoused_with(&self, other: &Stack) -> bool {
         self.position == other.position && self.velocity == other.velocity
     }
@@ -107,7 +106,6 @@ impl Stack {
     /// Is this stack landed on the target celestial?
     ///
     /// Broad terms landed - also counts rendezvouses with non-gravity celestials
-    #[cfg(feature = "server")]
     pub fn landed(&self, celestial: &Celestial) -> bool {
         self.position == celestial.position && self.velocity.norm() == 0
     }
@@ -115,7 +113,6 @@ impl Stack {
     /// Is this stack landed on a celestial with gravity?
     ///
     /// Strict terms landed - doesn't count rendezvouses with non-gravity celestials
-    #[cfg(feature = "server")]
     pub fn landed_with_gravity(&self, celestial: &Celestial) -> bool {
         celestial.orbit_gravity && self.position == celestial.position && self.velocity.norm() == 0
     }
@@ -312,7 +309,7 @@ impl Stack {
 
 /// Id to refer to a stack
 #[repr(transparent)]
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct StackId(u32);
 
 #[cfg(feature = "server")]
@@ -776,6 +773,7 @@ mod tests {
             resources: Resources::None,
             radius: 0.5,
             colour: "#000000".to_owned(),
+            is_minor: false,
         };
 
         // For a stack to be in orbit, it needs:
@@ -836,6 +834,7 @@ mod tests {
             resources: Resources::MiningOre,
             radius: 0.1,
             colour: "#000000".to_owned(),
+            is_minor: true,
         };
 
         assert!(!orbiting_stack.orbiting(&no_gravity_celestial));
@@ -851,6 +850,7 @@ mod tests {
             resources: Resources::MiningBoth,
             radius: 0.3,
             colour: "#000000".to_owned(),
+            is_minor: false,
         };
 
         // Stack landed (same position, zero velocity)
@@ -898,6 +898,7 @@ mod tests {
             resources: Resources::MiningOre,
             radius: 0.1,
             colour: "#000000".to_owned(),
+            is_minor: true,
         };
 
         assert!(landed_stack.landed(&no_gravity_celestial));

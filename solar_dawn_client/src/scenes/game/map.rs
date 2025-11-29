@@ -75,6 +75,7 @@ pub fn Map(
     client_game_settings: ReadSignal<ClientGameSettings>,
     client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<ClientState>,
+    select: EventHandler<Vec2<i32>>,
 ) -> Element {
     use_effect(move || {
         let canvas = window()
@@ -230,6 +231,7 @@ pub fn Map(
     });
 
     let mut dragging = use_signal(|| Option::<(f64, f64)>::None);
+    let mut dragged = use_signal(|| true);
 
     rsx! {
         canvas {
@@ -246,6 +248,7 @@ pub fn Map(
                     .set(
                         Some((event.coordinates().element().x, event.coordinates().element().y)),
                     );
+                dragged.set(false);
             },
             onmouseup: move |_| {
                 dragging.set(None);
@@ -262,6 +265,9 @@ pub fn Map(
                     let mut client_view_settings = client_view_settings.write();
                     let x = event.coordinates().element().x;
                     let y = event.coordinates().element().y;
+                    if x != start_x || y != start_y {
+                        dragged.set(true);
+                    }
                     client_view_settings.x_offset
                         += (x - start_x) as f32 / client_view_settings.zoom();
                     client_view_settings.y_offset
@@ -318,6 +324,47 @@ pub fn Map(
                     - client_view_settings.y_offset;
                 client_view_settings.x_offset += world_x_after - world_x_before;
                 client_view_settings.y_offset += world_y_after - world_y_before;
+            },
+            onclick: move |event| {
+                if *dragged.read() {
+                    return;
+                }
+
+                // Get canvas dimensions
+                let canvas = window()
+                    .unwrap()
+                    .document()
+                    .unwrap()
+                    .get_element_by_id("canvas")
+                    .unwrap()
+                    .unchecked_into::<HtmlCanvasElement>();
+                let canvas_width = canvas.client_width() as f32;
+                let canvas_height = canvas.client_height() as f32;
+
+                // Get click coordinates in canvas space
+                let click_x = event.coordinates().element().x as f32;
+                let click_y = event.coordinates().element().y as f32;
+
+                let client_view_settings = client_view_settings.read();
+
+                // Untransform from canvas space to world space
+                // Reverse the transformations applied in the rendering:
+                // 1. Subtract canvas center offset
+                // 2. Divide by zoom
+                // 3. Subtract world offset
+                let world_x = (click_x - canvas_width / 2.0) / client_view_settings.zoom()
+                    - client_view_settings.x_offset;
+                let world_y = (click_y - canvas_height / 2.0) / client_view_settings.zoom()
+                    - client_view_settings.y_offset;
+
+                // Unscale coordinates and convert to hex
+                let hex = CartesianVec2 {
+                    x: world_x / HEX_SCALE,
+                    y: world_y / HEX_SCALE,
+                }
+                    .to_axial();
+
+                select(hex);
             },
         }
     }

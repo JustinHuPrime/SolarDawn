@@ -20,16 +20,18 @@
 use std::collections::HashMap;
 
 use base64::{Engine, prelude::BASE64_STANDARD};
-use dioxus::prelude::*;
+use dioxus::{core::needs_update, prelude::*};
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_cbor::{from_slice, to_vec};
-use solar_dawn_common::{GameState, GameStateDelta, PlayerId, order::Order};
+use solar_dawn_common::{
+    GameState, GameStateDelta, PlayerId, Vec2, celestial::CelestialId, order::Order, stack::StackId,
+};
 use web_sys::window;
 
 use crate::{
     ClientState,
-    scenes::game::map::Map,
+    scenes::game::{map::Map, sidebar::Sidebar},
     websocket::{Message, WebsocketClient},
 };
 
@@ -96,6 +98,46 @@ impl Default for ClientViewSettings {
     }
 }
 
+struct ClickBroker {
+    listeners: Vec<Box<dyn FnOnce(Vec2<i32>)>>,
+    default_listener: Box<dyn FnMut(Vec2<i32>)>,
+}
+impl ClickBroker {
+    fn new(default_listener: Box<dyn FnMut(Vec2<i32>)>) -> Self {
+        Self {
+            listeners: vec![],
+            default_listener,
+        }
+    }
+
+    fn click(&mut self, location: Vec2<i32>) {
+        if let Some(listener) = self.listeners.pop() {
+            listener(location);
+        } else {
+            (self.default_listener)(location);
+        }
+    }
+
+    fn register(&mut self, action: Box<dyn FnOnce(Vec2<i32>)>) {
+        self.listeners.push(action);
+    }
+}
+
+#[derive(Store)]
+enum SidebarState {
+    Outliner(OutlinerState),
+    CelestialDetails(CelestialId),
+    StackDetails(StackId),
+    Disambiguate(Option<CelestialId>, Vec<StackId>),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum OutlinerState {
+    Overview,
+    Orders,
+    Settings,
+}
+
 #[component]
 pub fn InGame(
     me: PlayerId,
@@ -105,8 +147,9 @@ pub fn InGame(
 ) -> Element {
     let client_view_settings = use_signal(ClientViewSettings::default);
 
-    let orders = use_signal(Vec::<Order>::new);
-    let auto_orders = use_signal(Vec::<(Order, bool)>::new);
+    let mut orders = use_signal(Vec::<Order>::new);
+    let mut auto_orders = use_signal(Vec::<(Order, bool)>::new);
+    let mut submitting_orders = use_signal(|| false);
 
     // Game settings (unit hostility display, etc)
     let client_game_settings: Signal<ClientGameSettings> = use_signal(|| {
@@ -143,29 +186,107 @@ pub fn InGame(
         }
     });
 
-    // New state updates
-    spawn(async move {
-        match websocket.next().await {
-            Some(Ok(Message::Binary(bytes))) => {
-                let Ok(delta) = from_slice::<GameStateDelta>(&bytes) else {
-                    change_state(ClientState::Error(
-                        "Protocol error: bad state message: couldn't parse".to_owned(),
+    let mut sidebar_state = use_store(|| SidebarState::Outliner(OutlinerState::Overview));
+
+    let mut click_broker = use_signal(|| {
+        ClickBroker::new(Box::new(move |location| {
+            let game_state = game_state.read();
+            let selected_celestial = game_state
+                .celestials
+                .get_by_position(location)
+                .map(|(id, _)| id);
+            let selected_stacks = game_state
+                .stacks
+                .iter()
+                .filter_map(|(&id, stack)| {
+                    if stack.position == location {
+                        Some(id)
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>();
+            match (selected_celestial, selected_stacks.len()) {
+                (None, 0) => {
+                    if !matches!(&*sidebar_state.read(), SidebarState::Outliner(_)) {
+                        sidebar_state.set(SidebarState::Outliner(OutlinerState::Overview));
+                    }
+                }
+                (Some(selected), 0) => {
+                    sidebar_state.set(SidebarState::CelestialDetails(selected));
+                }
+                (None, 1) => {
+                    sidebar_state.set(SidebarState::StackDetails(selected_stacks[0]));
+                }
+                _ => {
+                    sidebar_state.set(SidebarState::Disambiguate(
+                        selected_celestial,
+                        selected_stacks,
                     ));
-                    return;
-                };
-                let mut game_state = game_state.write();
-                *game_state = game_state.apply(delta);
+                }
             }
-            Some(Ok(Message::Text(_))) => {
-                change_state(ClientState::Error(
-                    "Protocol error: bad state message: bad format".to_owned(),
-                ));
-            }
-            Some(Err(error)) => {
-                change_state(ClientState::Error(format!("Connection lost: {error}")));
-            }
-            None => {
-                unreachable!("we always give up upon seeing a close or error event");
+        }))
+    });
+
+    let candidate_orders = use_memo(move || {
+        let mut candidate_orders = orders.read().clone();
+        candidate_orders.extend(auto_orders.read().iter().filter_map(|(order, enabled)| {
+            if *enabled { Some(order.clone()) } else { None }
+        }));
+        candidate_orders
+    });
+
+    let order_errors = use_memo(move || {
+        let game_state = &*game_state.read();
+        let mut to_validate = game_state
+            .players
+            .keys()
+            .map(|&id| (id, vec![]))
+            .collect::<HashMap<PlayerId, Vec<Order>>>();
+        to_validate
+            .get_mut(&me)
+            .unwrap()
+            .extend(candidate_orders.read().iter().cloned());
+        Order::validate(game_state, &to_validate)
+            .1
+            .remove(&me)
+            .unwrap()
+    });
+
+    // New state updates
+    spawn({
+        let mut websocket = websocket.clone();
+        async move {
+            match websocket.next().await {
+                Some(Ok(Message::Binary(bytes))) => {
+                    trace!("Starting to parse delta");
+                    let Ok(delta) = from_slice::<GameStateDelta>(&bytes) else {
+                        trace!("Parse of delta failed");
+                        change_state(ClientState::Error(
+                            "Protocol error: bad state message: couldn't parse".to_owned(),
+                        ));
+                        return;
+                    };
+                    trace!(delta = ?delta);
+                    orders.clear();
+                    auto_orders.clear();
+                    submitting_orders.set(false);
+
+                    let mut game_state = game_state.write();
+                    *game_state = game_state.apply(delta);
+                    needs_update();
+                }
+                Some(Ok(Message::Text(_))) => {
+                    change_state(ClientState::Error(
+                        "Protocol error: bad state message: bad format".to_owned(),
+                    ));
+                }
+                Some(Err(error)) => {
+                    change_state(ClientState::Error(format!("Connection lost: {error}")));
+                }
+                None => {
+                    unreachable!("we always give up upon seeing a close or error event");
+                }
             }
         }
     });
@@ -183,10 +304,27 @@ pub fn InGame(
                         client_game_settings,
                         client_view_settings,
                         change_state,
+                        select: move |location| {
+                            click_broker.write().click(location);
+                        },
                     }
                 }
                 div { class: "col-3 h-100 overflow-y-auto border-start border-black",
-                    h1 { "Sidebar" }
+                    Sidebar {
+                        me,
+                        state: sidebar_state,
+                        game_state,
+                        orders,
+                        auto_orders,
+                        candidate_orders,
+                        order_errors,
+                        submitting_orders,
+                        client_game_settings,
+                        change_state: move |new_state| {
+                            sidebar_state.set(new_state);
+                        },
+                        websocket,
+                    }
                 }
             }
         }
