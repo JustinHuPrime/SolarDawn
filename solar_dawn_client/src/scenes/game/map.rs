@@ -17,6 +17,8 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::collections::HashMap;
+
 use dioxus::{
     core::needs_update,
     html::{geometry::WheelDelta, input_data::MouseButton},
@@ -30,7 +32,7 @@ use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, window};
 
 use crate::{
     ClientState,
-    scenes::game::{ClientGameSettings, ClientViewSettings},
+    scenes::game::{ClientGameSettings, ClientViewSettings, DisplayHostility},
 };
 
 // Major (left-right) radius of a hex
@@ -184,8 +186,44 @@ pub fn Map(
 
         let client_game_settings = &*client_game_settings.read();
 
+        let mut stacks_by_position = HashMap::<Vec2<i32>, Vec<&Stack>>::new();
         for stack in game_state.stacks.values() {
-            draw_stack(&ctx, stack, client_view_settings, client_game_settings);
+            if stack.velocity.norm() != 0 {
+                draw_arrow(
+                    &ctx,
+                    &ArrowOptions {
+                        from: stack.position,
+                        to: stack.position + stack.velocity,
+                        stop_short: false,
+                        stem_width: 1.0,
+                        head_style: ArrowHeadOptions::OpenV,
+                        colour: "#000000",
+                    },
+                );
+            }
+            stacks_by_position
+                .entry(stack.position)
+                .or_default()
+                .push(stack);
+        }
+        for (_, stacks) in stacks_by_position {
+            if stacks.len() == 1 {
+                draw_stack(
+                    &ctx,
+                    stacks[0],
+                    game_state,
+                    client_view_settings,
+                    client_game_settings,
+                );
+            } else {
+                draw_multistack(
+                    &ctx,
+                    &stacks,
+                    client_view_settings,
+                    client_game_settings,
+                    game_state,
+                );
+            }
         }
 
         ctx.restore();
@@ -359,7 +397,7 @@ fn draw_gravity_arrows(ctx: &CanvasRenderingContext2d, celestial_position: Vec2<
 
     // Draw arrows in all 6 neighboring hexes pointing toward the celestial
     ctx.save();
-    ctx.set_fill_style_str("#000000");
+    ctx.set_fill_style_str("#666666");
     for neighbor in celestial_position.neighbours() {
         let neighbor_center = neighbor.cartesian() * HEX_SCALE;
 
@@ -790,11 +828,272 @@ fn outline_hex(ctx: &CanvasRenderingContext2d, hex: Vec2<i32>) {
     ctx.restore();
 }
 
+/// Draw an icon representing multiple stacks
+fn draw_multistack(
+    ctx: &CanvasRenderingContext2d,
+    stacks: &[&Stack],
+    client_view_settings: &ClientViewSettings,
+    client_game_settings: &ClientGameSettings,
+    game_state: &GameState,
+) {
+    if stacks.is_empty() {
+        return;
+    }
+
+    let center = stacks[0].position.cartesian() * HEX_SCALE;
+    let icon_size = HEX_SCALE * 0.8;
+    let count = stacks.len();
+
+    ctx.save();
+
+    // Check if all stacks have the same display_hostility
+    let first_hostility = client_game_settings.display_hostility[&stacks[0].owner];
+    let all_same = stacks
+        .iter()
+        .all(|stack| client_game_settings.display_hostility[&stack.owner] == first_hostility);
+
+    if all_same {
+        // Draw the icon for that hostility
+        let fill_color = first_hostility.display_colour();
+        ctx.set_fill_style_str(fill_color);
+        ctx.set_stroke_style_str("#000000");
+        ctx.set_line_width(2.0);
+
+        match first_hostility {
+            DisplayHostility::Own | DisplayHostility::Friendly => {
+                // Draw a square
+                ctx.fill_rect(
+                    (center.x - icon_size / 2.0) as f64,
+                    (center.y - icon_size / 2.0) as f64,
+                    icon_size as f64,
+                    icon_size as f64,
+                );
+                ctx.stroke_rect(
+                    (center.x - icon_size / 2.0) as f64,
+                    (center.y - icon_size / 2.0) as f64,
+                    icon_size as f64,
+                    icon_size as f64,
+                );
+            }
+            DisplayHostility::Neutral => {
+                // Draw a circle
+                ctx.begin_path();
+                ctx.arc(
+                    center.x as f64,
+                    center.y as f64,
+                    (icon_size / 2.0) as f64,
+                    0.0,
+                    2.0 * std::f64::consts::PI,
+                )
+                .unwrap();
+                ctx.fill();
+                ctx.stroke();
+            }
+            DisplayHostility::Hostile => {
+                // Draw a diamond
+                ctx.begin_path();
+                ctx.move_to(center.x as f64, (center.y - icon_size / 2.0) as f64);
+                ctx.line_to((center.x + icon_size / 2.0) as f64, center.y as f64);
+                ctx.line_to(center.x as f64, (center.y + icon_size / 2.0) as f64);
+                ctx.line_to((center.x - icon_size / 2.0) as f64, center.y as f64);
+                ctx.close_path();
+                ctx.fill();
+                ctx.stroke();
+            }
+        }
+    } else {
+        // Draw a black circle outline
+        ctx.set_stroke_style_str("#000000");
+        ctx.set_line_width(2.0);
+        ctx.begin_path();
+        ctx.arc(
+            center.x as f64,
+            center.y as f64,
+            (icon_size / 2.0) as f64,
+            0.0,
+            2.0 * std::f64::consts::PI,
+        )
+        .unwrap();
+        ctx.stroke();
+    }
+
+    // Draw the number of stacks in black text if zoomed in enough
+    if client_view_settings.zoom_level >= -20 {
+        ctx.set_font("16px \"Science Gothic\"");
+        ctx.set_fill_style_str("#000000");
+        ctx.set_text_align("center");
+        ctx.set_text_baseline("middle");
+        ctx.fill_text(&count.to_string(), center.x as f64, center.y as f64)
+            .unwrap();
+    }
+
+    // Display owner name if all stacks share the same owner and zoomed in enough
+    if client_view_settings.zoom_level >= -10 {
+        let first_owner = stacks[0].owner;
+        let all_same_owner = stacks.iter().all(|stack| stack.owner == first_owner);
+
+        if all_same_owner {
+            ctx.set_font("8px \"Science Gothic\"");
+            ctx.set_fill_style_str("#000000");
+            ctx.set_text_align("right");
+            ctx.set_text_baseline("middle");
+            ctx.fill_text(
+                &game_state.players[&first_owner],
+                (center.x - icon_size / 2.0 - 2.0) as f64,
+                center.y as f64,
+            )
+            .unwrap();
+        }
+    }
+
+    ctx.restore();
+}
+
+/// Draw an icon representing a single stack
 fn draw_stack(
     ctx: &CanvasRenderingContext2d,
     stack: &Stack,
+    game_state: &GameState,
     client_view_settings: &ClientViewSettings,
     client_game_settings: &ClientGameSettings,
 ) {
-    // todo!()
+    let center = stack.position.cartesian() * HEX_SCALE;
+    let icon_size = HEX_SCALE * 0.8;
+
+    ctx.save();
+
+    let display_hostility = client_game_settings.display_hostility[&stack.owner];
+    let fill_color = display_hostility.display_colour();
+
+    ctx.set_fill_style_str(fill_color);
+    ctx.set_stroke_style_str("#000000");
+    ctx.set_line_width(2.0);
+
+    // Draw the icon shape based on hostility
+    match display_hostility {
+        DisplayHostility::Own | DisplayHostility::Friendly => {
+            // Draw a square
+            ctx.fill_rect(
+                (center.x - icon_size / 2.0) as f64,
+                (center.y - icon_size / 2.0) as f64,
+                icon_size as f64,
+                icon_size as f64,
+            );
+            ctx.stroke_rect(
+                (center.x - icon_size / 2.0) as f64,
+                (center.y - icon_size / 2.0) as f64,
+                icon_size as f64,
+                icon_size as f64,
+            );
+        }
+        DisplayHostility::Neutral => {
+            // Draw a circle
+            ctx.begin_path();
+            ctx.arc(
+                center.x as f64,
+                center.y as f64,
+                (icon_size / 2.0) as f64,
+                0.0,
+                2.0 * std::f64::consts::PI,
+            )
+            .unwrap();
+            ctx.fill();
+            ctx.stroke();
+        }
+        DisplayHostility::Hostile => {
+            // Draw a diamond
+            ctx.begin_path();
+            ctx.move_to(center.x as f64, (center.y - icon_size / 2.0) as f64); // top
+            ctx.line_to((center.x + icon_size / 2.0) as f64, center.y as f64); // right
+            ctx.line_to(center.x as f64, (center.y + icon_size / 2.0) as f64); // bottom
+            ctx.line_to((center.x - icon_size / 2.0) as f64, center.y as f64); // left
+            ctx.close_path();
+            ctx.fill();
+            ctx.stroke();
+        }
+    }
+
+    // Display ship category in center of icon if zoomed in enough
+    if client_view_settings.zoom_level >= -20 {
+        let category = stack.classify();
+        ctx.set_font("16px \"Science Gothic\"");
+        ctx.set_fill_style_str("#000000");
+        ctx.set_text_align("center");
+        ctx.set_text_baseline("middle");
+        ctx.fill_text(category, center.x as f64, center.y as f64)
+            .unwrap();
+    }
+
+    // Display detailed ship info if zoomed in enough
+    if client_view_settings.zoom_level >= -10 {
+        ctx.set_font("8px \"Science Gothic\"");
+        ctx.set_fill_style_str("#000000");
+
+        // Display tonnage at top
+        let tonnage = format!(
+            "{:.1} {}/{}",
+            stack.mass(),
+            stack.dry_mass(),
+            stack.full_mass()
+        );
+        ctx.set_text_align("center");
+        ctx.set_text_baseline("bottom");
+        ctx.fill_text(
+            &tonnage,
+            center.x as f64,
+            (center.y - icon_size / 2.0 - 2.0) as f64,
+        )
+        .unwrap();
+
+        // Display owner name at middle left
+        let owner_name = &game_state.players[&stack.owner];
+        ctx.set_text_align("right");
+        ctx.set_text_baseline("middle");
+        ctx.fill_text(
+            owner_name,
+            (center.x - icon_size / 2.0 - 2.0) as f64,
+            center.y as f64,
+        )
+        .unwrap();
+
+        // Display ship damage status at right
+        let (intact, damaged, destroyed) = stack.damage_status();
+        let damage_status = format!("{}/{}/{}", intact, damaged, destroyed);
+        ctx.set_text_align("left");
+        ctx.set_text_baseline("middle");
+        ctx.fill_text(
+            &damage_status,
+            (center.x + icon_size / 2.0 + 2.0) as f64,
+            center.y as f64,
+        )
+        .unwrap();
+
+        // Display movement status below icon
+        let movement_status = format!(
+            "{:.1}/{:.1} @ {:.1}",
+            stack.current_dv(),
+            stack.max_dv(),
+            stack.acceleration()
+        );
+        ctx.set_text_align("center");
+        ctx.set_text_baseline("top");
+        ctx.fill_text(
+            &movement_status,
+            center.x as f64,
+            (center.y + icon_size / 2.0 + 2.0) as f64,
+        )
+        .unwrap();
+
+        // Display ship name below movement status
+        ctx.set_text_align("center");
+        ctx.set_text_baseline("top");
+        ctx.fill_text(
+            &stack.name,
+            center.x as f64,
+            (center.y + icon_size / 2.0 + 12.0) as f64,
+        )
+        .unwrap();
+    }
+
+    ctx.restore();
 }

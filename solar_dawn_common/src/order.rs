@@ -398,11 +398,11 @@ pub enum OrderError {
     TargetMoved,
 }
 
-#[cfg(feature = "server")]
 impl Order {
     /// validates that orders can be carried out given some game state
     ///
     /// returns a token of said validity and the reasons why any invalid orders couldn't be carried out
+    #[cfg(feature = "server")]
     pub fn validate<'a>(
         game_state: &'a GameState,
         orders: &'a HashMap<PlayerId, Vec<Order>>,
@@ -1153,6 +1153,7 @@ impl Order {
     }
 
     /// Validate all that can be validated for a single order
+    #[cfg(feature = "server")]
     fn validate_single(&self, game_state: &GameState, player: PlayerId) -> Result<(), OrderError> {
         fn validate_stack(
             stack: StackId,
@@ -1215,21 +1216,8 @@ impl Order {
             // F = ma; a = F/m
             // Units of m/s^2 or equivalently 0.5 hex/turn^2
             let mass = stack_ref.mass();
-            let engine_count = stack_ref
-                .modules
-                .values()
-                .filter(|module| {
-                    matches!(
-                        module,
-                        Module {
-                            health: Health::Intact,
-                            details: ModuleDetails::Engine
-                        }
-                    )
-                })
-                .count();
 
-            if engine_count as f32 * ModuleDetails::ENGINE_THRUST / mass < min_accel {
+            if stack_ref.acceleration() < min_accel {
                 return Err(OrderError::NotEnoughThrust);
             }
 
@@ -1626,6 +1614,7 @@ impl Order {
     ///
     /// note: internal-only; call only on validated orders
     #[expect(clippy::too_many_arguments)]
+    #[cfg(feature = "server")]
     fn apply(
         &self,
         stacks: &mut HashMap<StackId, Stack>,
@@ -1957,7 +1946,7 @@ impl ValidatedOrders<'_> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server", feature = "client"))]
 mod tests {
     use super::*;
 

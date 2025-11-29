@@ -36,8 +36,8 @@ use crate::{
 mod map;
 mod sidebar;
 
-#[derive(Serialize, Deserialize)]
-enum DisplayHostility {
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DisplayHostility {
     Own,
     Friendly,
     Neutral,

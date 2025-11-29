@@ -112,14 +112,15 @@ pub struct GameStateDelta {
     pub errors: HashMap<PlayerId, Vec<Option<OrderError>>>,
 }
 
-#[cfg(feature = "server")]
 impl GameState {
     /// Maximum distance from the sun (origin) before stacks are deleted, in hexes
+    #[cfg(feature = "server")]
     const MAX_DISTANCE_FROM_SUN: i32 = 1000;
 
     /// Constructs an initializer for a new game given a scenario identifier
     ///
     /// Returns Err with the identifier if it does not correspond to a known scenario
+    #[cfg(feature = "server")]
     pub fn new(scenario: &str) -> Result<GameStateInitializer, &str> {
         match scenario {
             "campaign" => Ok(
@@ -187,6 +188,7 @@ impl GameState {
     }
 
     /// Produce the next game state after resolving orders
+    #[cfg(feature = "server")]
     pub fn next(
         &self,
         orders: HashMap<PlayerId, Vec<Order>>,
@@ -439,8 +441,8 @@ pub enum Phase {
     Movement,
 }
 
-#[cfg(feature = "server")]
 impl Phase {
+    #[cfg(feature = "server")]
     fn next(self) -> Self {
         use Phase::*;
 
@@ -459,8 +461,8 @@ impl Phase {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PlayerId(u8);
 
-#[cfg(feature = "server")]
 impl PlayerId {
+    #[cfg(feature = "server")]
     fn starting_stack_name(&self) -> String {
         match self.0 {
             1 => "Washington Station".to_owned(),
@@ -770,7 +772,7 @@ impl MulAssign<f32> for CartesianVec2 {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server", feature = "client"))]
 mod tests {
     use super::*;
 

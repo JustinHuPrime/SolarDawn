@@ -112,6 +112,7 @@ impl CelestialMap {
     }
 }
 
+#[cfg(feature = "server")]
 impl From<HashMap<CelestialId, Celestial>> for CelestialMap {
     fn from(value: HashMap<CelestialId, Celestial>) -> Self {
         Self {
@@ -134,6 +135,7 @@ impl From<HashMap<CelestialId, Celestial>> for CelestialMap {
     }
 }
 
+#[cfg(feature = "server")]
 impl From<CelestialMap> for HashMap<CelestialId, Celestial> {
     fn from(value: CelestialMap) -> Self {
         value.all
@@ -156,9 +158,9 @@ pub enum Resources {
     None,
 }
 
-#[cfg(feature = "server")]
 impl Celestial {
     /// Create a map of the solar system but with curated phase angles for the planets
+    #[cfg(feature = "server")]
     pub fn solar_system_balanced_positions(
         celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
         rng: &mut dyn RngCore,
@@ -677,6 +679,7 @@ impl Celestial {
 
     #[cfg(test)]
     /// Creates a simple solar system for testing purposes with a Sun, Earth, Moon, and asteroids.
+    #[cfg(feature = "server")]
     pub fn solar_system_for_testing(
         celestial_id_generator: &mut dyn Iterator<Item = CelestialId>,
     ) -> (HashMap<CelestialId, Celestial>, CelestialId) {
@@ -765,6 +768,7 @@ impl Celestial {
     /// Can only land on bodies you can get resources from via mining
     ///
     /// So you can't land on Earth, the Sun, or gas giants
+    #[cfg(feature = "server")]
     pub fn can_land(&self) -> bool {
         matches!(
             self.resources,
@@ -772,6 +776,7 @@ impl Celestial {
         )
     }
 
+    #[cfg(feature = "server")]
     fn intersects(&self, start: CartesianVec2, end: CartesianVec2) -> Option<(f32, f32)> {
         // find t such that self.radius^2 = (start - self.position + t*(end - start))^2
         let dp = start - self.position.cartesian();
@@ -796,6 +801,7 @@ impl Celestial {
     /// Would a stack moving from start to end collide with this celestial body, and if so, when?
     ///
     /// Note bodies without gravity also have no collision
+    #[cfg(feature = "server")]
     pub fn stack_movement_collides(&self, start: CartesianVec2, end: CartesianVec2) -> Option<f32> {
         if !self.orbit_gravity {
             return None;
@@ -816,6 +822,7 @@ impl Celestial {
     /// Is a weapons effect originating from start blocked for a stack at end?
     ///
     /// Note bodies without gravity don't block
+    #[cfg(feature = "server")]
     pub fn blocks_weapons_effect(&self, start: CartesianVec2, end: CartesianVec2) -> bool {
         if !self.orbit_gravity {
             return false;
@@ -831,6 +838,7 @@ impl Celestial {
     }
 
     /// Given a starting position and velocity, what's the effect of this body's gravity
+    #[cfg(feature = "server")]
     pub fn gravity_to(&self, position: Vec2<i32>, velocity: Vec2<i32>) -> Vec2<i32> {
         if !self.orbit_gravity {
             return Vec2::zero();
@@ -898,9 +906,7 @@ impl Celestial {
             })
             .sum()
     }
-}
 
-impl Celestial {
     /// Generate orbital parameters; assumes body has gravity
     pub fn orbit_parameters(&self, clockwise: bool) -> [(Vec2<i32>, Vec2<i32>); 6] {
         debug_assert!(self.orbit_gravity);
@@ -922,7 +928,7 @@ impl Celestial {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server", feature = "client"))]
 mod tests {
     use super::*;
 

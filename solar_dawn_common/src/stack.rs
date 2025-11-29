@@ -44,11 +44,11 @@ pub struct Stack {
     pub modules: HashMap<ModuleId, Module>,
 }
 
-#[cfg(feature = "server")]
 impl Stack {
     /// Create a starter stack for some player at some location with some velocity
     ///
     /// Contents = 2x hab, factory, refinery, miner, cargo hold (empty), tank (fuelled), 4x engine
+    #[cfg(feature = "server")]
     pub fn starter_stack(
         owner: PlayerId,
         position: Vec2<i32>,
@@ -87,6 +87,7 @@ impl Stack {
     }
 
     /// Create a new empty stack
+    #[cfg(feature = "server")]
     pub fn new(position: Vec2<i32>, velocity: Vec2<i32>, owner: PlayerId) -> Self {
         Self {
             position,
@@ -98,6 +99,7 @@ impl Stack {
     }
 
     /// Is this stack rendezvoused with the other stack?
+    #[cfg(feature = "server")]
     pub fn rendezvoused_with(&self, other: &Stack) -> bool {
         self.position == other.position && self.velocity == other.velocity
     }
@@ -105,6 +107,7 @@ impl Stack {
     /// Is this stack landed on the target celestial?
     ///
     /// Broad terms landed - also counts rendezvouses with non-gravity celestials
+    #[cfg(feature = "server")]
     pub fn landed(&self, celestial: &Celestial) -> bool {
         self.position == celestial.position && self.velocity.norm() == 0
     }
@@ -112,16 +115,13 @@ impl Stack {
     /// Is this stack landed on a celestial with gravity?
     ///
     /// Strict terms landed - doesn't count rendezvouses with non-gravity celestials
+    #[cfg(feature = "server")]
     pub fn landed_with_gravity(&self, celestial: &Celestial) -> bool {
         celestial.orbit_gravity && self.position == celestial.position && self.velocity.norm() == 0
     }
 
-    /// Get the wet mass in tonnes
-    pub fn mass(&self) -> f32 {
-        self.modules.values().map(|module| module.mass()).sum()
-    }
-
     /// When is the closest approach between this and the other stack, if it is within WARHEAD_RANGE
+    #[cfg(feature = "server")]
     pub fn closest_approach(&self, other: &Stack) -> Option<f32> {
         let t =
             Vec2::closest_approach(self.position, self.velocity, other.position, other.velocity);
@@ -142,6 +142,7 @@ impl Stack {
     /// Is the other stack within range at time t
     ///
     /// By in range, we mean WARHEAD_RANGE
+    #[cfg(feature = "server")]
     pub fn in_range(&self, t: f32, other: &Stack) -> bool {
         Vec2::squared_distance_at_time(
             self.position,
@@ -153,6 +154,7 @@ impl Stack {
     }
 
     /// Deal some damage to the stack
+    #[cfg(feature = "server")]
     pub fn do_damage(&mut self, mut hits: u32, rng: &mut impl Rng) {
         let mut armour_plates = self
             .modules
@@ -204,15 +206,107 @@ impl Stack {
             hits -= 1;
         }
     }
-}
 
-impl Stack {
     /// Is this stack orbiting the target celestial?
     pub fn orbiting(&self, celestial: &Celestial) -> bool {
         celestial.orbit_gravity
             && (self.position - celestial.position).norm() == 1
             && self.velocity.norm() == 1
             && (self.position + self.velocity - celestial.position).norm() == 1
+    }
+
+    /// Get the wet mass in tonnes
+    pub fn mass(&self) -> f32 {
+        self.modules.values().map(|module| module.mass()).sum()
+    }
+
+    /// Get the dry mass in tonnes
+    #[cfg(feature = "client")]
+    pub fn dry_mass(&self) -> u32 {
+        self.modules.values().map(|module| module.dry_mass()).sum()
+    }
+
+    /// Get the maximum possible mass in tonnes
+    #[cfg(feature = "client")]
+    pub fn full_mass(&self) -> u32 {
+        self.modules.values().map(|module| module.full_mass()).sum()
+    }
+
+    /// Get the acceleration of a stack, in m/s^2
+    pub fn acceleration(&self) -> f32 {
+        let engine_count = self
+            .modules
+            .values()
+            .filter(|module| {
+                matches!(
+                    module,
+                    Module {
+                        health: Health::Intact,
+                        details: ModuleDetails::Engine
+                    }
+                )
+            })
+            .count();
+        engine_count as f32 * ModuleDetails::ENGINE_THRUST / self.mass()
+    }
+
+    /// Get number of intact, damaged, and destroyed modules
+    #[cfg(feature = "client")]
+    pub fn damage_status(&self) -> (u32, u32, u32) {
+        self.modules.values().fold(
+            (0, 0, 0),
+            |(intact, damaged, destroyed), module| match module.health {
+                Health::Intact => (intact + 1, damaged, destroyed),
+                Health::Damaged => (intact, damaged + 1, destroyed),
+                Health::Destroyed => (intact, damaged + 1, destroyed),
+            },
+        )
+    }
+
+    /// Get current delta-v capabilities (assumes one large burn)
+    #[cfg(feature = "client")]
+    pub fn current_dv(&self) -> f32 {
+        // propellant mass, in 0.1 tonnes, and total mass in tonnes
+        let (propellant_mass, mass) =
+            self.modules
+                .values()
+                .fold((0_f32, 0_f32), |(prop_mass, mass), module| {
+                    match module.details {
+                        ModuleDetails::Tank { fuel, .. } => {
+                            (prop_mass + fuel as f32, mass + module.mass())
+                        }
+                        _ => (prop_mass, mass + module.mass()),
+                    }
+                });
+        let delta_p = propellant_mass * ModuleDetails::ENGINE_SPECIFIC_IMPULSE as f32;
+        delta_p / mass
+    }
+
+    /// Get fully-fuelled delta-v capabilities (assumes one large burn and no extra cargo)
+    #[cfg(feature = "client")]
+    pub fn max_dv(&self) -> f32 {
+        // potential propellant mass, in 0.1 tonnes, and total mass in tonnes
+        let (propellant_mass, mass) =
+            self.modules
+                .values()
+                .fold((0_f32, 0_f32), |(prop_mass, mass), module| {
+                    match module.details {
+                        ModuleDetails::Tank { water, .. } => (
+                            prop_mass + (ModuleDetails::TANK_CAPACITY as u8 - water) as f32,
+                            mass + module.mass(),
+                        ),
+                        _ => (prop_mass, mass + module.mass()),
+                    }
+                });
+        let delta_p = propellant_mass * ModuleDetails::ENGINE_SPECIFIC_IMPULSE as f32;
+        delta_p / mass
+    }
+
+    /// Classify a stack for display purposes
+    #[cfg(feature = "client")]
+    pub fn classify(&self) -> &'static str {
+        ""
+        // TODO: improve this after alpha
     }
 }
 
@@ -244,8 +338,8 @@ pub struct Module {
     pub details: ModuleDetails,
 }
 
-#[cfg(feature = "server")]
 impl Module {
+    #[cfg(feature = "server")]
     fn new(details: ModuleDetails) -> Self {
         Self {
             health: Health::Intact,
@@ -254,16 +348,19 @@ impl Module {
     }
 
     /// Create a new miner module
+    #[cfg(feature = "server")]
     pub fn new_miner() -> Self {
         Self::new(ModuleDetails::Miner)
     }
 
     /// Create a new fuel skimmer module
+    #[cfg(feature = "server")]
     pub fn new_fuel_skimmer() -> Self {
         Self::new(ModuleDetails::FuelSkimmer)
     }
 
     /// Create a new (empty) cargo hold module
+    #[cfg(feature = "server")]
     pub fn new_cargo_hold() -> Self {
         Self::new(ModuleDetails::CargoHold {
             ore: 0,
@@ -272,11 +369,13 @@ impl Module {
     }
 
     /// Create a new (empty) tank module
+    #[cfg(feature = "server")]
     pub fn new_tank() -> Self {
         Self::new(ModuleDetails::Tank { water: 0, fuel: 0 })
     }
 
     /// Create a tank full of fuel
+    #[cfg(feature = "server")]
     fn new_fuel_tank() -> Self {
         Self::new(ModuleDetails::Tank {
             water: 0,
@@ -285,48 +384,61 @@ impl Module {
     }
 
     /// Create a new engine module
+    #[cfg(feature = "server")]
     pub fn new_engine() -> Self {
         Self::new(ModuleDetails::Engine)
     }
 
     /// Create a new warhead module (starts disarmed)
+    #[cfg(feature = "server")]
     pub fn new_warhead() -> Self {
         Self::new(ModuleDetails::Warhead { armed: false })
     }
 
     /// Create a new gun module
+    #[cfg(feature = "server")]
     pub fn new_gun() -> Self {
         Self::new(ModuleDetails::Gun)
     }
 
     /// Create a new habitat module
+    #[cfg(feature = "server")]
     pub fn new_habitat(owner: PlayerId) -> Self {
         Self::new(ModuleDetails::Habitat { owner })
     }
 
     /// Create a new refinery module
+    #[cfg(feature = "server")]
     pub fn new_refinery() -> Self {
         Self::new(ModuleDetails::Refinery)
     }
 
     /// Create a new factory module
+    #[cfg(feature = "server")]
     pub fn new_factory() -> Self {
         Self::new(ModuleDetails::Factory)
     }
 
     /// Create a new armour plate module
+    #[cfg(feature = "server")]
     pub fn new_armour_plate() -> Self {
         Self::new(ModuleDetails::ArmourPlate)
     }
 
-    /// Get the mass of this module (only relevant for getting the mass of the stack)
-    fn mass(&self) -> f32 {
+    /// Get the dry mass of this module, in tonnes (excludes module contents for containers)
+    pub fn dry_mass(&self) -> u32 {
+        self.details.dry_mass()
+    }
+
+    /// Get the mass of this module, in tonnes (only relevant for getting the mass of the stack)
+    pub fn mass(&self) -> f32 {
         self.details.mass()
     }
 
-    /// Get the dry mass of this module (excludes module contents for containers)
-    pub fn dry_mass(&self) -> u32 {
-        self.details.dry_mass()
+    /// Get the full mass of this module, in tonnes
+    #[cfg(feature = "client")]
+    pub fn full_mass(&self) -> u32 {
+        self.details.full_mass()
     }
 }
 
@@ -341,11 +453,11 @@ pub enum Health {
     Destroyed,
 }
 
-#[cfg(feature = "server")]
 impl Health {
     /// Do damage to this module's health
     ///
     /// Note: must not try to do damage to a destroyed module, panic in debug mode if you do so
+    #[cfg(feature = "server")]
     pub fn damage(&mut self) {
         match self {
             Health::Intact => *self = Health::Damaged,
@@ -492,7 +604,6 @@ impl ModuleDetails {
     }
 }
 
-#[cfg(feature = "server")]
 impl ModuleDetails {
     fn dry_mass(&self) -> u32 {
         match self {
@@ -507,6 +618,17 @@ impl ModuleDetails {
             ModuleDetails::Refinery => Self::REFINERY_MASS,
             ModuleDetails::Factory => Self::FACTORY_MASS,
             ModuleDetails::ArmourPlate => Self::ARMOUR_PLATE_MASS,
+        }
+    }
+
+    #[cfg(feature = "client")]
+    fn full_mass(&self) -> u32 {
+        match self {
+            ModuleDetails::CargoHold { .. } => {
+                Self::CARGO_HOLD_MASS + Self::CARGO_HOLD_CAPACITY as u32 / 10
+            }
+            ModuleDetails::Tank { .. } => Self::TANK_MASS + Self::TANK_CAPACITY as u32 / 10,
+            not_container => not_container.dry_mass(),
         }
     }
 }
@@ -530,13 +652,12 @@ impl From<ModuleId> for u32 {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "server", feature = "client"))]
 mod tests {
     use super::*;
     use crate::celestial::{Celestial, Resources};
     use rand::{SeedableRng, rngs::StdRng};
 
-    #[cfg(feature = "server")]
     #[test]
     fn test_stack_creation() {
         let position = Vec2 { q: 5, r: 3 };
@@ -552,7 +673,6 @@ mod tests {
         assert!(stack.modules.is_empty());
     }
 
-    #[cfg(feature = "server")]
     #[test]
     fn test_starter_stack() {
         struct MockIdGen {
@@ -820,7 +940,6 @@ mod tests {
         assert_eq!(stack.mass(), expected_mass_with_tank);
     }
 
-    #[cfg(feature = "server")]
     #[test]
     fn test_stack_closest_approach() {
         // Two stacks starting at same position - should be in range immediately
@@ -871,7 +990,6 @@ mod tests {
         assert!(approach.is_some() || approach.is_none()); // Either result is valid
     }
 
-    #[cfg(feature = "server")]
     #[test]
     fn test_stack_in_range() {
         let stack1 = Stack {
@@ -914,7 +1032,6 @@ mod tests {
         assert!(stack1.in_range(0.0, &stack3));
     }
 
-    #[cfg(feature = "server")]
     #[test]
     fn test_stack_do_damage() {
         let mut rng = StdRng::seed_from_u64(42);
@@ -1069,7 +1186,6 @@ mod tests {
         assert_eq!(tank.dry_mass(), ModuleDetails::TANK_MASS);
     }
 
-    #[cfg(feature = "server")]
     #[test]
     fn test_health_damage() {
         let mut health = Health::Intact;
