@@ -22,6 +22,8 @@
 //! A stack is an unordered collection of modules
 
 use std::collections::HashMap;
+#[cfg(feature = "client")]
+use std::fmt::Display;
 
 #[cfg(feature = "server")]
 use rand::Rng;
@@ -88,12 +90,12 @@ impl Stack {
 
     /// Create a new empty stack
     #[cfg(feature = "server")]
-    pub fn new(position: Vec2<i32>, velocity: Vec2<i32>, owner: PlayerId) -> Self {
+    pub fn new(position: Vec2<i32>, velocity: Vec2<i32>, owner: PlayerId, name: String) -> Self {
         Self {
             position,
             velocity,
             owner,
-            name: String::default(),
+            name,
             modules: HashMap::new(),
         }
     }
@@ -439,6 +441,30 @@ impl Module {
     }
 }
 
+#[cfg(feature = "client")]
+impl Display for Module {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let health = match self.health {
+            Health::Intact => "",
+            Health::Damaged => " (damaged)",
+            Health::Destroyed => " (destroyed)",
+        };
+        match self.details {
+            ModuleDetails::Miner => write!(f, "a miner{health}"),
+            ModuleDetails::FuelSkimmer => write!(f, "a fuel skimmer{health}"),
+            ModuleDetails::CargoHold { .. } => write!(f, "a cargo hold{health}"),
+            ModuleDetails::Tank { .. } => write!(f, "a tank{health}"),
+            ModuleDetails::Engine => write!(f, "an engine{health}"),
+            ModuleDetails::Warhead { .. } => write!(f, "a warhead{health}"),
+            ModuleDetails::Gun => write!(f, "a gun{health}"),
+            ModuleDetails::Habitat { .. } => write!(f, "a habitat{health}"),
+            ModuleDetails::Refinery => write!(f, "a refinery{health}"),
+            ModuleDetails::Factory => write!(f, "a factory{health}"),
+            ModuleDetails::ArmourPlate => write!(f, "an armour plate{health}"),
+        }
+    }
+}
+
 /// The health of a module
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum Health {
@@ -661,7 +687,7 @@ mod tests {
         let velocity = Vec2 { q: 1, r: -1 };
         let owner = PlayerId::from(1u8);
 
-        let stack = Stack::new(position, velocity, owner);
+        let stack = Stack::new(position, velocity, owner, "".to_owned());
 
         assert_eq!(stack.position, position);
         assert_eq!(stack.velocity, velocity);

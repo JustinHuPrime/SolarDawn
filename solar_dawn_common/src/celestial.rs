@@ -45,7 +45,7 @@ pub struct Celestial {
     pub surface_gravity: f32,
     /// What resources can be obtained?
     ///
-    /// - Mining(Both|Ice|Ore) = must land, if a body with gravity, with a
+    /// - Mining(Both|Water|Ore) = must land, if a body with gravity, with a
     ///   landing manoeuver, or rendezvoused for bodies without gravity
     /// - Skimming = if in orbit, may use a skimming manoeuver
     pub resources: Resources,
@@ -164,10 +164,10 @@ impl From<CelestialMap> for HashMap<CelestialId, Celestial> {
 #[repr(u8)]
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
 pub enum Resources {
-    /// Can mine for both ice and ore if landed
+    /// Can mine for both water and ore if landed
     MiningBoth,
-    /// Can mine for only ice if landed
-    MiningIce,
+    /// Can mine for only water if landed
+    MiningWater,
     /// Can mine for only ore if landed
     MiningOre,
     /// Can't land, but can skim for fuel if in orbit
@@ -338,7 +338,7 @@ impl Celestial {
                 name: "Europa".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 1.3,
-                resources: Resources::MiningIce,
+                resources: Resources::MiningWater,
                 radius: 0.15,
                 colour: "#88bbdd".to_owned(),
                 is_minor: false,
@@ -403,7 +403,7 @@ impl Celestial {
                 name: "Tethys".to_owned(),
                 orbit_gravity: false,
                 surface_gravity: 0.1,
-                resources: Resources::MiningIce,
+                resources: Resources::MiningWater,
                 radius: 0.1,
                 colour: "#888888".to_owned(),
                 is_minor: false,
@@ -476,7 +476,7 @@ impl Celestial {
                 name: "Iapetus".to_owned(),
                 orbit_gravity: false,
                 surface_gravity: 0.2,
-                resources: Resources::MiningIce,
+                resources: Resources::MiningWater,
                 radius: 0.1,
                 colour: "#444444".to_owned(),
                 is_minor: false,
@@ -618,7 +618,7 @@ impl Celestial {
         let asteroid_belt_resources = [
             (0.8, Resources::MiningOre),
             (0.1, Resources::MiningBoth),
-            (0.1, Resources::MiningIce),
+            (0.1, Resources::MiningWater),
         ];
         let asteroid_belt_distribution =
             WeightedIndex::new(asteroid_belt_resources.iter().map(|&(weight, _)| weight)).unwrap();
@@ -657,7 +657,7 @@ impl Celestial {
                         radius: 0.1,
                         colour: match resources {
                             Resources::MiningBoth => "#888888".to_owned(),
-                            Resources::MiningIce => "#aaaaaa".to_owned(),
+                            Resources::MiningWater => "#aaaaaa".to_owned(),
                             Resources::MiningOre => "#666666".to_owned(),
                             _ => unreachable!(),
                         },
@@ -671,7 +671,7 @@ impl Celestial {
         let kuiper_belt_start = 395;
         let kuiper_belt_end = 487;
         let kuiper_belt_resources = [
-            (0.9, Resources::MiningIce),
+            (0.9, Resources::MiningWater),
             (0.05, Resources::MiningBoth),
             (0.05, Resources::MiningOre),
         ];
@@ -712,7 +712,7 @@ impl Celestial {
                         radius: 0.1,
                         colour: match resources {
                             Resources::MiningBoth => "#888888".to_owned(),
-                            Resources::MiningIce => "#aaaaaa".to_owned(),
+                            Resources::MiningWater => "#aaaaaa".to_owned(),
                             Resources::MiningOre => "#666666".to_owned(),
                             _ => unreachable!(),
                         },
@@ -767,7 +767,7 @@ impl Celestial {
                 name: "Moon".to_owned(),
                 orbit_gravity: true,
                 surface_gravity: 1.6,
-                resources: Resources::MiningIce,
+                resources: Resources::MiningWater,
                 radius: 0.1,
                 colour: "#aaaaaa".to_owned(),
                 is_minor: false,
@@ -824,7 +824,7 @@ impl Celestial {
     pub fn can_land(&self) -> bool {
         matches!(
             self.resources,
-            Resources::MiningBoth | Resources::MiningIce | Resources::MiningOre
+            Resources::MiningBoth | Resources::MiningWater | Resources::MiningOre
         )
     }
 
@@ -1064,12 +1064,12 @@ mod tests {
         assert_eq!(sun.position, Vec2::zero());
         assert!(!sun.can_land()); // Sun has Resources::None
 
-        // Moon should have ice mining
+        // Moon should have water mining
         let moon = celestials
             .values()
             .find(|c| c.name == "Moon")
             .expect("Moon should exist");
-        assert!(matches!(moon.resources, Resources::MiningIce));
+        assert!(matches!(moon.resources, Resources::MiningWater));
         assert!(moon.can_land());
 
         // Check asteroids
@@ -1099,7 +1099,7 @@ mod tests {
     fn test_resources_enum() {
         // Test all resource types
         let mining_both = Resources::MiningBoth;
-        let mining_ice = Resources::MiningIce;
+        let mining_ice = Resources::MiningWater;
         let mining_ore = Resources::MiningOre;
         let skimming = Resources::Skimming;
         let none = Resources::None;
@@ -1117,9 +1117,9 @@ mod tests {
         };
         assert!(mining_both_body.can_land());
 
-        let mining_ice_body = Celestial {
+        let mining_water_body = Celestial {
             position: Vec2::zero(),
-            name: "Ice World".to_owned(),
+            name: "Water World".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
             resources: mining_ice,
@@ -1127,7 +1127,7 @@ mod tests {
             colour: "#aaddff".to_owned(),
             is_minor: false,
         };
-        assert!(mining_ice_body.can_land());
+        assert!(mining_water_body.can_land());
 
         let mining_ore_body = Celestial {
             position: Vec2::zero(),
@@ -1350,17 +1350,17 @@ mod tests {
         };
         assert!(mining_both_body.can_land());
 
-        let mining_ice_body = Celestial {
+        let mining_water_body = Celestial {
             position: Vec2::zero(),
-            name: "Mining Ice".to_owned(),
+            name: "Mining Water".to_owned(),
             orbit_gravity: true,
             surface_gravity: 1.0,
-            resources: Resources::MiningIce,
+            resources: Resources::MiningWater,
             radius: 0.5,
             colour: "#aaddff".to_owned(),
             is_minor: false,
         };
-        assert!(mining_ice_body.can_land());
+        assert!(mining_water_body.can_land());
 
         let mining_ore_body = Celestial {
             position: Vec2::zero(),
@@ -1458,7 +1458,7 @@ mod tests {
             name: "No Gravity".to_owned(),
             orbit_gravity: false,
             surface_gravity: 0.0,
-            resources: Resources::MiningIce,
+            resources: Resources::MiningWater,
             radius: 1.0,
             colour: "#aaddff".to_owned(),
             is_minor: false,
@@ -1590,7 +1590,7 @@ mod tests {
             name: "No Gravity".to_owned(),
             orbit_gravity: false,
             surface_gravity: 0.0,
-            resources: Resources::MiningIce,
+            resources: Resources::MiningWater,
             radius: 1.0,
             colour: "#aaddff".to_owned(),
             is_minor: false,

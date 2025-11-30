@@ -275,10 +275,53 @@ pub fn OutlinerOrders(
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
-    // TODO
+    let game_state = &*game_state.read();
     rsx! {
         h2 { "Orders" }
+        p {
+            for (index , order) in orders.read().iter().enumerate() {
+                Fragment { key: "{index}:{order:?}",
+                    "{order.display_attributed(game_state)}"
+                    button {
+                        r#type: "button",
+                        class: "btn btn-secondary btn-sm",
+                        onclick: move |_| {
+                            orders.write().remove(index);
+                        },
+                        "Cancel"
+                    }
+                    br {}
+                }
+            }
+        }
         h2 { "Automatic Orders" }
+        p {
+            for (index , (order , enabled)) in auto_orders.read().iter().enumerate() {
+                Fragment { key: "{index}:{order:?}",
+                    if *enabled {
+                        "{order.display_attributed(game_state)}"
+                        button {
+                            r#type: "button",
+                            class: "btn btn-secondary btn-sm",
+                            onclick: move |_| {
+                                auto_orders.write()[index].1 = false;
+                            },
+                            "Cancel"
+                        }
+                    } else {
+                        s { "{order.display_attributed(game_state)}" }
+                        button {
+                            r#type: "button",
+                            class: "btn btn-secondary btn-sm",
+                            onclick: move |_| {
+                                auto_orders.write()[index].1 = true;
+                            },
+                            "Reinstate"
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -369,14 +412,14 @@ pub fn CelestialDetails(
     client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
-    let game_state_ref = &*game_state.read();
-    let Some(celestial) = game_state_ref.celestials.get(id) else {
+    let game_state = &*game_state.read();
+    let Some(celestial) = game_state.celestials.get(id) else {
         return rsx! {
             h1 { "Unknown Celestial Body" }
         };
     };
 
-    let stacks_nearby = game_state_ref
+    let stacks_nearby = game_state
         .stacks
         .iter()
         .filter(|(_, stack)| (stack.position - celestial.position).norm() <= 1)
@@ -417,10 +460,10 @@ pub fn CelestialDetails(
         }
         match celestial.resources {
             Resources::MiningBoth => rsx! {
-                p { "May mine ice and ore" }
+                p { "May mine water and ore" }
             },
-            Resources::MiningIce => rsx! {
-                p { "May mine ice" }
+            Resources::MiningWater => rsx! {
+                p { "May mine water" }
             },
             Resources::MiningOre => rsx! {
                 p { "May mine ore" }
@@ -471,8 +514,35 @@ pub fn StackDetails(
     client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
+    let game_state = &*game_state.read();
+    let Some(stack) = game_state.stacks.get(&id) else {
+        return rsx! {
+            h1 { "Unknown Celestial Body" }
+        };
+    };
+
     // TODO
-    rsx! {}
+    rsx! {
+        h1 {
+            "{stack.name} "
+            button {
+                r#type: "button",
+                class: "btn btn-secondary btn-sm regular-font",
+                onclick: {
+                    let position = stack.position.cartesian() * HEX_SCALE;
+                    move |_| {
+                        client_view_settings
+                            .set(ClientViewSettings {
+                                x_offset: -position.x,
+                                y_offset: -position.y,
+                                zoom_level: 0,
+                            })
+                    }
+                },
+                "Go To"
+            }
+        }
+    }
 }
 
 #[component]

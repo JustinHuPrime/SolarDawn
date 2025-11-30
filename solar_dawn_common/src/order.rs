@@ -20,6 +20,8 @@
 //! Orders that may be given to stacks
 
 use std::collections::HashMap;
+#[cfg(feature = "client")]
+use std::fmt::Display;
 
 #[cfg(feature = "server")]
 use rand::Rng;
@@ -80,12 +82,12 @@ pub enum Order {
     Isru {
         /// Which stack
         stack: StackId,
-        /// How much ore to produce
-        ore: u8,
-        /// How much water to produce
-        water: u8,
-        /// How much fuel to produce
-        fuel: u8,
+        /// How much ore to produce, 0.1 tonnes
+        ore: u32,
+        /// How much water to produce, 0.1 tonnes
+        water: u32,
+        /// How much fuel to produce, 0.1 tonnes
+        fuel: u32,
     },
     /// Transfer resources - only between your stacks
     ///
@@ -103,13 +105,13 @@ pub enum Order {
         ///
         /// If to another stack, must be your stack
         to: ResourceTransferTarget,
-        /// How much ore to transfer
+        /// How much ore to transfer, 0.1 tonnes
         ore: u8,
-        /// How much materials to transfer
+        /// How much materials to transfer, 0.1 tonnes
         materials: u8,
-        /// How much water to transfer
+        /// How much water to transfer, 0.1 tonnes
         water: u8,
-        /// How much fuel to transfer
+        /// How much fuel to transfer, 0.1 tonnes
         fuel: u8,
     },
     /// Repair another module - must be your module
@@ -135,9 +137,9 @@ pub enum Order {
     Refine {
         /// Which stack
         stack: StackId,
-        /// How many materials to produce
+        /// How many materials to produce, 0.1 tonnes
         materials: u8,
-        /// How much fuel to produce
+        /// How much fuel to produce, 0.1 tonnes
         fuel: u8,
     },
     /// Build a module
@@ -211,6 +213,8 @@ pub enum Order {
     OrbitAdjust {
         /// Which stack
         stack: StackId,
+        /// Where
+        around: CelestialId,
         /// Target orbital position
         target_position: Vec2<i32>,
         /// Clockwise or counterclockwise orbit direction
@@ -302,6 +306,25 @@ impl ModuleType {
             ModuleType::Refinery => ModuleDetails::REFINERY_MASS as i32 * 10,
             ModuleType::Factory => ModuleDetails::FACTORY_MASS as i32 * 10,
             ModuleType::ArmourPlate => ModuleDetails::ARMOUR_PLATE_MASS as i32 * 10,
+        }
+    }
+}
+
+#[cfg(feature = "client")]
+impl Display for ModuleType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ModuleType::Miner => write!(f, "a miner"),
+            ModuleType::FuelSkimmer => write!(f, "a fuel skimmer"),
+            ModuleType::CargoHold => write!(f, "a cargo hold"),
+            ModuleType::Tank => write!(f, "a tank"),
+            ModuleType::Engine => write!(f, "an engine"),
+            ModuleType::Warhead => write!(f, "a warhead"),
+            ModuleType::Gun => write!(f, "a gun"),
+            ModuleType::Habitat => write!(f, "a habitat"),
+            ModuleType::Refinery => write!(f, "a refinery"),
+            ModuleType::Factory => write!(f, "a factory"),
+            ModuleType::ArmourPlate => write!(f, "an armour plate"),
         }
     }
 }
@@ -655,11 +678,10 @@ impl Order {
                                 water,
                                 fuel,
                             }) => {
-                                *miner_capacity_used.entry(*stack).or_default() +=
-                                    *ore as u32 + *water as u32;
-                                *skimmer_capacity_used.entry(*stack).or_default() += *fuel as u32;
+                                *miner_capacity_used.entry(*stack).or_default() += *ore + *water;
+                                *skimmer_capacity_used.entry(*stack).or_default() += *fuel;
 
-                                // mote - both mining and skimming orders will not pass individual validation
+                                // note - both mining and skimming orders will not pass individual validation
                                 if *ore > 0 || *water > 0 {
                                     miner_orders.entry(*stack).or_default().push(order);
                                 } else if *fuel > 0 {
@@ -1339,7 +1361,7 @@ impl Order {
                             stack_ref.landed(celestial)
                                 && matches!(
                                     celestial.resources,
-                                    Resources::MiningBoth | Resources::MiningIce
+                                    Resources::MiningBoth | Resources::MiningWater
                                 )
                         })
                 {
@@ -1532,6 +1554,7 @@ impl Order {
             }
             Order::OrbitAdjust {
                 stack,
+                around,
                 target_position,
                 fuel_from,
                 ..
@@ -1541,11 +1564,8 @@ impl Order {
 
                 validate_burn(*stack, stack_ref, 1, fuel_from, 0.0)?;
 
-                let Some(orbited) = game_state
-                    .celestials
-                    .with_gravity()
-                    .find(|&celestial| stack_ref.orbiting(celestial))
-                else {
+                let orbited = validate_celestial(*around, game_state)?;
+                if !stack_ref.orbiting(orbited) {
                     return Err(OrderError::NotInOrbit);
                 };
 
@@ -1662,9 +1682,9 @@ impl Order {
                         let position = stack.position;
                         let velocity = stack.velocity;
                         let owner = stack.owner;
-                        let new_stack = stacks
-                            .entry(new_id)
-                            .or_insert_with(|| Stack::new(position, velocity, owner));
+                        let new_stack = stacks.entry(new_id).or_insert_with(|| {
+                            Stack::new(position, velocity, owner, format!("New Stack #{new_count}"))
+                        });
                         new_stack.modules.insert(module_id, module);
                     }
                 }
@@ -1847,6 +1867,7 @@ impl Order {
             }
             Order::OrbitAdjust {
                 stack,
+                around,
                 target_position,
                 clockwise,
                 fuel_from,
@@ -1854,11 +1875,7 @@ impl Order {
                 let stack = stacks.get_mut(stack).unwrap();
 
                 // Find the orbited body to get correct velocity for target position
-                let orbited = game_state
-                    .celestials
-                    .with_gravity()
-                    .find(|&celestial| stack.orbiting(celestial))
-                    .unwrap();
+                let orbited = game_state.celestials.get(*around).unwrap();
 
                 // Get the correct velocity for the target position
                 let orbit_params = orbited.orbit_parameters(*clockwise);
@@ -1905,6 +1922,266 @@ impl Order {
 
                 drain_fuel(stack, fuel_from);
             }
+        }
+    }
+
+    /// Displays like
+    ///
+    /// stack_name: do thing
+    #[cfg(feature = "client")]
+    pub fn display_attributed(&self, game_state: &GameState) -> String {
+        fn format_resources(ore: u32, materials: u32, water: u32, fuel: u32) -> String {
+            match (ore, materials, water, fuel) {
+                (0, 0, 0, 0) => "nothing".to_owned(),
+                (ore, 0, 0, 0) => format!("{:.1}t ore", ore as f32 / 10.0),
+                (0, materials, 0, 0) => format!("{:.1}t materials", materials as f32 / 10.0),
+                (ore, materials, 0, 0) => format!(
+                    "{:.1}t ore and {:.1}t materials",
+                    ore as f32 / 10.0,
+                    materials as f32 / 10.0
+                ),
+                (0, 0, water, 0) => format!("{:.1}t water", water as f32 / 10.0),
+                (ore, 0, water, 0) => format!(
+                    "{:.1}t ore and {:.1}t water",
+                    ore as f32 / 10.0,
+                    water as f32 / 10.0
+                ),
+                (0, materials, water, 0) => format!(
+                    "{:.1}t materials and {:.1}t water",
+                    materials as f32 / 10.0,
+                    water as f32 / 10.0
+                ),
+                (ore, materials, water, 0) => format!(
+                    "{:.1}t ore, {:.1}t materials, and {:.1}t water",
+                    ore as f32 / 10.0,
+                    materials as f32 / 10.0,
+                    water as f32 / 10.0
+                ),
+                (0, 0, 0, fuel) => format!("{:.1}t fuel", fuel as f32 / 10.0),
+                (ore, 0, 0, fuel) => format!(
+                    "{:.1}t ore and {:.1}t fuel",
+                    ore as f32 / 10.0,
+                    fuel as f32 / 10.0
+                ),
+                (0, materials, 0, fuel) => format!(
+                    "{:.1}t materials and {:.1}t fuel",
+                    materials as f32 / 10.0,
+                    fuel as f32 / 10.0
+                ),
+                (ore, materials, 0, fuel) => format!(
+                    "{:.1}t ore, {:.1}t materials, and {:.1}t fuel",
+                    ore as f32 / 10.0,
+                    materials as f32 / 10.0,
+                    fuel as f32 / 10.0
+                ),
+                (0, 0, water, fuel) => format!(
+                    "{:.1}t water and {:.1}t fuel",
+                    water as f32 / 10.0,
+                    fuel as f32 / 10.0
+                ),
+                (ore, 0, water, fuel) => format!(
+                    "{:.1}t ore, {:.1}t water, and {:.1}t fuel",
+                    ore as f32 / 10.0,
+                    water as f32 / 10.0,
+                    fuel as f32 / 10.0
+                ),
+                (0, materials, water, fuel) => format!(
+                    "{:.1}t materials, {:.1}t water, and {:.1}t fuel",
+                    materials as f32 / 10.0,
+                    water as f32 / 10.0,
+                    fuel as f32 / 10.0
+                ),
+                (ore, materials, water, fuel) => format!(
+                    "{:.1}t ore, {:.1}t materials, {:.1}t water, and {:.1}t fuel",
+                    ore as f32 / 10.0,
+                    materials as f32 / 10.0,
+                    water as f32 / 10.0,
+                    fuel as f32 / 10.0
+                ),
+            }
+        }
+
+        match self {
+            Order::NameStack { stack, name } => {
+                format!("{}: rename to {name}", game_state.stacks[stack].name)
+            }
+            Order::ModuleTransfer { stack, module, to } => {
+                let stack = &game_state.stacks[stack];
+                match to {
+                    ModuleTransferTarget::Existing(stack_id) => format!(
+                        "{}: transfer a {} to {}",
+                        stack.name, stack.modules[module], game_state.stacks[stack_id].name
+                    ),
+                    ModuleTransferTarget::New(n) => format!(
+                        "{}: transfer a {} to new stack #{}",
+                        stack.name, stack.modules[module], n
+                    ),
+                }
+            }
+            Order::Board { stack, target } => format!(
+                "{}: board {}",
+                game_state.stacks[stack].name, game_state.stacks[target].name
+            ),
+            Order::Isru {
+                stack,
+                ore,
+                water,
+                fuel,
+            } => match (*ore, *water, *fuel) {
+                (ore, 0, 0) => format!(
+                    "{}: mine {:.1}t ore",
+                    game_state.stacks[stack].name,
+                    ore as f32 / 10.0
+                ),
+                (0, water, 0) => format!(
+                    "{}: mine {:.1}t water",
+                    game_state.stacks[stack].name,
+                    water as f32 / 10.0
+                ),
+                (ore, water, 0) => format!(
+                    "{}: mine {:.1}t ore and {:.1}t water",
+                    game_state.stacks[stack].name,
+                    ore as f32 / 10.0,
+                    water as f32 / 10.0
+                ),
+                (0, 0, fuel) => format!(
+                    "{}: skim {:.1}t fuel",
+                    game_state.stacks[stack].name,
+                    fuel as f32 / 10.0,
+                ),
+                _ => unreachable!("invalid order"),
+            },
+            Order::ResourceTransfer {
+                stack,
+                from,
+                to,
+                ore,
+                materials,
+                water,
+                fuel,
+            } => match (from, to) {
+                (None, ResourceTransferTarget::Jettison) => format!(
+                    "{}: jettison {}",
+                    game_state.stacks[stack].name,
+                    format_resources(*ore as u32, *materials as u32, *water as u32, *fuel as u32)
+                ),
+                (None, ResourceTransferTarget::Module(module_id)) => {
+                    format!(
+                        "{}: transfer {} to {}",
+                        game_state.stacks[stack].name,
+                        format_resources(
+                            *ore as u32,
+                            *materials as u32,
+                            *water as u32,
+                            *fuel as u32
+                        ),
+                        game_state.stacks[stack].modules[module_id]
+                    )
+                }
+                (None, ResourceTransferTarget::Stack(stack_id)) => format!(
+                    "{}: transfer {} to {}",
+                    game_state.stacks[stack].name,
+                    format_resources(*ore as u32, *materials as u32, *water as u32, *fuel as u32),
+                    game_state.stacks[stack_id].name
+                ),
+                (Some(module), ResourceTransferTarget::FloatingPool) => {
+                    format!(
+                        "{}: transfer {} from {}",
+                        game_state.stacks[stack].name,
+                        format_resources(
+                            *ore as u32,
+                            *materials as u32,
+                            *water as u32,
+                            *fuel as u32
+                        ),
+                        game_state.stacks[stack].modules[module]
+                    )
+                }
+                _ => unreachable!("invalid order"),
+            },
+            Order::Repair {
+                stack,
+                target_stack,
+                target_module,
+            } if stack == target_stack => format!(
+                "{}: repair {}",
+                game_state.stacks[stack].name,
+                game_state.stacks[target_stack].modules[target_module]
+            ),
+            Order::Repair {
+                stack,
+                target_stack,
+                target_module,
+            } => format!(
+                "{}: repair {} on {}",
+                game_state.stacks[stack].name,
+                game_state.stacks[target_stack].modules[target_module],
+                game_state.stacks[target_stack].name
+            ),
+            Order::Refine {
+                stack,
+                materials,
+                fuel,
+            } => format!(
+                "{}: produce {}",
+                game_state.stacks[stack].name,
+                format_resources(0, *materials as u32, 0, *fuel as u32)
+            ),
+            Order::Build { stack, module } => {
+                format!("{}: build {}", game_state.stacks[stack].name, module)
+            }
+            Order::Salvage { stack, salvaged } => format!(
+                "{}: salvage {}",
+                game_state.stacks[stack].name, game_state.stacks[stack].modules[salvaged]
+            ),
+            Order::Shoot {
+                stack,
+                target,
+                shots,
+            } if *shots == 1 => format!(
+                "{}: shoot {}",
+                game_state.stacks[stack].name, game_state.stacks[target].name
+            ),
+            Order::Shoot {
+                stack,
+                target,
+                shots,
+            } => format!(
+                "{}: shoot {} {} times",
+                game_state.stacks[stack].name, game_state.stacks[target].name, shots
+            ),
+            Order::Arm {
+                stack,
+                warhead,
+                armed,
+            } if *armed => format!(
+                "{}: arm {}",
+                game_state.stacks[stack].name, game_state.stacks[stack].modules[warhead]
+            ),
+            Order::Arm { stack, warhead, .. } => format!(
+                "{}: disarm {}",
+                game_state.stacks[stack].name, game_state.stacks[stack].modules[warhead]
+            ),
+            Order::Burn { stack, delta_v, .. } => format!(
+                "{}: make a {} hex/turn burn",
+                game_state.stacks[stack].name,
+                delta_v.norm()
+            ),
+            Order::OrbitAdjust { stack, around, .. } => format!(
+                "{}: adjust orbit around {}",
+                game_state.stacks[stack].name,
+                game_state.celestials.get(*around).unwrap().name
+            ),
+            Order::Land { stack, on, .. } => format!(
+                "{}: land on {}",
+                game_state.stacks[stack].name,
+                game_state.celestials.get(*on).unwrap().name
+            ),
+            Order::TakeOff { stack, from, .. } => format!(
+                "{}: take off from {}",
+                game_state.stacks[stack].name,
+                game_state.celestials.get(*from).unwrap().name
+            ),
         }
     }
 }
@@ -2016,12 +2293,17 @@ mod tests {
 
         let stack_1 = stack_id_generator.next().unwrap();
         let stack_2 = stack_id_generator.next().unwrap();
-        let mut stack_1_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
-        stack_1_data.name = "original name".to_owned();
+        let stack_1_data = Stack::new(
+            Vec2::zero(),
+            Vec2::zero(),
+            player_1,
+            "original name".to_owned(),
+        );
         game_state.stacks.insert(stack_1, stack_1_data);
-        game_state
-            .stacks
-            .insert(stack_2, Stack::new(Vec2::zero(), Vec2::zero(), player_2));
+        game_state.stacks.insert(
+            stack_2,
+            Stack::new(Vec2::zero(), Vec2::zero(), player_2, "".to_owned()),
+        );
 
         // Test 1: Valid rename order
         let orders = HashMap::from([(
@@ -2206,12 +2488,12 @@ mod tests {
         let module_1 = module_id_generator.next().unwrap();
         let module_2 = module_id_generator.next().unwrap();
 
-        let mut stack_1_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let mut stack_1_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned());
         stack_1_data.modules.insert(module_1, Module::new_engine());
         stack_1_data.modules.insert(module_2, Module::new_gun());
 
-        let stack_2_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1); // same position for rendezvous
-        let stack_3_data = Stack::new(Vec2 { q: 1, r: 0 }, Vec2::zero(), player_2); // different player
+        let stack_2_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned()); // same position for rendezvous
+        let stack_3_data = Stack::new(Vec2 { q: 1, r: 0 }, Vec2::zero(), player_2, "".to_owned()); // different player
 
         game_state.stacks.insert(stack_1, stack_1_data);
         game_state.stacks.insert(stack_2, stack_2_data);
@@ -2288,7 +2570,7 @@ mod tests {
 
         // Test 6: Not rendezvoused stacks
         let stack_4 = stack_id_generator.next().unwrap();
-        let stack_4_data = Stack::new(Vec2 { q: 2, r: 0 }, Vec2::zero(), player_1); // different position
+        let stack_4_data = Stack::new(Vec2 { q: 2, r: 0 }, Vec2::zero(), player_1, "".to_owned()); // different position
         game_state.stacks.insert(stack_4, stack_4_data);
 
         let orders = HashMap::from([(
@@ -2364,7 +2646,8 @@ mod tests {
 
         // Test 10: Multiple transfers to same new stack with different positions (conflict)
         let stack_5 = stack_id_generator.next().unwrap();
-        let mut stack_5_data = Stack::new(Vec2 { q: 3, r: 0 }, Vec2::zero(), player_1); // different position
+        let mut stack_5_data =
+            Stack::new(Vec2 { q: 3, r: 0 }, Vec2::zero(), player_1, "".to_owned()); // different position
         let module_3 = module_id_generator.next().unwrap();
         stack_5_data.modules.insert(module_3, Module::new_tank());
         game_state.stacks.insert(stack_5, stack_5_data);
@@ -2424,11 +2707,11 @@ mod tests {
         let module_1 = module_id_generator.next().unwrap();
         let module_2 = module_id_generator.next().unwrap();
 
-        let mut stack_1_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let mut stack_1_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned());
         stack_1_data.modules.insert(module_1, Module::new_engine());
         stack_1_data.modules.insert(module_2, Module::new_gun());
 
-        let stack_2_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1); // same position for rendezvous
+        let stack_2_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned()); // same position for rendezvous
 
         game_state.stacks.insert(stack_1, stack_1_data);
         game_state.stacks.insert(stack_2, stack_2_data);
@@ -2529,7 +2812,7 @@ mod tests {
 
         let stack_id = stack_id_generator.next().unwrap();
         let miner_module = module_id_generator.next().unwrap();
-        let mut stack_data = Stack::new(Vec2 { q: 5, r: 5 }, Vec2::zero(), player_1); // Landed on mining world
+        let mut stack_data = Stack::new(Vec2 { q: 5, r: 5 }, Vec2::zero(), player_1, "".to_owned()); // Landed on mining world
         stack_data.modules.insert(miner_module, Module::new_miner());
         game_state.stacks.insert(stack_id, stack_data);
 
@@ -2571,7 +2854,8 @@ mod tests {
         game_state.phase = Phase::Logistics;
 
         // Test ISRU order when not on resource body
-        let mut wrong_stack = Stack::new(Vec2 { q: 0, r: 0 }, Vec2::zero(), player_1); // Not on mining world
+        let mut wrong_stack =
+            Stack::new(Vec2 { q: 0, r: 0 }, Vec2::zero(), player_1, "".to_owned()); // Not on mining world
         wrong_stack
             .modules
             .insert(module_id_generator.next().unwrap(), Module::new_miner());
@@ -2615,7 +2899,12 @@ mod tests {
 
         let orbiting_stack_id = stack_id_generator.next().unwrap();
         let skimmer_module = module_id_generator.next().unwrap();
-        let mut orbiting_stack = Stack::new(Vec2 { q: 10, r: 11 }, Vec2 { q: -1, r: 0 }, player_1); // Orbiting gas giant
+        let mut orbiting_stack = Stack::new(
+            Vec2 { q: 10, r: 11 },
+            Vec2 { q: -1, r: 0 },
+            player_1,
+            "".to_owned(),
+        ); // Orbiting gas giant
         orbiting_stack
             .modules
             .insert(skimmer_module, Module::new_fuel_skimmer());
@@ -2682,7 +2971,7 @@ mod tests {
             *fuel = 60;
         }
 
-        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned());
         stack_data.modules.insert(cargo_module, cargo_hold);
         stack_data.modules.insert(tank_module, tank);
         game_state.stacks.insert(stack_id, stack_data);
@@ -2841,7 +3130,7 @@ mod tests {
         let damaged_module = module_id_generator.next().unwrap();
 
         // Create repair stack with habitat and cargo hold with materials
-        let mut repair_stack = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let mut repair_stack = Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned());
         repair_stack
             .modules
             .insert(habitat_module, Module::new_habitat(player_1));
@@ -2855,7 +3144,7 @@ mod tests {
         game_state.stacks.insert(repair_stack_id, repair_stack);
 
         // Create target stack with damaged module
-        let mut target_stack = Stack::new(Vec2::zero(), Vec2::zero(), player_1); // Same position for rendezvous
+        let mut target_stack = Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned()); // Same position for rendezvous
         let mut damaged_engine = Module::new_engine();
         damaged_engine.health = Health::Damaged;
         target_stack.modules.insert(damaged_module, damaged_engine);
@@ -2915,7 +3204,7 @@ mod tests {
         // Test repair when not rendezvoused
         let far_stack_id = stack_id_generator.next().unwrap();
         let far_damaged_module = module_id_generator.next().unwrap();
-        let mut far_stack = Stack::new(Vec2 { q: 5, r: 5 }, Vec2::zero(), player_1); // Different position
+        let mut far_stack = Stack::new(Vec2 { q: 5, r: 5 }, Vec2::zero(), player_1, "".to_owned()); // Different position
         let mut far_damaged_engine = Module::new_engine();
         far_damaged_engine.health = Health::Damaged;
         far_stack
@@ -2961,7 +3250,7 @@ mod tests {
         let cargo_module = module_id_generator.next().unwrap();
         let tank_module = module_id_generator.next().unwrap();
 
-        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned());
         stack_data
             .modules
             .insert(refinery_module, Module::new_refinery());
@@ -3079,7 +3368,12 @@ mod tests {
         let earth_position = earth_celestial.position;
         let earth_neighbors = earth_position.neighbours();
 
-        let mut stack_data = Stack::new(earth_neighbors[0], Vec2 { q: 1, r: 0 }, player_1); // Orbiting Earth
+        let mut stack_data = Stack::new(
+            earth_neighbors[0],
+            Vec2 { q: 1, r: 0 },
+            player_1,
+            "".to_owned(),
+        ); // Orbiting Earth
         stack_data
             .modules
             .insert(factory_module, Module::new_factory());
@@ -3164,7 +3458,8 @@ mod tests {
         // Test building habitat NOT in Earth orbit (should fail)
         let away_stack_id = stack_id_generator.next().unwrap();
         let away_factory_module = module_id_generator.next().unwrap();
-        let mut away_stack = Stack::new(Vec2 { q: 20, r: 20 }, Vec2::zero(), player_1); // Far from Earth
+        let mut away_stack =
+            Stack::new(Vec2 { q: 20, r: 20 }, Vec2::zero(), player_1, "".to_owned()); // Far from Earth
         away_stack
             .modules
             .insert(away_factory_module, Module::new_factory());
@@ -3244,7 +3539,7 @@ mod tests {
         let factory_module = module_id_generator.next().unwrap();
         let salvage_module = module_id_generator.next().unwrap();
 
-        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned());
         stack_data
             .modules
             .insert(factory_module, Module::new_factory());
@@ -3334,11 +3629,12 @@ mod tests {
         let target_stack = stack_id_generator.next().unwrap();
         let gun_module = module_id_generator.next().unwrap();
 
-        let mut shooter_data = Stack::new(Vec2 { q: 20, r: 20 }, Vec2::zero(), player_1); // Far from celestials
+        let mut shooter_data =
+            Stack::new(Vec2 { q: 20, r: 20 }, Vec2::zero(), player_1, "".to_owned()); // Far from celestials
         shooter_data.modules.insert(gun_module, Module::new_gun());
         game_state.stacks.insert(shooter_stack, shooter_data);
 
-        let target_data = Stack::new(Vec2 { q: 22, r: 20 }, Vec2::zero(), player_2); // 2 hexes away horizontally
+        let target_data = Stack::new(Vec2 { q: 22, r: 20 }, Vec2::zero(), player_2, "".to_owned()); // 2 hexes away horizontally
         game_state.stacks.insert(target_stack, target_data);
 
         // Test valid shoot order (should have clear line of sight initially)
@@ -3450,7 +3746,7 @@ mod tests {
         let stack_id = stack_id_generator.next().unwrap();
         let warhead_module = module_id_generator.next().unwrap();
 
-        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let mut stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned());
         stack_data
             .modules
             .insert(warhead_module, Module::new_warhead());
@@ -3595,7 +3891,7 @@ mod tests {
             *fuel = 100; // Plenty of fuel
         }
 
-        let mut stack_data = Stack::new(Vec2 { q: 5, r: 5 }, Vec2::zero(), player_1);
+        let mut stack_data = Stack::new(Vec2 { q: 5, r: 5 }, Vec2::zero(), player_1, "".to_owned());
         stack_data
             .modules
             .insert(engine_module, Module::new_engine());
@@ -3722,7 +4018,7 @@ mod tests {
         let (orbital_pos_2, _orbital_vel_2) = earth_orbital_params[1];
 
         // Place both stacks in orbit around Earth using actual orbital parameters
-        let mut stack_data = Stack::new(orbital_pos_1, orbital_vel_1, player_1);
+        let mut stack_data = Stack::new(orbital_pos_1, orbital_vel_1, player_1, "".to_owned());
         stack_data
             .modules
             .insert(engine_module, Module::new_engine());
@@ -3731,7 +4027,8 @@ mod tests {
 
         // Target stack at a different orbital position (not needed for this test, but keeping for completeness)
         let target_engine = module_id_generator.next().unwrap();
-        let mut target_data = Stack::new(orbital_pos_2, Vec2 { q: 0, r: 1 }, player_1);
+        let mut target_data =
+            Stack::new(orbital_pos_2, Vec2 { q: 0, r: 1 }, player_1, "".to_owned());
         target_data
             .modules
             .insert(target_engine, Module::new_engine());
@@ -3770,6 +4067,7 @@ mod tests {
             player_1,
             vec![Order::OrbitAdjust {
                 stack: stack_id,
+                around: game_state.earth,
                 target_position: orbital_pos_2,
                 clockwise: true,
                 fuel_from: vec![(tank_module, 6)],
@@ -3788,6 +4086,7 @@ mod tests {
             player_1,
             vec![Order::OrbitAdjust {
                 stack: stack_id,
+                around: game_state.earth,
                 target_position: far_position, // Not an orbital position
                 clockwise: true,
                 fuel_from: vec![(tank_module, 6)],
@@ -3834,7 +4133,7 @@ mod tests {
         let (orbital_pos_2, orbital_vel_2) = earth_orbital_params[1];
 
         // Place stack in orbit around Earth using actual orbital parameters
-        let mut stack_data = Stack::new(orbital_pos_1, orbital_vel_1, player_1);
+        let mut stack_data = Stack::new(orbital_pos_1, orbital_vel_1, player_1, "".to_owned());
         stack_data
             .modules
             .insert(engine_module, Module::new_engine());
@@ -3846,6 +4145,7 @@ mod tests {
             player_1,
             vec![Order::OrbitAdjust {
                 stack: stack_id,
+                around: game_state.earth,
                 target_position: orbital_pos_2, // Another valid orbital position
                 clockwise: true,
                 fuel_from: vec![(tank_module, 6)],
@@ -3888,6 +4188,7 @@ mod tests {
             player_1,
             vec![Order::OrbitAdjust {
                 stack: stack_id,
+                around: game_state.earth,
                 target_position: ccw_pos_2,
                 clockwise: false, // counterclockwise
                 fuel_from: vec![(tank_module, 6)],
@@ -3947,7 +4248,8 @@ mod tests {
         let target_hab_module = module_id_generator.next().unwrap();
 
         // Boarder stack: has habitat (can board)
-        let mut boarder_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let mut boarder_stack_data =
+            Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned());
         boarder_stack_data
             .modules
             .insert(hab_module, Module::new_habitat(player_1));
@@ -3956,7 +4258,7 @@ mod tests {
             .insert(engine_module, Module::new_engine());
 
         // Target stack: no habitat (can be boarded)
-        let mut target_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_2);
+        let mut target_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_2, "".to_owned());
         target_stack_data
             .modules
             .insert(gun_module, Module::new_gun());
@@ -3965,13 +4267,14 @@ mod tests {
             .insert(tank_module, Module::new_tank());
 
         // Defended stack: has habitat (cannot be boarded)
-        let mut defended_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_2);
+        let mut defended_stack_data =
+            Stack::new(Vec2::zero(), Vec2::zero(), player_2, "".to_owned());
         defended_stack_data
             .modules
             .insert(target_hab_module, Module::new_habitat(player_2));
 
         // No hab stack: no habitat (cannot board others)
-        let no_hab_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let no_hab_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned());
 
         game_state.stacks.insert(boarder_stack, boarder_stack_data);
         game_state.stacks.insert(target_stack, target_stack_data);
@@ -4113,7 +4416,8 @@ mod tests {
         // Test 9: Multiple boarding attempts on same stack (contested)
         let another_boarder = stack_id_generator.next().unwrap();
         let another_hab = module_id_generator.next().unwrap();
-        let mut another_boarder_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let mut another_boarder_data =
+            Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned());
         another_boarder_data
             .modules
             .insert(another_hab, Module::new_habitat(player_1));
@@ -4209,7 +4513,8 @@ mod tests {
         // Test 12: Boarding with damaged habitat should fail
         let damaged_hab_stack = stack_id_generator.next().unwrap();
         let damaged_hab_module = module_id_generator.next().unwrap();
-        let mut damaged_hab_stack_data = Stack::new(Vec2::zero(), Vec2::zero(), player_1);
+        let mut damaged_hab_stack_data =
+            Stack::new(Vec2::zero(), Vec2::zero(), player_1, "".to_owned());
         let mut damaged_habitat = Module::new_habitat(player_1);
         damaged_habitat.health = Health::Damaged;
         damaged_hab_stack_data
