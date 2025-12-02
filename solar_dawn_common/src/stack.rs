@@ -328,6 +328,13 @@ impl From<StackId> for u32 {
     }
 }
 
+#[cfg(feature = "client")]
+impl Display for StackId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 /// A module, part of a stack
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Module {
@@ -449,18 +456,50 @@ impl Display for Module {
             Health::Damaged => " (damaged)",
             Health::Destroyed => " (destroyed)",
         };
-        match self.details {
-            ModuleDetails::Miner => write!(f, "a miner{health}"),
-            ModuleDetails::FuelSkimmer => write!(f, "a fuel skimmer{health}"),
-            ModuleDetails::CargoHold { .. } => write!(f, "a cargo hold{health}"),
-            ModuleDetails::Tank { .. } => write!(f, "a tank{health}"),
-            ModuleDetails::Engine => write!(f, "an engine{health}"),
-            ModuleDetails::Warhead { .. } => write!(f, "a warhead{health}"),
-            ModuleDetails::Gun => write!(f, "a gun{health}"),
-            ModuleDetails::Habitat { .. } => write!(f, "a habitat{health}"),
-            ModuleDetails::Refinery => write!(f, "a refinery{health}"),
-            ModuleDetails::Factory => write!(f, "a factory{health}"),
-            ModuleDetails::ArmourPlate => write!(f, "an armour plate{health}"),
+        if f.alternate() {
+            let mass = format!("({:.1}t)", self.mass());
+            match self.details {
+                ModuleDetails::Miner => write!(f, "A miner{health} {mass}"),
+                ModuleDetails::FuelSkimmer => write!(f, "A fuel skimmer{health} {mass}"),
+                ModuleDetails::CargoHold { ore, materials } => write!(
+                    f,
+                    "A cargo hold{health} {mass}: {:.1}t ore, {:.1}t materials, {:.1}t free",
+                    ore as f32 / 10.0,
+                    materials as f32 / 10.0,
+                    (ModuleDetails::CARGO_HOLD_CAPACITY - ore as i32 - materials as i32) as f32
+                        / 10.0
+                ),
+                ModuleDetails::Tank { water, fuel } => write!(
+                    f,
+                    "A tank{health} {mass}: {:.1}t water, {:.1}t fuel, {:.1}t free",
+                    water as f32 / 10.0,
+                    fuel as f32 / 10.0,
+                    (ModuleDetails::TANK_CAPACITY - water as i32 - fuel as i32) as f32 / 10.0
+                ),
+                ModuleDetails::Engine => write!(f, "An engine {mass}"),
+                ModuleDetails::Warhead { armed } => {
+                    write!(f, "A warhead{} {mass}", if armed { " (armed)" } else { "" })
+                }
+                ModuleDetails::Gun => write!(f, "A gun {mass}"),
+                ModuleDetails::Habitat { .. } => write!(f, "A habitat {mass}"),
+                ModuleDetails::Refinery => write!(f, "A refinery {mass}"),
+                ModuleDetails::Factory => write!(f, "A factory {mass}"),
+                ModuleDetails::ArmourPlate => write!(f, "An armour plate {mass}"),
+            }
+        } else {
+            match self.details {
+                ModuleDetails::Miner => write!(f, "a miner{health}"),
+                ModuleDetails::FuelSkimmer => write!(f, "a fuel skimmer{health}"),
+                ModuleDetails::CargoHold { .. } => write!(f, "a cargo hold{health}"),
+                ModuleDetails::Tank { .. } => write!(f, "a tank{health}"),
+                ModuleDetails::Engine => write!(f, "an engine{health}"),
+                ModuleDetails::Warhead { .. } => write!(f, "a warhead{health}"),
+                ModuleDetails::Gun => write!(f, "a gun{health}"),
+                ModuleDetails::Habitat { .. } => write!(f, "a habitat{health}"),
+                ModuleDetails::Refinery => write!(f, "a refinery{health}"),
+                ModuleDetails::Factory => write!(f, "a factory{health}"),
+                ModuleDetails::ArmourPlate => write!(f, "an armour plate{health}"),
+            }
         }
     }
 }
@@ -672,6 +711,13 @@ impl From<u32> for ModuleId {
 impl From<ModuleId> for u32 {
     fn from(value: ModuleId) -> Self {
         value.0
+    }
+}
+
+#[cfg(feature = "client")]
+impl Display for ModuleId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

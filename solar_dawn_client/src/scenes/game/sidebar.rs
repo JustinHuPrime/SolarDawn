@@ -20,7 +20,7 @@
 use dioxus::prelude::*;
 use serde_cbor::to_vec;
 use solar_dawn_common::{
-    GameState, PlayerId,
+    GameState, Phase, PlayerId,
     celestial::{CelestialId, Resources},
     order::{Order, OrderError},
     stack::StackId,
@@ -86,6 +86,7 @@ pub fn Sidebar(
                     orders,
                     auto_orders,
                     client_view_settings,
+                    order_errors,
                     change_state,
                 }
             }
@@ -162,6 +163,7 @@ pub fn Outliner(
                         game_state,
                         orders,
                         auto_orders,
+                        order_errors,
                         change_state,
                     }
                 }
@@ -200,6 +202,27 @@ pub fn OutlinerOverview(
 ) -> Element {
     let game_state = &*game_state.read();
     rsx! {
+        h2 { "Your Stacks" }
+        p {
+            for (& stack_id , stack) in game_state.stacks.iter().filter(|(_, stack)| stack.owner == me) {
+                {
+                    rsx! {
+                        Fragment { key: "{stack_id:?}",
+                            a {
+                                href: "#",
+                                role: "button",
+                                onclick: move |event| {
+                                    event.prevent_default();
+                                    change_state(SidebarState::StackDetails(stack_id));
+                                },
+                                "{stack.name}"
+                            }
+                            br {}
+                        }
+                    }
+                }
+            }
+        }
         h2 { "Major Bodies" }
         p {
             for & celestial_id in game_state.celestials.majors().iter() {
@@ -215,27 +238,6 @@ pub fn OutlinerOverview(
                                     change_state(SidebarState::CelestialDetails(celestial_id));
                                 },
                                 "{celestial.name}"
-                            }
-                            br {}
-                        }
-                    }
-                }
-            }
-        }
-        h2 { "Your Stacks" }
-        p {
-            for (& stack_id , stack) in game_state.stacks.iter().filter(|(_, stack)| stack.owner == me) {
-                {
-                    rsx! {
-                        Fragment { key: "{stack_id:?}",
-                            a {
-                                href: "#",
-                                role: "button",
-                                onclick: move |event| {
-                                    event.prevent_default();
-                                    change_state(SidebarState::StackDetails(stack_id));
-                                },
-                                "{stack.name}"
                             }
                             br {}
                         }
@@ -273,15 +275,21 @@ pub fn OutlinerOrders(
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
+    order_errors: ReadSignal<Vec<Option<OrderError>>>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
     let game_state = &*game_state.read();
+    let order_errors = &*order_errors.read();
     rsx! {
         h2 { "Orders" }
         p {
             for (index , order) in orders.read().iter().enumerate() {
                 Fragment { key: "{index}:{order:?}",
                     "{order.display_attributed(game_state)}"
+                    if let Some(Some(error)) = order_errors.get(index) {
+                        " "
+                        span { class: "text-danger", "{error.display(game_state)}" }
+                    }
                     button {
                         r#type: "button",
                         class: "btn btn-secondary btn-sm",
@@ -300,6 +308,10 @@ pub fn OutlinerOrders(
                 Fragment { key: "{index}:{order:?}",
                     if *enabled {
                         "{order.display_attributed(game_state)}"
+                        if let Some(Some(error)) = order_errors.get(orders.read().len() + index) {
+                            " "
+                            span { class: "text-danger", "{error.display(game_state)}" }
+                        }
                         button {
                             r#type: "button",
                             class: "btn btn-secondary btn-sm",
@@ -450,7 +462,7 @@ pub fn CelestialDetails(
                 "Can orbit"
                 br {}
                 if celestial.can_land() {
-                    "Surface gravity: {celestial.surface_gravity:.1} m/s² ({celestial.surface_gravity / 2.0:.1} hex/turn)²"
+                    "Surface gravity: {celestial.surface_gravity:.1} m/s² ({celestial.surface_gravity / 2.0:.1} hex/turn²)"
                 } else {
                     "Can't land"
                 }
@@ -482,21 +494,17 @@ pub fn CelestialDetails(
             h2 { "Stacks Nearby" }
             p {
                 for (& stack_id , stack) in stacks_nearby {
-                    {
-                        rsx! {
-                            Fragment { key: "{stack_id:?}",
-                                a {
-                                    href: "#",
-                                    role: "button",
-                                    onclick: move |event| {
-                                        event.prevent_default();
-                                        change_state(SidebarState::StackDetails(stack_id));
-                                    },
-                                    "{stack.name}"
-                                }
-                                br {}
-                            }
+                    Fragment { key: "{stack_id:?}",
+                        a {
+                            href: "#",
+                            role: "button",
+                            onclick: move |event| {
+                                event.prevent_default();
+                                change_state(SidebarState::StackDetails(stack_id));
+                            },
+                            "{stack.name}"
                         }
+                        br {}
                     }
                 }
             }
@@ -511,17 +519,18 @@ pub fn StackDetails(
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
+    order_errors: ReadSignal<Vec<Option<OrderError>>>,
     client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
     let game_state = &*game_state.read();
     let Some(stack) = game_state.stacks.get(&id) else {
         return rsx! {
-            h1 { "Unknown Celestial Body" }
+            h1 { "Unknown Stack" }
         };
     };
+    let order_errors = &*order_errors.read();
 
-    // TODO
     rsx! {
         h1 {
             "{stack.name} "
@@ -540,6 +549,94 @@ pub fn StackDetails(
                     }
                 },
                 "Go To"
+            }
+        }
+        p {
+            if stack.owner == me {
+                "Your stack"
+            } else {
+                "Owned by {game_state.players[&stack.owner]}"
+            }
+        }
+        h2 { "Modules" }
+        p {
+            for (& module_id , module) in stack.modules.iter() {
+                Fragment { key: "{module_id:?}",
+                    "{module:#}"
+                    br {}
+                }
+            }
+        }
+        if stack.owner == me {
+            h2 { "Orders" }
+            // TODO: give orders here
+            // NameStack
+
+            // ModuleTransfer
+            // Board
+            // Isru
+            // ResourceTransfer
+            // Repair
+            // Refine
+            // Build
+            // Salvage
+
+            // Shoot
+            // Arm
+
+            // Burn
+            // OrbitAdjust
+            // Land
+            // TakeOff
+            p {
+                for (index , order) in orders.read().iter().enumerate().filter(|(_, order)| order.target() == id) {
+                    Fragment { key: "{index}:{order:?}",
+                        "{order.display_unattributed(game_state)}"
+                        if let Some(Some(error)) = order_errors.get(index) {
+                            " "
+                            span { class: "text-danger", "{error.display(game_state)}" }
+                        }
+                        button {
+                            r#type: "button",
+                            class: "btn btn-secondary btn-sm",
+                            onclick: move |_| {
+                                orders.write().remove(index);
+                            },
+                            "Cancel"
+                        }
+                        br {}
+                    }
+                }
+            }
+            h2 { "Automatic Orders" }
+            p {
+                for (index , (order , enabled)) in auto_orders.read().iter().enumerate().filter(|(_, (order, _))| order.target() == id) {
+                    if *enabled {
+                        "{order.display_unattributed(game_state)}"
+                        if let Some(Some(error)) = order_errors.get(orders.read().len() + index) {
+                            " "
+                            span { class: "text-danger", "{error.display(game_state)}" }
+                        }
+                        button {
+                            r#type: "button",
+                            class: "btn btn-secondary btn-sm",
+                            onclick: move |_| {
+                                auto_orders.write()[index].1 = false;
+                            },
+                            "Cancel"
+                        }
+                    } else {
+                        s { "{order.display_unattributed(game_state)}" }
+                        button {
+                            r#type: "button",
+                            class: "btn btn-secondary btn-sm",
+                            onclick: move |_| {
+                                auto_orders.write()[index].1 = true;
+                            },
+                            "Reinstate"
+                        }
+                    }
+                }
             }
         }
     }

@@ -57,8 +57,8 @@ impl ClientViewSettings {
         let transformed_x = (center.x + self.x_offset) * self.zoom() + (width as f32 / 2.0);
         let transformed_y = (center.y + self.y_offset) * self.zoom() + (height as f32 / 2.0);
 
-        // Check if the hex center is within HEX_SCALE (scaled by zoom) of the visible area
-        let margin = HEX_SCALE * self.zoom();
+        // Check if the hex center is within two hexes of the visible area (two because of gravity arrows)
+        let margin = 4.0 * HEX_SCALE * self.zoom();
 
         transformed_x >= -margin
             && transformed_x <= width as f32 + margin

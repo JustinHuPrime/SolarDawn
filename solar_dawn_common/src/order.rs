@@ -360,6 +360,9 @@ pub enum OrderError {
     /// Too much or not enough propellant burned
     IncorrectPropellantMass,
 
+    /// Multiple naming orders for the same stack
+    MultipleNamingOrders,
+
     /// Can't board - stack has no habitat to board with
     NoHab,
     /// Boarding contested by named stack - either by an existing habitat or another boarding attempt
@@ -417,8 +420,65 @@ pub enum OrderError {
     NotEnoughCapacity(StackId, ModuleId),
     /// Ordered to move multiple ways
     MultipleMoves,
-    /// Rendezvous target moved
-    TargetMoved,
+}
+
+impl OrderError {
+    /// Display the order error, translating ids to names where appropriate
+    #[cfg(feature = "client")]
+    pub fn display(&self, game_state: &GameState) -> String {
+        match self {
+            OrderError::WrongPhase => "order issued in wrong phase".to_owned(),
+            OrderError::InvalidStackId(stack_id) => format!("invalid stack id: {}", stack_id),
+            OrderError::InvalidModuleId(stack_id, module_id) => format!(
+                "invalid stack id and module id combination: {}.{}",
+                stack_id, module_id
+            ),
+            OrderError::InvalidCelestialId(celestial_id) => {
+                format!("invalid celestial body id: {}", celestial_id)
+            }
+            OrderError::InvalidModuleType(stack_id, module_id) => format!(
+                "wrong type of module: {}",
+                game_state.stacks[stack_id].modules[module_id]
+            ),
+            OrderError::BadOwnership(stack_id) => format!(
+                "stack {} not owned by correct player",
+                game_state.stacks[stack_id].name
+            ),
+            OrderError::NotRendezvoused(stack_id1, stack_id2) => format!(
+                "stack {} and {} are not rendezvoused",
+                game_state.stacks[stack_id1].name, game_state.stacks[stack_id2].name
+            ),
+            OrderError::NotInOrbit => "stack not in orbit".to_owned(),
+            OrderError::NotLandable => "can't land on target".to_owned(),
+            OrderError::NotLanded => "not landed on a celestial body".to_owned(),
+            OrderError::NotEnoughThrust => "not enough thrust".to_owned(),
+            OrderError::NotEnoughResources(stack_id, module_id) => format!(
+                "not enough resources in {} in {}",
+                game_state.stacks[stack_id].modules[module_id], game_state.stacks[stack_id].name
+            ),
+            OrderError::IncorrectPropellantMass => "incorrect propellant mass".to_owned(),
+            OrderError::MultipleNamingOrders => "multiple naming orders".to_owned(),
+            OrderError::NoHab => "stack doesn't contain a habitat".to_owned(),
+            OrderError::ContestedBoarding => "boarding action contested - boarding failed".to_owned(),
+            OrderError::NoResourceAccess => "resource not available in this location".to_owned(),
+            OrderError::InvalidTransfer => "invalid transfer source-destination combination".to_owned(),
+            OrderError::NotDamaged => "module not damaged".to_owned(),
+            OrderError::NotInEarthOrbit => "stack not in Earth orbit".to_owned(),
+            OrderError::InvalidTarget => "invalid target".to_owned(),
+            OrderError::NoLineOfSight => "no line of sight to target".to_owned(),
+            OrderError::HabOnStack => "stack has a habitat".to_owned(),
+            OrderError::BurnWhileLanded => "cannot thrust while landed".to_owned(),
+            OrderError::DestinationTooFar => "destination too far".to_owned(),
+            OrderError::TooBusyToBoard => "can't board and carry out other orders".to_owned(),
+            OrderError::Boarded => "stack boarded - order interrupted".to_owned(),
+            OrderError::ModuleTransferConflict => "module transferred involved in another order".to_owned(),
+            OrderError::NewStackStateConflict => "new stack created in multiple locations".to_owned(),
+            OrderError::NotEnoughModules => "not enough capacity for all orders of this type".to_owned(),
+            OrderError::ResourcePoolResidual(stack_id) => format!("resource pool for {} is not empty at end of turn", game_state.stacks[stack_id].name),
+            OrderError::NotEnoughCapacity(stack_id, module_id) => format!("attempted to fill {} on {} beyond capacity", game_state.stacks[stack_id].modules[module_id], game_state.stacks[stack_id].name),
+            OrderError::MultipleMoves => "multiple movement orders for this stack".to_owned(),
+        }
+    }
 }
 
 impl Order {
@@ -440,11 +500,30 @@ impl Order {
         // individual order validation
         for (&player, orders) in orders.iter_mut() {
             for order_result in orders.iter_mut() {
-                let Ok(order) = order_result else {
-                    unreachable!("initialized with Ok");
-                };
+                let order = order_result.as_mut().unwrap();
                 if let Err(e) = order.validate_single(game_state, player) {
                     *order_result = Err(e);
+                }
+            }
+        }
+
+        // aggregate check that only one naming order exists per stack
+        let mut naming_orders_by_stack: HashMap<StackId, Vec<&mut Result<&Order, OrderError>>> =
+            HashMap::new();
+        for (_, orders) in orders.iter_mut() {
+            for order in orders.iter_mut() {
+                if let Ok(Order::NameStack { stack, .. }) = order {
+                    naming_orders_by_stack
+                        .entry(*stack)
+                        .or_default()
+                        .push(order);
+                }
+            }
+        }
+        for (_, orders) in naming_orders_by_stack {
+            if orders.len() > 1 {
+                for order in orders {
+                    *order = Err(OrderError::MultipleNamingOrders);
                 }
             }
         }
@@ -1274,6 +1353,7 @@ impl Order {
         match self {
             Order::NameStack { stack, .. } => {
                 validate_stack(*stack, game_state, player)?;
+                // aggregate check that there are no other naming orders for this stack
             }
             Order::ModuleTransfer { stack, module, to } => {
                 validate_phase(game_state, Phase::Logistics)?;
@@ -1925,131 +2005,134 @@ impl Order {
         }
     }
 
+    /// Get the target of the order - which stack is carrying out the order
+    #[cfg(feature = "client")]
+    pub fn target(&self) -> StackId {
+        match self {
+            Order::NameStack { stack, .. }
+            | Order::ModuleTransfer { stack, .. }
+            | Order::Board { stack, .. }
+            | Order::Isru { stack, .. }
+            | Order::ResourceTransfer { stack, .. }
+            | Order::Repair { stack, .. }
+            | Order::Refine { stack, .. }
+            | Order::Build { stack, .. }
+            | Order::Salvage { stack, .. }
+            | Order::Shoot { stack, .. }
+            | Order::Arm { stack, .. }
+            | Order::Burn { stack, .. }
+            | Order::OrbitAdjust { stack, .. }
+            | Order::Land { stack, .. }
+            | Order::TakeOff { stack, .. } => *stack,
+        }
+    }
+
+    #[cfg(feature = "client")]
+    fn format_resources(ore: u32, materials: u32, water: u32, fuel: u32) -> String {
+        match (ore, materials, water, fuel) {
+            (0, 0, 0, 0) => "nothing".to_owned(),
+            (ore, 0, 0, 0) => format!("{:.1}t ore", ore as f32 / 10.0),
+            (0, materials, 0, 0) => format!("{:.1}t materials", materials as f32 / 10.0),
+            (ore, materials, 0, 0) => format!(
+                "{:.1}t ore and {:.1}t materials",
+                ore as f32 / 10.0,
+                materials as f32 / 10.0
+            ),
+            (0, 0, water, 0) => format!("{:.1}t water", water as f32 / 10.0),
+            (ore, 0, water, 0) => format!(
+                "{:.1}t ore and {:.1}t water",
+                ore as f32 / 10.0,
+                water as f32 / 10.0
+            ),
+            (0, materials, water, 0) => format!(
+                "{:.1}t materials and {:.1}t water",
+                materials as f32 / 10.0,
+                water as f32 / 10.0
+            ),
+            (ore, materials, water, 0) => format!(
+                "{:.1}t ore, {:.1}t materials, and {:.1}t water",
+                ore as f32 / 10.0,
+                materials as f32 / 10.0,
+                water as f32 / 10.0
+            ),
+            (0, 0, 0, fuel) => format!("{:.1}t fuel", fuel as f32 / 10.0),
+            (ore, 0, 0, fuel) => format!(
+                "{:.1}t ore and {:.1}t fuel",
+                ore as f32 / 10.0,
+                fuel as f32 / 10.0
+            ),
+            (0, materials, 0, fuel) => format!(
+                "{:.1}t materials and {:.1}t fuel",
+                materials as f32 / 10.0,
+                fuel as f32 / 10.0
+            ),
+            (ore, materials, 0, fuel) => format!(
+                "{:.1}t ore, {:.1}t materials, and {:.1}t fuel",
+                ore as f32 / 10.0,
+                materials as f32 / 10.0,
+                fuel as f32 / 10.0
+            ),
+            (0, 0, water, fuel) => format!(
+                "{:.1}t water and {:.1}t fuel",
+                water as f32 / 10.0,
+                fuel as f32 / 10.0
+            ),
+            (ore, 0, water, fuel) => format!(
+                "{:.1}t ore, {:.1}t water, and {:.1}t fuel",
+                ore as f32 / 10.0,
+                water as f32 / 10.0,
+                fuel as f32 / 10.0
+            ),
+            (0, materials, water, fuel) => format!(
+                "{:.1}t materials, {:.1}t water, and {:.1}t fuel",
+                materials as f32 / 10.0,
+                water as f32 / 10.0,
+                fuel as f32 / 10.0
+            ),
+            (ore, materials, water, fuel) => format!(
+                "{:.1}t ore, {:.1}t materials, {:.1}t water, and {:.1}t fuel",
+                ore as f32 / 10.0,
+                materials as f32 / 10.0,
+                water as f32 / 10.0,
+                fuel as f32 / 10.0
+            ),
+        }
+    }
+
     /// Displays like
     ///
-    /// stack_name: do thing
+    /// Do thing
     #[cfg(feature = "client")]
-    pub fn display_attributed(&self, game_state: &GameState) -> String {
-        fn format_resources(ore: u32, materials: u32, water: u32, fuel: u32) -> String {
-            match (ore, materials, water, fuel) {
-                (0, 0, 0, 0) => "nothing".to_owned(),
-                (ore, 0, 0, 0) => format!("{:.1}t ore", ore as f32 / 10.0),
-                (0, materials, 0, 0) => format!("{:.1}t materials", materials as f32 / 10.0),
-                (ore, materials, 0, 0) => format!(
-                    "{:.1}t ore and {:.1}t materials",
-                    ore as f32 / 10.0,
-                    materials as f32 / 10.0
-                ),
-                (0, 0, water, 0) => format!("{:.1}t water", water as f32 / 10.0),
-                (ore, 0, water, 0) => format!(
-                    "{:.1}t ore and {:.1}t water",
-                    ore as f32 / 10.0,
-                    water as f32 / 10.0
-                ),
-                (0, materials, water, 0) => format!(
-                    "{:.1}t materials and {:.1}t water",
-                    materials as f32 / 10.0,
-                    water as f32 / 10.0
-                ),
-                (ore, materials, water, 0) => format!(
-                    "{:.1}t ore, {:.1}t materials, and {:.1}t water",
-                    ore as f32 / 10.0,
-                    materials as f32 / 10.0,
-                    water as f32 / 10.0
-                ),
-                (0, 0, 0, fuel) => format!("{:.1}t fuel", fuel as f32 / 10.0),
-                (ore, 0, 0, fuel) => format!(
-                    "{:.1}t ore and {:.1}t fuel",
-                    ore as f32 / 10.0,
-                    fuel as f32 / 10.0
-                ),
-                (0, materials, 0, fuel) => format!(
-                    "{:.1}t materials and {:.1}t fuel",
-                    materials as f32 / 10.0,
-                    fuel as f32 / 10.0
-                ),
-                (ore, materials, 0, fuel) => format!(
-                    "{:.1}t ore, {:.1}t materials, and {:.1}t fuel",
-                    ore as f32 / 10.0,
-                    materials as f32 / 10.0,
-                    fuel as f32 / 10.0
-                ),
-                (0, 0, water, fuel) => format!(
-                    "{:.1}t water and {:.1}t fuel",
-                    water as f32 / 10.0,
-                    fuel as f32 / 10.0
-                ),
-                (ore, 0, water, fuel) => format!(
-                    "{:.1}t ore, {:.1}t water, and {:.1}t fuel",
-                    ore as f32 / 10.0,
-                    water as f32 / 10.0,
-                    fuel as f32 / 10.0
-                ),
-                (0, materials, water, fuel) => format!(
-                    "{:.1}t materials, {:.1}t water, and {:.1}t fuel",
-                    materials as f32 / 10.0,
-                    water as f32 / 10.0,
-                    fuel as f32 / 10.0
-                ),
-                (ore, materials, water, fuel) => format!(
-                    "{:.1}t ore, {:.1}t materials, {:.1}t water, and {:.1}t fuel",
-                    ore as f32 / 10.0,
-                    materials as f32 / 10.0,
-                    water as f32 / 10.0,
-                    fuel as f32 / 10.0
-                ),
-            }
-        }
-
+    pub fn display_unattributed(&self, game_state: &GameState) -> String {
         match self {
-            Order::NameStack { stack, name } => {
-                format!("{}: rename to {name}", game_state.stacks[stack].name)
+            Order::NameStack { name, .. } => {
+                format!("Rename to {name}")
             }
             Order::ModuleTransfer { stack, module, to } => {
                 let stack = &game_state.stacks[stack];
                 match to {
                     ModuleTransferTarget::Existing(stack_id) => format!(
-                        "{}: transfer a {} to {}",
-                        stack.name, stack.modules[module], game_state.stacks[stack_id].name
+                        "Transfer a {} to {}",
+                        stack.modules[module], game_state.stacks[stack_id].name
                     ),
-                    ModuleTransferTarget::New(n) => format!(
-                        "{}: transfer a {} to new stack #{}",
-                        stack.name, stack.modules[module], n
-                    ),
+                    ModuleTransferTarget::New(n) => {
+                        format!("Transfer a {} to new stack #{}", stack.modules[module], n)
+                    }
                 }
             }
-            Order::Board { stack, target } => format!(
-                "{}: board {}",
-                game_state.stacks[stack].name, game_state.stacks[target].name
-            ),
+            Order::Board { target, .. } => format!("Board {}", game_state.stacks[target].name),
             Order::Isru {
-                stack,
-                ore,
-                water,
-                fuel,
+                ore, water, fuel, ..
             } => match (*ore, *water, *fuel) {
-                (ore, 0, 0) => format!(
-                    "{}: mine {:.1}t ore",
-                    game_state.stacks[stack].name,
-                    ore as f32 / 10.0
-                ),
-                (0, water, 0) => format!(
-                    "{}: mine {:.1}t water",
-                    game_state.stacks[stack].name,
-                    water as f32 / 10.0
-                ),
+                (ore, 0, 0) => format!("Mine {:.1}t ore", ore as f32 / 10.0),
+                (0, water, 0) => format!("Mine {:.1}t water", water as f32 / 10.0),
                 (ore, water, 0) => format!(
-                    "{}: mine {:.1}t ore and {:.1}t water",
-                    game_state.stacks[stack].name,
+                    "Mine {:.1}t ore and {:.1}t water",
                     ore as f32 / 10.0,
                     water as f32 / 10.0
                 ),
-                (0, 0, fuel) => format!(
-                    "{}: skim {:.1}t fuel",
-                    game_state.stacks[stack].name,
-                    fuel as f32 / 10.0,
-                ),
-                _ => unreachable!("invalid order"),
+                (0, 0, fuel) => format!("Skim {:.1}t fuel", fuel as f32 / 10.0,),
+                _ => "Invalid ISRU order".to_owned(),
             },
             Order::ResourceTransfer {
                 stack,
@@ -2061,15 +2144,18 @@ impl Order {
                 fuel,
             } => match (from, to) {
                 (None, ResourceTransferTarget::Jettison) => format!(
-                    "{}: jettison {}",
-                    game_state.stacks[stack].name,
-                    format_resources(*ore as u32, *materials as u32, *water as u32, *fuel as u32)
+                    "Jettison {}",
+                    Self::format_resources(
+                        *ore as u32,
+                        *materials as u32,
+                        *water as u32,
+                        *fuel as u32
+                    )
                 ),
                 (None, ResourceTransferTarget::Module(module_id)) => {
                     format!(
-                        "{}: transfer {} to {}",
-                        game_state.stacks[stack].name,
-                        format_resources(
+                        "Transfer {} to {}",
+                        Self::format_resources(
                             *ore as u32,
                             *materials as u32,
                             *water as u32,
@@ -2079,16 +2165,19 @@ impl Order {
                     )
                 }
                 (None, ResourceTransferTarget::Stack(stack_id)) => format!(
-                    "{}: transfer {} to {}",
-                    game_state.stacks[stack].name,
-                    format_resources(*ore as u32, *materials as u32, *water as u32, *fuel as u32),
+                    "Transfer {} to {}",
+                    Self::format_resources(
+                        *ore as u32,
+                        *materials as u32,
+                        *water as u32,
+                        *fuel as u32
+                    ),
                     game_state.stacks[stack_id].name
                 ),
                 (Some(module), ResourceTransferTarget::FloatingPool) => {
                     format!(
-                        "{}: transfer {} from {}",
-                        game_state.stacks[stack].name,
-                        format_resources(
+                        "Transfer {} from {}",
+                        Self::format_resources(
                             *ore as u32,
                             *materials as u32,
                             *water as u32,
@@ -2097,89 +2186,231 @@ impl Order {
                         game_state.stacks[stack].modules[module]
                     )
                 }
-                _ => unreachable!("invalid order"),
+                _ => "Invalid transfer order".to_owned(),
             },
             Order::Repair {
                 stack,
                 target_stack,
                 target_module,
             } if stack == target_stack => format!(
-                "{}: repair {}",
-                game_state.stacks[stack].name,
+                "Repair {}",
                 game_state.stacks[target_stack].modules[target_module]
             ),
             Order::Repair {
-                stack,
                 target_stack,
                 target_module,
+                ..
             } => format!(
-                "{}: repair {} on {}",
-                game_state.stacks[stack].name,
+                "Repair {} on {}",
                 game_state.stacks[target_stack].modules[target_module],
                 game_state.stacks[target_stack].name
             ),
             Order::Refine {
-                stack,
-                materials,
-                fuel,
+                materials, fuel, ..
             } => format!(
-                "{}: produce {}",
-                game_state.stacks[stack].name,
-                format_resources(0, *materials as u32, 0, *fuel as u32)
+                "Produce {}",
+                Self::format_resources(0, *materials as u32, 0, *fuel as u32)
             ),
-            Order::Build { stack, module } => {
-                format!("{}: build {}", game_state.stacks[stack].name, module)
+            Order::Build { module, .. } => {
+                format!("Build {}", module)
             }
-            Order::Salvage { stack, salvaged } => format!(
-                "{}: salvage {}",
-                game_state.stacks[stack].name, game_state.stacks[stack].modules[salvaged]
-            ),
-            Order::Shoot {
+            Order::Salvage { stack, salvaged } => {
+                format!("Salvage {}", game_state.stacks[stack].modules[salvaged])
+            }
+            Order::Shoot { target, shots, .. } if *shots == 1 => {
+                format!("Shoot {}", game_state.stacks[target].name)
+            }
+            Order::Shoot { target, shots, .. } => {
+                format!("Shoot {} {} times", game_state.stacks[target].name, shots)
+            }
+            Order::Arm {
                 stack,
-                target,
-                shots,
-            } if *shots == 1 => format!(
-                "{}: shoot {}",
-                game_state.stacks[stack].name, game_state.stacks[target].name
+                warhead,
+                armed,
+            } if *armed => format!("Arm {}", game_state.stacks[stack].modules[warhead]),
+            Order::Arm { stack, warhead, .. } => {
+                format!("Disarm {}", game_state.stacks[stack].modules[warhead])
+            }
+            Order::Burn { delta_v, .. } => format!("Make a {} hex/turn burn", delta_v.norm()),
+            Order::OrbitAdjust { around, .. } => format!(
+                "Adjust orbit around {}",
+                game_state.celestials.get(*around).unwrap().name
             ),
-            Order::Shoot {
+            Order::Land { on, .. } => {
+                format!("Land on {}", game_state.celestials.get(*on).unwrap().name)
+            }
+            Order::TakeOff { from, .. } => format!(
+                "Take off from {}",
+                game_state.celestials.get(*from).unwrap().name
+            ),
+        }
+    }
+
+    /// Displays like
+    ///
+    /// stack_name: do thing
+    #[cfg(feature = "client")]
+    pub fn display_attributed(&self, game_state: &GameState) -> String {
+        let stack_name = &game_state.stacks[&self.target()].name;
+        match self {
+            Order::NameStack { name, .. } => {
+                format!("{stack_name}: Rename to {name}")
+            }
+            Order::ModuleTransfer { stack, module, to } => {
+                let stack = &game_state.stacks[stack];
+                match to {
+                    ModuleTransferTarget::Existing(stack_id) => format!(
+                        "{stack_name}: Transfer a {} to {}",
+                        stack.modules[module], game_state.stacks[stack_id].name
+                    ),
+                    ModuleTransferTarget::New(n) => {
+                        format!(
+                            "{stack_name}: Transfer a {} to new stack #{}",
+                            stack.modules[module], n
+                        )
+                    }
+                }
+            }
+            Order::Board { target, .. } => {
+                format!("{stack_name}: Board {}", game_state.stacks[target].name)
+            }
+            Order::Isru {
+                ore, water, fuel, ..
+            } => match (*ore, *water, *fuel) {
+                (ore, 0, 0) => format!("{stack_name}: Mine {:.1}t ore", ore as f32 / 10.0),
+                (0, water, 0) => format!("{stack_name}: Mine {:.1}t water", water as f32 / 10.0),
+                (ore, water, 0) => format!(
+                    "{stack_name}: Mine {:.1}t ore and {:.1}t water",
+                    ore as f32 / 10.0,
+                    water as f32 / 10.0
+                ),
+                (0, 0, fuel) => format!("{stack_name}: Skim {:.1}t fuel", fuel as f32 / 10.0,),
+                _ => "Invalid ISRU order".to_owned(),
+            },
+            Order::ResourceTransfer {
                 stack,
-                target,
-                shots,
+                from,
+                to,
+                ore,
+                materials,
+                water,
+                fuel,
+            } => match (from, to) {
+                (None, ResourceTransferTarget::Jettison) => format!(
+                    "{stack_name}: Jettison {}",
+                    Self::format_resources(
+                        *ore as u32,
+                        *materials as u32,
+                        *water as u32,
+                        *fuel as u32
+                    )
+                ),
+                (None, ResourceTransferTarget::Module(module_id)) => {
+                    format!(
+                        "{stack_name}: Transfer {} to {}",
+                        Self::format_resources(
+                            *ore as u32,
+                            *materials as u32,
+                            *water as u32,
+                            *fuel as u32
+                        ),
+                        game_state.stacks[stack].modules[module_id]
+                    )
+                }
+                (None, ResourceTransferTarget::Stack(stack_id)) => format!(
+                    "{stack_name}: Transfer {} to {}",
+                    Self::format_resources(
+                        *ore as u32,
+                        *materials as u32,
+                        *water as u32,
+                        *fuel as u32
+                    ),
+                    game_state.stacks[stack_id].name
+                ),
+                (Some(module), ResourceTransferTarget::FloatingPool) => {
+                    format!(
+                        "{stack_name}: Transfer {} from {}",
+                        Self::format_resources(
+                            *ore as u32,
+                            *materials as u32,
+                            *water as u32,
+                            *fuel as u32
+                        ),
+                        game_state.stacks[stack].modules[module]
+                    )
+                }
+                _ => "Invalid transfer order".to_owned(),
+            },
+            Order::Repair {
+                stack,
+                target_stack,
+                target_module,
+            } if stack == target_stack => format!(
+                "{stack_name}: Repair {}",
+                game_state.stacks[target_stack].modules[target_module]
+            ),
+            Order::Repair {
+                target_stack,
+                target_module,
+                ..
             } => format!(
-                "{}: shoot {} {} times",
-                game_state.stacks[stack].name, game_state.stacks[target].name, shots
+                "{stack_name}: Repair {} on {}",
+                game_state.stacks[target_stack].modules[target_module],
+                game_state.stacks[target_stack].name
             ),
+            Order::Refine {
+                materials, fuel, ..
+            } => format!(
+                "{stack_name}: Produce {}",
+                Self::format_resources(0, *materials as u32, 0, *fuel as u32)
+            ),
+            Order::Build { module, .. } => {
+                format!("{stack_name}: Build {}", module)
+            }
+            Order::Salvage { stack, salvaged } => {
+                format!(
+                    "{stack_name}: Salvage {}",
+                    game_state.stacks[stack].modules[salvaged]
+                )
+            }
+            Order::Shoot { target, shots, .. } if *shots == 1 => {
+                format!("{stack_name}: Shoot {}", game_state.stacks[target].name)
+            }
+            Order::Shoot { target, shots, .. } => {
+                format!(
+                    "{stack_name}: Shoot {} {} times",
+                    game_state.stacks[target].name, shots
+                )
+            }
             Order::Arm {
                 stack,
                 warhead,
                 armed,
             } if *armed => format!(
-                "{}: arm {}",
-                game_state.stacks[stack].name, game_state.stacks[stack].modules[warhead]
+                "{stack_name}: Arm {}",
+                game_state.stacks[stack].modules[warhead]
             ),
-            Order::Arm { stack, warhead, .. } => format!(
-                "{}: disarm {}",
-                game_state.stacks[stack].name, game_state.stacks[stack].modules[warhead]
-            ),
-            Order::Burn { stack, delta_v, .. } => format!(
-                "{}: make a {} hex/turn burn",
-                game_state.stacks[stack].name,
-                delta_v.norm()
-            ),
-            Order::OrbitAdjust { stack, around, .. } => format!(
-                "{}: adjust orbit around {}",
-                game_state.stacks[stack].name,
+            Order::Arm { stack, warhead, .. } => {
+                format!(
+                    "{stack_name}: Disarm {}",
+                    game_state.stacks[stack].modules[warhead]
+                )
+            }
+            Order::Burn { delta_v, .. } => {
+                format!("{stack_name}: Make a {} hex/turn burn", delta_v.norm())
+            }
+            Order::OrbitAdjust { around, .. } => format!(
+                "{stack_name}: Adjust orbit around {}",
                 game_state.celestials.get(*around).unwrap().name
             ),
-            Order::Land { stack, on, .. } => format!(
-                "{}: land on {}",
-                game_state.stacks[stack].name,
-                game_state.celestials.get(*on).unwrap().name
-            ),
-            Order::TakeOff { stack, from, .. } => format!(
-                "{}: take off from {}",
-                game_state.stacks[stack].name,
+            Order::Land { on, .. } => {
+                format!(
+                    "{stack_name}: Land on {}",
+                    game_state.celestials.get(*on).unwrap().name
+                )
+            }
+            Order::TakeOff { from, .. } => format!(
+                "{stack_name}: Take off from {}",
                 game_state.celestials.get(*from).unwrap().name
             ),
         }

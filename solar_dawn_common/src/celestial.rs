@@ -20,6 +20,8 @@
 //! Celestial bodies
 
 use std::collections::{HashMap, HashSet};
+#[cfg(feature = "client")]
+use std::fmt::Display;
 
 #[cfg(feature = "server")]
 use rand::{
@@ -75,6 +77,13 @@ impl From<u32> for CelestialId {
 impl From<CelestialId> for u32 {
     fn from(value: CelestialId) -> Self {
         value.0
+    }
+}
+
+#[cfg(feature = "client")]
+impl Display for CelestialId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
