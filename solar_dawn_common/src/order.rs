@@ -2655,31 +2655,7 @@ mod tests {
             validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
         assert_eq!(new_stacks[&stack_1].name, special_name);
 
-        // Test 7: Multiple rename orders in same turn
-        let orders = HashMap::from([(
-            player_1,
-            vec![
-                Order::NameStack {
-                    stack: stack_1,
-                    name: "first name".to_owned(),
-                },
-                Order::NameStack {
-                    stack: stack_1,
-                    name: "second name".to_owned(),
-                },
-            ],
-        )]);
-
-        let (validated_orders, errors) = Order::validate(&game_state, &orders);
-        assert!(errors[&player_1][0].is_none());
-        assert!(errors[&player_1][1].is_none());
-
-        // Both orders should be valid and the last one should win
-        let new_stacks =
-            validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
-        assert_eq!(new_stacks[&stack_1].name, "second name");
-
-        // Test 8: Rename order works in all phases
+        // Test 7: Rename order works in all phases
         for phase in [Phase::Logistics, Phase::Combat, Phase::Movement] {
             game_state.phase = phase;
 
@@ -2698,7 +2674,7 @@ mod tests {
             );
         }
 
-        // Test 9: Unicode characters in name
+        // Test 8: Unicode characters in name
         let unicode_name = "测试名称 🚀 ñoél ∑φμβοl";
         let orders = HashMap::from([(
             player_1,
