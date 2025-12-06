@@ -17,14 +17,17 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
+use std::ptr;
+
 use dioxus::prelude::*;
 use serde_cbor::to_vec;
 use solar_dawn_common::{
-    GameState, Phase, PlayerId,
+    GameState, Phase, PlayerId, Vec2,
     celestial::{CelestialId, Resources},
     order::{Order, OrderError},
-    stack::StackId,
+    stack::{Health, Module, ModuleDetails, StackId},
 };
+use strum::{EnumString, IntoStaticStr};
 
 use crate::{
     scenes::game::{
@@ -523,6 +526,34 @@ pub fn StackDetails(
     client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
+    #[derive(Clone, Copy, EnumString, IntoStaticStr)]
+    enum DraftOrder {
+        None,
+        NameStack,
+        ModuleTransfer,
+        ModuleTransferNew,
+        Board,
+        IsruMine,
+        IsruSkim,
+        ResourceTransferFromModule,
+        ResourceTransferToModule,
+        ResourceTransferToStack,
+        ResourceTransferJettison,
+        Repair,
+        Refine,
+        Build,
+        Salvage,
+        Shoot,
+        Arm,
+        Disarm,
+        Burn,
+        OrbitAdjust,
+        Land,
+        TakeOff,
+    }
+    let mut draft_order = use_signal(|| DraftOrder::None);
+    let mut target_location = use_signal(|| Option::<Vec2<i32>>::None);
+
     let game_state = &*game_state.read();
     let Some(stack) = game_state.stacks.get(&id) else {
         return rsx! {
@@ -557,6 +588,26 @@ pub fn StackDetails(
             } else {
                 "Owned by {game_state.players[&stack.owner]}"
             }
+            br {}
+            "Current mass: {stack.mass():.1}t"
+            br {}
+            "Empty mass: {stack.dry_mass()}"
+            br {}
+            "Fully loaded mass: {stack.full_mass()}"
+            br {}
+            {
+                let (intact, damaged, destroyed) = stack.damage_status();
+                let intact_word = if intact == 1 { "module" } else { "modules" };
+                let damaged_word = if damaged == 1 { "module" } else { "modules" };
+                let destroyed_word = if destroyed == 1 { "module" } else { "modules" };
+                rsx! { "{intact} intact {intact_word}, {damaged} damaged {damaged_word}, {destroyed} destroyed {destroyed_word}" }
+            }
+            br {}
+            "Current ΔV: {stack.current_dv():.1}"
+            br {}
+            "Fully fuelled ΔV: {stack.max_dv():.1}"
+            br {}
+            "Acceleration: {stack.acceleration() / 2.0:.1} hex/turn² ({stack.acceleration():.1} m/s²)"
         }
         h2 { "Modules" }
         p {
@@ -569,25 +620,319 @@ pub fn StackDetails(
         }
         if stack.owner == me {
             h2 { "Orders" }
-            // TODO: give orders here
-            // NameStack
-
-            // ModuleTransfer
-            // Board
-            // Isru
-            // ResourceTransfer
-            // Repair
-            // Refine
-            // Build
-            // Salvage
-
-            // Shoot
-            // Arm
-
-            // Burn
-            // OrbitAdjust
-            // Land
-            // TakeOff
+            select {
+                class: "form-select",
+                oninput: move |e| {
+                    draft_order.set(e.value().parse::<DraftOrder>().unwrap_or(DraftOrder::None));
+                },
+                option { value: <&'static str>::from(DraftOrder::None), "Give an order..." }
+                option { value: <&'static str>::from(DraftOrder::NameStack), "Rename" }
+                match game_state.phase {
+                    Phase::Logistics => rsx! {
+                        if game_state
+                            .stacks
+                            .values()
+                            .any(|target| {
+                                target.owner != me && target.rendezvoused_with(stack)
+                                    && !target
+                                        .modules
+                                        .values()
+                                        .any(|module| {
+                                            matches!(
+                                                module,
+                                                Module {
+                                                    health: Health::Intact,
+                                                    details: ModuleDetails::Habitat { .. },
+                                                }
+                                            )
+                                        })
+                            })
+                        {
+                            option { value: <&'static str>::from(DraftOrder::Board), "Board" }
+                        }
+                        if game_state
+                            .stacks
+                            .values()
+                            .any(|target| {
+                                !ptr::eq(stack, target) && target.owner == me
+                                    && target.rendezvoused_with(stack)
+                            })
+                        {
+                            option { value: <&'static str>::from(DraftOrder::ModuleTransfer), "Transfer module" }
+                        }
+                        option { value: <&'static str>::from(DraftOrder::ModuleTransferNew), "Transfer module to new stack" }
+                        if stack
+                            .modules
+                            .values()
+                            .any(|module| {
+                                matches!(
+                                    module,
+                                    Module {
+                                        health: Health::Intact,
+                                        details: ModuleDetails::CargoHold { .. } | ModuleDetails::Tank { .. },
+                                    }
+                                )
+                            })
+                        {
+                            option { value: <&'static str>::from(DraftOrder::ResourceTransferFromModule),
+                                "Transfer resources from module"
+                            }
+                            option { value: <&'static str>::from(DraftOrder::ResourceTransferToModule),
+                                "Transfer resources to module"
+                            }
+                        }
+                        if game_state
+                            .stacks
+                            .values()
+                            .any(|target| {
+                                !ptr::eq(stack, target) && target.owner == me
+                                    && target.rendezvoused_with(stack)
+                            })
+                        {
+                            option { value: <&'static str>::from(DraftOrder::ResourceTransferToStack),
+                                "Transfer resources to stack"
+                            }
+                        }
+                        option { value: <&'static str>::from(DraftOrder::ResourceTransferJettison), "Jettison resources" }
+                        if game_state
+                            .celestials
+                            .get_by_position(stack.position)
+                            .is_some_and(|(_, celestial)| {
+                                stack.landed(celestial)
+                                    && matches!(
+                                        celestial.resources,
+                                        Resources::MiningBoth | Resources::MiningWater | Resources::MiningOre
+                                    )
+                            })
+                        {
+                            option { value: <&'static str>::from(DraftOrder::IsruMine), "Mine" }
+                        }
+                        if game_state
+                            .celestials
+                            .with_gravity()
+                            .any(|celestial| {
+                                stack.orbiting(celestial)
+                                    && matches!(celestial.resources, Resources::Skimming)
+                            })
+                        {
+                            option { value: <&'static str>::from(DraftOrder::IsruSkim), "Skim fuel" }
+                        }
+                        if stack
+                            .modules
+                            .values()
+                            .any(|module| {
+                                matches!(
+                                    module,
+                                    Module { health: Health::Intact, details: ModuleDetails::Refinery }
+                                )
+                            })
+                        {
+                            option { value: <&'static str>::from(DraftOrder::Refine), "Refine" }
+                        }
+                        if stack
+                            .modules
+                            .values()
+                            .any(|module| {
+                                matches!(
+                                    module,
+                                    Module {
+                                        health: Health::Intact,
+                                        details: ModuleDetails::Factory | ModuleDetails::Habitat { .. },
+                                    }
+                                )
+                            })
+                        {
+                            option { value: <&'static str>::from(DraftOrder::Repair), "Repair" }
+                        }
+                        if stack
+                            .modules
+                            .values()
+                            .any(|module| {
+                                matches!(
+                                    module,
+                                    Module { health: Health::Intact, details: ModuleDetails::Factory }
+                                )
+                            })
+                        {
+                            option { value: <&'static str>::from(DraftOrder::Build), "Build" }
+                            option { value: <&'static str>::from(DraftOrder::Salvage), "Salvage" }
+                        }
+                    },
+                    Phase::Combat => rsx! {
+                        if stack
+                            .modules
+                            .values()
+                            .any(|module| {
+                                matches!(
+                                    module,
+                                    Module { health: Health::Intact, details: ModuleDetails::Gun }
+                                )
+                            })
+                        {
+                            option { value: <&'static str>::from(DraftOrder::Shoot), "Shoot" }
+                        }
+                        if !stack
+                            .modules
+                            .values()
+                            .any(|module| {
+                                matches!(
+                                    module,
+                                    Module {
+                                        health: Health::Intact | Health::Damaged,
+                                        details: ModuleDetails::Habitat { .. },
+                                    }
+                                )
+                            })
+                        {
+                            if stack
+                                .modules
+                                .values()
+                                .any(|module| {
+                                    matches!(
+                                        module,
+                                        Module {
+                                            health: Health::Intact,
+                                            details: ModuleDetails::Warhead { armed: false },
+                                        }
+                                    )
+                                })
+                            {
+                                option { value: <&'static str>::from(DraftOrder::Arm), "Arm" }
+                            }
+                            if stack
+                                .modules
+                                .values()
+                                .any(|module| {
+                                    matches!(
+                                        module,
+                                        Module {
+                                            health: Health::Intact,
+                                            details: ModuleDetails::Warhead { armed: true },
+                                        }
+                                    )
+                                })
+                            {
+                                option { value: <&'static str>::from(DraftOrder::Disarm), "Disarm" }
+                            }
+                        }
+                    },
+                    Phase::Movement => rsx! {
+                        if stack.acceleration() >= 2.0 {
+                            option { value: <&'static str>::from(DraftOrder::Burn), "Burn" }
+                        }
+                        if game_state.celestials.with_gravity().any(|celestial| { stack.orbiting(celestial) }) {
+                            option { value: <&'static str>::from(DraftOrder::OrbitAdjust), "Adjust orbit" }
+                        }
+                        if game_state
+                            .celestials
+                            .with_gravity()
+                            .any(|celestial| {
+                                stack.orbiting(celestial) && stack.acceleration() >= 2.0
+                                    && stack.acceleration() >= celestial.surface_gravity
+                            })
+                        {
+                            option { value: <&'static str>::from(DraftOrder::Land), "Land" }
+                        }
+                        if game_state
+                            .celestials
+                            .get_by_position(stack.position)
+                            .is_some_and(|(_, celestial)| stack.landed_with_gravity(celestial))
+                        {
+                            option { value: <&'static str>::from(DraftOrder::TakeOff), "Take off" }
+                        }
+                    },
+                }
+            }
+            match *draft_order.read() {
+                DraftOrder::None => {
+                    // pass
+                    rsx! {}
+                }
+                DraftOrder::NameStack => {
+                    // TODO: name
+                    rsx! {}
+                }
+                DraftOrder::Board => {
+                    // TODO: target
+                    rsx! {}
+                }
+                DraftOrder::ModuleTransfer => {
+                    // TODO: target
+                    rsx! {}
+                }
+                DraftOrder::ModuleTransferNew => {
+                    // TODO: target
+                    rsx! {}
+                }
+                DraftOrder::ResourceTransferFromModule => {
+                    // TODO: target, amount
+                    rsx! {}
+                }
+                DraftOrder::ResourceTransferToModule => {
+                    // TODO: target, amount
+                    rsx! {}
+                }
+                DraftOrder::ResourceTransferToStack => {
+                    // TODO: target, amount
+                    rsx! {}
+                }
+                DraftOrder::ResourceTransferJettison => {
+                    // TODO: amount
+                    rsx! {}
+                }
+                DraftOrder::IsruMine => {
+                    // TODO: amount
+                    rsx! {}
+                }
+                DraftOrder::IsruSkim => {
+                    // TODO: amount
+                    rsx! {}
+                }
+                DraftOrder::Repair => {
+                    // TODO: target
+                    rsx! {}
+                }
+                DraftOrder::Refine => {
+                    // TODO: amount
+                    rsx! {}
+                }
+                DraftOrder::Build => {
+                    // TODO: module
+                    rsx! {}
+                }
+                DraftOrder::Salvage => {
+                    // TODO: target
+                    rsx! {}
+                }
+                DraftOrder::Shoot => {
+                    // TODO: target
+                    rsx! {}
+                }
+                DraftOrder::Arm => {
+                    // TODO: target
+                    rsx! {}
+                }
+                DraftOrder::Disarm => {
+                    // TODO: target
+                    rsx! {}
+                }
+                DraftOrder::Burn => {
+                    // TODO: fuel, magnitude
+                    rsx! {}
+                }
+                DraftOrder::OrbitAdjust => {
+                    // TODO: target, direction
+                    rsx! {}
+                }
+                DraftOrder::Land => {
+                    // TODO: implicit target
+                    rsx! {}
+                }
+                DraftOrder::TakeOff => {
+                    // TODO: target, direction
+                    rsx! {}
+                }
+            }
             p {
                 for (index , order) in orders.read().iter().enumerate().filter(|(_, order)| order.target() == id) {
                     Fragment { key: "{index}:{order:?}",

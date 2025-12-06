@@ -459,9 +459,13 @@ impl OrderError {
             OrderError::IncorrectPropellantMass => "incorrect propellant mass".to_owned(),
             OrderError::MultipleNamingOrders => "multiple naming orders".to_owned(),
             OrderError::NoHab => "stack doesn't contain a habitat".to_owned(),
-            OrderError::ContestedBoarding => "boarding action contested - boarding failed".to_owned(),
+            OrderError::ContestedBoarding => {
+                "boarding action contested - boarding failed".to_owned()
+            }
             OrderError::NoResourceAccess => "resource not available in this location".to_owned(),
-            OrderError::InvalidTransfer => "invalid transfer source-destination combination".to_owned(),
+            OrderError::InvalidTransfer => {
+                "invalid transfer source-destination combination".to_owned()
+            }
             OrderError::NotDamaged => "module not damaged".to_owned(),
             OrderError::NotInEarthOrbit => "stack not in Earth orbit".to_owned(),
             OrderError::InvalidTarget => "invalid target".to_owned(),
@@ -471,11 +475,23 @@ impl OrderError {
             OrderError::DestinationTooFar => "destination too far".to_owned(),
             OrderError::TooBusyToBoard => "can't board and carry out other orders".to_owned(),
             OrderError::Boarded => "stack boarded - order interrupted".to_owned(),
-            OrderError::ModuleTransferConflict => "module transferred involved in another order".to_owned(),
-            OrderError::NewStackStateConflict => "new stack created in multiple locations".to_owned(),
-            OrderError::NotEnoughModules => "not enough capacity for all orders of this type".to_owned(),
-            OrderError::ResourcePoolResidual(stack_id) => format!("resource pool for {} is not empty at end of turn", game_state.stacks[stack_id].name),
-            OrderError::NotEnoughCapacity(stack_id, module_id) => format!("attempted to fill {} on {} beyond capacity", game_state.stacks[stack_id].modules[module_id], game_state.stacks[stack_id].name),
+            OrderError::ModuleTransferConflict => {
+                "module transferred involved in another order".to_owned()
+            }
+            OrderError::NewStackStateConflict => {
+                "new stack created in multiple locations".to_owned()
+            }
+            OrderError::NotEnoughModules => {
+                "not enough capacity for all orders of this type".to_owned()
+            }
+            OrderError::ResourcePoolResidual(stack_id) => format!(
+                "resource pool for {} is not empty at end of turn",
+                game_state.stacks[stack_id].name
+            ),
+            OrderError::NotEnoughCapacity(stack_id, module_id) => format!(
+                "attempted to fill {} on {} beyond capacity",
+                game_state.stacks[stack_id].modules[module_id], game_state.stacks[stack_id].name
+            ),
             OrderError::MultipleMoves => "multiple movement orders for this stack".to_owned(),
         }
     }
@@ -1361,6 +1377,9 @@ impl Order {
                 match to {
                     ModuleTransferTarget::Existing(target) => {
                         let target_ref = validate_stack(*target, game_state, player)?;
+                        if *stack == *target {
+                            return Err(OrderError::InvalidTarget);
+                        }
                         if !stack_ref.rendezvoused_with(target_ref) {
                             return Err(OrderError::NotRendezvoused(*stack, *target));
                         }
@@ -1393,6 +1412,9 @@ impl Order {
                 };
                 if target_ref.owner == player {
                     return Err(OrderError::BadOwnership(*target));
+                }
+                if !stack_ref.rendezvoused_with(target_ref) {
+                    return Err(OrderError::NotRendezvoused(*stack, *target));
                 }
 
                 if target_ref.modules.values().any(|module| {
@@ -1512,6 +1534,9 @@ impl Order {
                     (None, ResourceTransferTarget::Stack(to)) => {
                         let stack_ref = validate_stack(*stack, game_state, player)?;
                         let to_ref = validate_stack(*stack, game_state, player)?;
+                        if *stack == *to {
+                            return Err(OrderError::InvalidTarget);
+                        }
                         if !stack_ref.rendezvoused_with(to_ref) {
                             return Err(OrderError::NotRendezvoused(*stack, *to));
                         }

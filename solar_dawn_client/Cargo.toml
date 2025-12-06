@@ -16,6 +16,7 @@ futures = "0.3.31"
 serde = { workspace = true }
 serde_cbor = { workspace = true }
 solar_dawn_common = { path = "../solar_dawn_common", features = ["client"] }
+strum = { version = "0.27.2", features = ["derive"] }
 thiserror = "2.0.17"
 wasm-bindgen = "0.2.105"
 web-sys = { version = "0.3.82", features = [
