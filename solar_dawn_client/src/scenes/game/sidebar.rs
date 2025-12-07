@@ -17,15 +17,15 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::ptr;
+use std::{collections::HashSet, ptr};
 
 use dioxus::prelude::*;
 use serde_cbor::to_vec;
 use solar_dawn_common::{
-    GameState, Phase, PlayerId, Vec2,
+    GameState, Phase, PlayerId,
     celestial::{CelestialId, Resources},
-    order::{Order, OrderError},
-    stack::{Health, Module, ModuleDetails, StackId},
+    order::{ModuleTransferTarget, Order, OrderError},
+    stack::{Health, Module, ModuleDetails, ModuleId, StackId},
 };
 use strum::{EnumString, IntoStaticStr};
 
@@ -515,6 +515,32 @@ pub fn CelestialDetails(
     }
 }
 
+#[derive(Clone, Copy, EnumString, IntoStaticStr)]
+enum DraftOrder {
+    None,
+    NameStack,
+    ModuleTransfer,
+    ModuleTransferNew,
+    Board,
+    IsruMine,
+    IsruSkim,
+    ResourceTransferFromModule,
+    ResourceTransferToModule,
+    ResourceTransferToStack,
+    ResourceTransferJettison,
+    Repair,
+    Refine,
+    Build,
+    Salvage,
+    Shoot,
+    Arm,
+    Disarm,
+    Burn,
+    OrbitAdjust,
+    Land,
+    TakeOff,
+}
+
 #[component]
 pub fn StackDetails(
     me: PlayerId,
@@ -526,36 +552,10 @@ pub fn StackDetails(
     client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
-    #[derive(Clone, Copy, EnumString, IntoStaticStr)]
-    enum DraftOrder {
-        None,
-        NameStack,
-        ModuleTransfer,
-        ModuleTransferNew,
-        Board,
-        IsruMine,
-        IsruSkim,
-        ResourceTransferFromModule,
-        ResourceTransferToModule,
-        ResourceTransferToStack,
-        ResourceTransferJettison,
-        Repair,
-        Refine,
-        Build,
-        Salvage,
-        Shoot,
-        Arm,
-        Disarm,
-        Burn,
-        OrbitAdjust,
-        Land,
-        TakeOff,
-    }
     let mut draft_order = use_signal(|| DraftOrder::None);
-    let mut target_location = use_signal(|| Option::<Vec2<i32>>::None);
 
-    let game_state = &*game_state.read();
-    let Some(stack) = game_state.stacks.get(&id) else {
+    let game_state_ref = &*game_state.read();
+    let Some(stack) = game_state_ref.stacks.get(&id) else {
         return rsx! {
             h1 { "Unknown Stack" }
         };
@@ -586,7 +586,7 @@ pub fn StackDetails(
             if stack.owner == me {
                 "Your stack"
             } else {
-                "Owned by {game_state.players[&stack.owner]}"
+                "Owned by {game_state_ref.players[&stack.owner]}"
             }
             br {}
             "Current mass: {stack.mass():.1}t"
@@ -625,11 +625,15 @@ pub fn StackDetails(
                 oninput: move |e| {
                     draft_order.set(e.value().parse::<DraftOrder>().unwrap_or(DraftOrder::None));
                 },
-                option { value: <&'static str>::from(DraftOrder::None), "Give an order..." }
+                option {
+                    value: <&'static str>::from(DraftOrder::None),
+                    selected: matches!(&*draft_order.read(), DraftOrder::None),
+                    "Give an order..."
+                }
                 option { value: <&'static str>::from(DraftOrder::NameStack), "Rename" }
-                match game_state.phase {
+                match game_state_ref.phase {
                     Phase::Logistics => rsx! {
-                        if game_state
+                        if game_state_ref
                             .stacks
                             .values()
                             .any(|target| {
@@ -650,7 +654,7 @@ pub fn StackDetails(
                         {
                             option { value: <&'static str>::from(DraftOrder::Board), "Board" }
                         }
-                        if game_state
+                        if game_state_ref
                             .stacks
                             .values()
                             .any(|target| {
@@ -681,7 +685,7 @@ pub fn StackDetails(
                                 "Transfer resources to module"
                             }
                         }
-                        if game_state
+                        if game_state_ref
                             .stacks
                             .values()
                             .any(|target| {
@@ -694,7 +698,7 @@ pub fn StackDetails(
                             }
                         }
                         option { value: <&'static str>::from(DraftOrder::ResourceTransferJettison), "Jettison resources" }
-                        if game_state
+                        if game_state_ref
                             .celestials
                             .get_by_position(stack.position)
                             .is_some_and(|(_, celestial)| {
@@ -707,7 +711,7 @@ pub fn StackDetails(
                         {
                             option { value: <&'static str>::from(DraftOrder::IsruMine), "Mine" }
                         }
-                        if game_state
+                        if game_state_ref
                             .celestials
                             .with_gravity()
                             .any(|celestial| {
@@ -820,10 +824,14 @@ pub fn StackDetails(
                         if stack.acceleration() >= 2.0 {
                             option { value: <&'static str>::from(DraftOrder::Burn), "Burn" }
                         }
-                        if game_state.celestials.with_gravity().any(|celestial| { stack.orbiting(celestial) }) {
+                        if game_state_ref
+                            .celestials
+                            .with_gravity()
+                            .any(|celestial| { stack.orbiting(celestial) })
+                        {
                             option { value: <&'static str>::from(DraftOrder::OrbitAdjust), "Adjust orbit" }
                         }
-                        if game_state
+                        if game_state_ref
                             .celestials
                             .with_gravity()
                             .any(|celestial| {
@@ -833,7 +841,7 @@ pub fn StackDetails(
                         {
                             option { value: <&'static str>::from(DraftOrder::Land), "Land" }
                         }
-                        if game_state
+                        if game_state_ref
                             .celestials
                             .get_by_position(stack.position)
                             .is_some_and(|(_, celestial)| stack.landed_with_gravity(celestial))
@@ -849,97 +857,102 @@ pub fn StackDetails(
                     rsx! {}
                 }
                 DraftOrder::NameStack => {
-                    // TODO: name
-                    rsx! {}
+                    rsx! {
+                        NameStack { id, orders, draft_order }
+                    }
                 }
                 DraftOrder::Board => {
-                    // TODO: target
-                    rsx! {}
+                    rsx! {
+                        BoardStack {
+                            id,
+                            me,
+                            game_state,
+                            orders,
+                            draft_order,
+                        }
+                    }
                 }
                 DraftOrder::ModuleTransfer => {
-                    // TODO: target
-                    rsx! {}
+                    rsx! {
+                        ModuleTransfer {
+                            id,
+                            me,
+                            game_state,
+                            orders,
+                            draft_order,
+                        }
+                    }
                 }
                 DraftOrder::ModuleTransferNew => {
-                    // TODO: target
-                    rsx! {}
+                    rsx! {
+                        ModuleTransferNew {
+                            id,
+                            game_state,
+                            orders,
+                            draft_order,
+                        }
+                    }
                 }
                 DraftOrder::ResourceTransferFromModule => {
-                    // TODO: target, amount
                     rsx! {}
                 }
                 DraftOrder::ResourceTransferToModule => {
-                    // TODO: target, amount
                     rsx! {}
                 }
                 DraftOrder::ResourceTransferToStack => {
-                    // TODO: target, amount
                     rsx! {}
                 }
                 DraftOrder::ResourceTransferJettison => {
-                    // TODO: amount
                     rsx! {}
                 }
                 DraftOrder::IsruMine => {
-                    // TODO: amount
                     rsx! {}
                 }
                 DraftOrder::IsruSkim => {
-                    // TODO: amount
                     rsx! {}
                 }
                 DraftOrder::Repair => {
-                    // TODO: target
                     rsx! {}
                 }
                 DraftOrder::Refine => {
-                    // TODO: amount
                     rsx! {}
                 }
                 DraftOrder::Build => {
-                    // TODO: module
                     rsx! {}
                 }
                 DraftOrder::Salvage => {
-                    // TODO: target
                     rsx! {}
                 }
                 DraftOrder::Shoot => {
-                    // TODO: target
                     rsx! {}
                 }
                 DraftOrder::Arm => {
-                    // TODO: target
                     rsx! {}
                 }
                 DraftOrder::Disarm => {
-                    // TODO: target
                     rsx! {}
                 }
                 DraftOrder::Burn => {
-                    // TODO: fuel, magnitude
                     rsx! {}
                 }
                 DraftOrder::OrbitAdjust => {
-                    // TODO: target, direction
                     rsx! {}
                 }
                 DraftOrder::Land => {
-                    // TODO: implicit target
                     rsx! {}
                 }
                 DraftOrder::TakeOff => {
-                    // TODO: target, direction
                     rsx! {}
                 }
             }
+            hr {}
             p {
                 for (index , order) in orders.read().iter().enumerate().filter(|(_, order)| order.target() == id) {
                     Fragment { key: "{index}:{order:?}",
-                        "{order.display_unattributed(game_state)}"
+                        "{order.display_unattributed(game_state_ref)} "
                         if let Some(Some(error)) = order_errors.get(index) {
+                            span { class: "text-danger", "{error.display(game_state_ref)}" }
                             " "
-                            span { class: "text-danger", "{error.display(game_state)}" }
                         }
                         button {
                             r#type: "button",
@@ -957,10 +970,10 @@ pub fn StackDetails(
             p {
                 for (index , (order , enabled)) in auto_orders.read().iter().enumerate().filter(|(_, (order, _))| order.target() == id) {
                     if *enabled {
-                        "{order.display_unattributed(game_state)}"
+                        "{order.display_unattributed(game_state_ref)} "
                         if let Some(Some(error)) = order_errors.get(orders.read().len() + index) {
+                            span { class: "text-danger", "{error.display(game_state_ref)}" }
                             " "
-                            span { class: "text-danger", "{error.display(game_state)}" }
                         }
                         button {
                             r#type: "button",
@@ -971,7 +984,7 @@ pub fn StackDetails(
                             "Cancel"
                         }
                     } else {
-                        s { "{order.display_unattributed(game_state)}" }
+                        s { "{order.display_unattributed(game_state_ref)}" }
                         button {
                             r#type: "button",
                             class: "btn btn-secondary btn-sm",
@@ -983,6 +996,287 @@ pub fn StackDetails(
                     }
                 }
             }
+        }
+    }
+}
+
+#[component]
+fn NameStack(
+    id: StackId,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+) -> Element {
+    let mut name = use_signal(String::new);
+    rsx! {
+        label { r#for: "new-name", class: "form-label", "New name" }
+        input {
+            r#type: "text",
+            id: "new-name",
+            class: "form-control",
+            oninput: move |e| {
+                name.set(e.value());
+            },
+            ""
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                orders
+                    .write()
+                    .push(Order::NameStack {
+                        stack: id,
+                        name: name.read().clone(),
+                    });
+                draft_order.set(DraftOrder::None);
+            },
+            "Submit"
+        }
+    }
+}
+
+#[component]
+fn BoardStack(
+    id: StackId,
+    me: PlayerId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+) -> Element {
+    let mut selected = use_signal(|| Option::<StackId>::None);
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+    rsx! {
+        select {
+            class: "form-select",
+            oninput: move |e| {
+                let value = e.value();
+                if value == "none" {
+                    selected.set(None);
+                } else {
+                    selected.set(Some(value.parse::<StackId>().unwrap()));
+                }
+            },
+            option { value: "none", "Select target..." }
+            for (target_id , stack) in game_state
+                .stacks
+                .iter()
+                .filter(|(_, target)| {
+                    target.owner != me && target.rendezvoused_with(stack)
+                        && !target
+                            .modules
+                            .values()
+                            .any(|module| {
+                                matches!(
+                                    module,
+                                    Module {
+                                        health: Health::Intact,
+                                        details: ModuleDetails::Habitat { .. },
+                                    }
+                                )
+                            })
+                })
+            {
+                option { value: "{target_id}", "{stack.name}" }
+            }
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                if let Some(selected) = &*selected.read() {
+                    orders
+                        .write()
+                        .push(Order::Board {
+                            stack: id,
+                            target: *selected,
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
+            },
+            disabled: selected.read().is_none(),
+            "Submit"
+        }
+    }
+}
+
+#[component]
+fn ModuleTransfer(
+    id: StackId,
+    me: PlayerId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+) -> Element {
+    let mut selected_module = use_signal(|| Option::<ModuleId>::None);
+    let mut selected_target = use_signal(|| Option::<StackId>::None);
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+    rsx! {
+        select {
+            class: "form-select",
+            oninput: move |e| {
+                let value = e.value();
+                if value == "none" {
+                    selected_module.set(None);
+                } else {
+                    selected_module.set(Some(value.parse::<ModuleId>().unwrap()));
+                }
+            },
+            option { value: "none", "Select module..." }
+            for (module_id , module) in stack.modules.iter() {
+                option { value: "{module_id}", "{module}" }
+            }
+        }
+        select {
+            class: "form-select",
+            oninput: move |e| {
+                let value = e.value();
+                if value == "none" {
+                    selected_target.set(None);
+                } else {
+                    selected_target.set(Some(value.parse::<StackId>().unwrap()));
+                }
+            },
+            option { value: "none", "Select target stack..." }
+            for (target_id , target_stack) in game_state
+                .stacks
+                .iter()
+                .filter(|(target_id, target)| {
+                    **target_id != id && target.owner == me && target.rendezvoused_with(stack)
+                })
+            {
+                option { value: "{target_id}", "{target_stack.name}" }
+            }
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                if let Some(selected_module) = &*selected_module.read()
+                    && let Some(selected_target) = &*selected_target.read()
+                {
+                    orders
+                        .write()
+                        .push(Order::ModuleTransfer {
+                            stack: id,
+                            module: *selected_module,
+                            to: ModuleTransferTarget::Existing(*selected_target),
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
+            },
+            disabled: selected_module.read().is_none() || selected_target.read().is_none(),
+            "Submit"
+        }
+    }
+}
+
+#[component]
+fn ModuleTransferNew(
+    id: StackId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+) -> Element {
+    let mut selected_module = use_signal(|| Option::<ModuleId>::None);
+    let mut selected_target = use_signal(|| Option::<u32>::None);
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+    let mut possible_new_stack_numbers = orders
+        .read()
+        .iter()
+        .filter_map(|order| {
+            if let Order::ModuleTransfer {
+                stack: transferring,
+                module,
+                to: ModuleTransferTarget::New(to),
+            } = order
+            {
+                let transferring = &game_state.stacks[transferring];
+                if transferring.rendezvoused_with(stack) {
+                    Some(*to)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    possible_new_stack_numbers.sort();
+    possible_new_stack_numbers.push(
+        orders
+            .read()
+            .iter()
+            .filter_map(|order| {
+                if let Order::ModuleTransfer {
+                    to: ModuleTransferTarget::New(to),
+                    ..
+                } = order
+                {
+                    Some(*to)
+                } else {
+                    None
+                }
+            })
+            .max()
+            .unwrap_or(0)
+            + 1,
+    );
+
+    rsx! {
+        select {
+            class: "form-select",
+            oninput: move |e| {
+                let value = e.value();
+                if value == "none" {
+                    selected_module.set(None);
+                } else {
+                    selected_module.set(Some(value.parse::<ModuleId>().unwrap()));
+                }
+            },
+            option { value: "none", "Select module..." }
+            for (module_id , module) in stack.modules.iter() {
+                option { value: "{module_id}", "{module}" }
+            }
+        }
+        select {
+            class: "form-select",
+            oninput: move |e| {
+                let value = e.value();
+                if value == "none" {
+                    selected_target.set(None);
+                } else {
+                    selected_target.set(Some(value.parse::<u32>().unwrap()));
+                }
+            },
+            option { value: "none", "Select new stack number..." }
+            for new_stack_number in possible_new_stack_numbers {
+                option { value: "{new_stack_number}", "New stack #{new_stack_number}" }
+            }
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                if let Some(selected_module) = &*selected_module.read()
+                    && let Some(selected_target) = &*selected_target.read()
+                {
+                    orders
+                        .write()
+                        .push(Order::ModuleTransfer {
+                            stack: id,
+                            module: *selected_module,
+                            to: ModuleTransferTarget::New(*selected_target),
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
+            },
+            disabled: selected_module.read().is_none() || selected_target.read().is_none(),
+            "Submit"
         }
     }
 }

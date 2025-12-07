@@ -23,7 +23,7 @@
 
 use std::collections::HashMap;
 #[cfg(feature = "client")]
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 #[cfg(feature = "server")]
 use rand::Rng;
@@ -332,6 +332,15 @@ impl From<StackId> for u32 {
 impl Display for StackId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+#[cfg(feature = "client")]
+impl FromStr for StackId {
+    type Err = <u32 as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.parse::<u32>()?))
     }
 }
 
@@ -718,6 +727,15 @@ impl From<ModuleId> for u32 {
 impl Display for ModuleId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
+    }
+}
+
+#[cfg(feature = "client")]
+impl FromStr for ModuleId {
+    type Err = <u32 as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.parse::<u32>()?))
     }
 }
 
