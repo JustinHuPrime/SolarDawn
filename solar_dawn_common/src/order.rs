@@ -362,6 +362,8 @@ pub enum OrderError {
 
     /// Multiple naming orders for the same stack
     MultipleNamingOrders,
+    /// Stack name duplicates another stack owned by the same player
+    DuplicateStackName,
 
     /// Can't board - stack has no habitat to board with
     NoHab,
@@ -458,6 +460,9 @@ impl OrderError {
             ),
             OrderError::IncorrectPropellantMass => "incorrect propellant mass".to_owned(),
             OrderError::MultipleNamingOrders => "multiple naming orders".to_owned(),
+            OrderError::DuplicateStackName => {
+                "stack name duplicates another stack's game".to_owned()
+            }
             OrderError::NoHab => "stack doesn't contain a habitat".to_owned(),
             OrderError::ContestedBoarding => {
                 "boarding action contested - boarding failed".to_owned()
@@ -540,6 +545,48 @@ impl Order {
             if orders.len() > 1 {
                 for order in orders {
                     *order = Err(OrderError::MultipleNamingOrders);
+                }
+            }
+        }
+
+        // aggregate check that stacks have distinct names after rename
+        #[expect(clippy::type_complexity)]
+        let mut naming_orders_by_player_and_name: HashMap<
+            PlayerId,
+            HashMap<String, Vec<&mut Result<&Order, OrderError>>>,
+        > = HashMap::new();
+        for (&player, orders) in orders.iter_mut() {
+            for order in orders.iter_mut() {
+                if let Ok(Order::NameStack { name, .. }) = order {
+                    naming_orders_by_player_and_name
+                        .entry(player)
+                        .or_default()
+                        .entry(name.clone())
+                        .or_default()
+                        .push(order);
+                }
+            }
+        }
+        for (player, names) in naming_orders_by_player_and_name {
+            for (name, orders) in names {
+                if orders.len() > 1
+                    || game_state.stacks.iter().any(|(id, stack)| {
+                        stack.owner == player
+                            && stack.name == name
+                            && !orders.iter().any(|order| {
+                                let Ok(Order::NameStack {
+                                    stack: order_id, ..
+                                }) = order
+                                else {
+                                    unreachable!()
+                                };
+                                id == order_id
+                            })
+                    })
+                {
+                    for order in orders {
+                        *order = Err(OrderError::DuplicateStackName);
+                    }
                 }
             }
         }
@@ -1788,7 +1835,12 @@ impl Order {
                         let velocity = stack.velocity;
                         let owner = stack.owner;
                         let new_stack = stacks.entry(new_id).or_insert_with(|| {
-                            Stack::new(position, velocity, owner, format!("New Stack #{new_count}"))
+                            Stack::new(
+                                position,
+                                velocity,
+                                owner,
+                                format!("New Stack #{}", u32::from(new_id)),
+                            )
                         });
                         new_stack.modules.insert(module_id, module);
                     }
