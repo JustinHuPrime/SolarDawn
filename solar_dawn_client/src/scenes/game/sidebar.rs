@@ -2655,12 +2655,10 @@ fn Burn(
             br {}
         }
         if let Some(required) = &*required_fuel.read() {
-            output { "Fuel required: {*required as f32 / 10.0:.1}t" }
-            br {}
-            output { "Fuel selected: {*selected_fuel.read() as f32 / 10.0:.1}t" }
+            output { "Fuel selected: {*selected_fuel.read() as f32 / 10.0:.1}t/{*required as f32 / 10.0:.1}t" }
             br {}
         }
-        label { class: "form-label", "Fuel Usage" }
+        h3 { "Fuel Usage" }
         for (module_id , fuel_available) in stack
             .modules
             .iter()
@@ -2675,16 +2673,21 @@ fn Burn(
                 }
             })
         {
-            input {
-                key: "{module_id:?}",
-                r#type: "range",
-                class: "form-range",
-                min: 0,
-                max: fuel_available,
-                value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
-                oninput: move |e| {
-                    fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
-                },
+            Fragment { key: "{module_id:?}",
+                label { class: "form-label", r#for: "tank-{module_id:?}",
+                    "Tank with {fuel_available as f32 / 10.0:.1}t fuel"
+                }
+                input {
+                    r#type: "range",
+                    class: "form-range",
+                    id: "tank-{module_id:?}",
+                    min: 0,
+                    max: fuel_available,
+                    value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
+                    oninput: move |e| {
+                        fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
+                    },
+                }
             }
         }
         button {
@@ -2773,11 +2776,9 @@ fn OrbitAdjust(
             },
         }
         br {}
-        output { "Fuel required: {required_fuel as f32 / 10.0:.1}t" }
+        output { "Fuel selected: {*selected_fuel.read() as f32 / 10.0:.1}t/{required_fuel as f32 / 10.0:.1}t" }
         br {}
-        output { "Fuel selected: {*selected_fuel.read() as f32 / 10.0:.1}t" }
-        br {}
-        label { class: "form-label", "Fuel Usage" }
+        h3 { "Fuel Usage" }
         for (module_id , fuel_available) in stack
             .modules
             .iter()
@@ -2792,16 +2793,21 @@ fn OrbitAdjust(
                 }
             })
         {
-            input {
-                key: "{module_id:?}",
-                r#type: "range",
-                class: "form-range",
-                min: 0,
-                max: fuel_available,
-                value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
-                oninput: move |e| {
-                    fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
-                },
+            Fragment { key: "{module_id:?}",
+                label { class: "form-label", r#for: "tank-{module_id:?}",
+                    "Tank with {fuel_available as f32 / 10.0:.1}t fuel"
+                }
+                input {
+                    r#type: "range",
+                    class: "form-range",
+                    id: "tank-{module_id:?}",
+                    min: 0,
+                    max: fuel_available,
+                    value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
+                    oninput: move |e| {
+                        fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
+                    },
+                }
             }
         }
         button {
@@ -2861,11 +2867,9 @@ fn Land(
     let selected_fuel = use_memo(move || fuel_from.read().values().map(|&v| v as u32).sum::<u32>());
 
     rsx! {
-        output { "Fuel required: {required_fuel as f32 / 10.0:.1}t" }
+        output { "Fuel required: {*selected_fuel.read() as f32 / 10.0:.1}t/{required_fuel as f32 / 10.0:.1}t" }
         br {}
-        output { "Fuel selected: {*selected_fuel.read() as f32 / 10.0:.1}t" }
-        br {}
-        label { class: "form-label", "Fuel Usage" }
+        h3 { "Fuel Usage" }
         for (module_id , fuel_available) in stack
             .modules
             .iter()
@@ -2880,16 +2884,21 @@ fn Land(
                 }
             })
         {
-            input {
-                key: "{module_id:?}",
-                r#type: "range",
-                class: "form-range",
-                min: 0,
-                max: fuel_available,
-                value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
-                oninput: move |e| {
-                    fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
-                },
+            Fragment { key: "{module_id:?}",
+                label { class: "form-label", r#for: "tank-{module_id:?}",
+                    "Tank with {fuel_available as f32 / 10.0:.1}t fuel"
+                }
+                input {
+                    r#type: "range",
+                    class: "form-range",
+                    id: "tank-{module_id:?}",
+                    min: 0,
+                    max: fuel_available,
+                    value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
+                    oninput: move |e| {
+                        fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
+                    },
+                }
             }
         }
         button {
@@ -2973,11 +2982,9 @@ fn TakeOff(
             },
         }
         br {}
-        output { "Fuel required: {required_fuel as f32 / 10.0:.1}t" }
+        output { "Fuel required: {*selected_fuel.read() as f32 / 10.0:.1}t/{required_fuel as f32 / 10.0:.1}t" }
         br {}
-        output { "Fuel selected: {*selected_fuel.read() as f32 / 10.0:.1}t" }
-        br {}
-        label { class: "form-label", "Fuel Usage" }
+        h3 { "Fuel Usage" }
         for (module_id , fuel_available) in stack
             .modules
             .iter()
@@ -2992,16 +2999,21 @@ fn TakeOff(
                 }
             })
         {
-            input {
-                key: "{module_id:?}",
-                r#type: "range",
-                class: "form-range",
-                min: 0,
-                max: fuel_available,
-                value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
-                oninput: move |e| {
-                    fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
-                },
+            Fragment { key: "{module_id:?}",
+                label { class: "form-label", r#for: "tank-{module_id:?}",
+                    "Tank with {fuel_available as f32 / 10.0:.1}t fuel"
+                }
+                input {
+                    r#type: "range",
+                    class: "form-range",
+                    id: "tank-{module_id:?}",
+                    min: 0,
+                    max: fuel_available,
+                    value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
+                    oninput: move |e| {
+                        fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
+                    },
+                }
             }
         }
         button {
