@@ -21,7 +21,7 @@
 //!
 //! A stack is an unordered collection of modules
 
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 #[cfg(feature = "client")]
 use std::{fmt::Display, str::FromStr};
 
@@ -43,7 +43,7 @@ pub struct Stack {
     /// Name as assigned by owner - may be blank
     pub name: String,
     /// Modules contained
-    pub modules: HashMap<ModuleId, Module>,
+    pub modules: BTreeMap<ModuleId, Module>,
 }
 
 impl Stack {
@@ -63,7 +63,7 @@ impl Stack {
             velocity,
             owner,
             name,
-            modules: HashMap::from([
+            modules: BTreeMap::from([
                 (
                     module_id_generator.next().unwrap(),
                     Module::new_habitat(owner),
@@ -96,7 +96,7 @@ impl Stack {
             velocity,
             owner,
             name,
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         }
     }
 
@@ -706,7 +706,7 @@ impl ModuleDetails {
 
 /// Id used to reference a module in a stack; unique across stacks
 #[repr(transparent)]
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ModuleId(u32);
 
 #[cfg(feature = "server")]
@@ -821,7 +821,7 @@ mod tests {
             velocity,
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         let stack2 = Stack {
@@ -829,7 +829,7 @@ mod tests {
             velocity,
             owner: PlayerId::from(2u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         let stack3 = Stack {
@@ -837,7 +837,7 @@ mod tests {
             velocity,
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         let stack4 = Stack {
@@ -845,7 +845,7 @@ mod tests {
             velocity: Vec2 { q: 2, r: -1 }, // different velocity
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         assert!(stack1.rendezvoused_with(&stack2));
@@ -880,7 +880,7 @@ mod tests {
             velocity: Vec2 { q: 1, r: 0 }, // Move to up-right neighbor
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         // Check preconditions
@@ -899,7 +899,7 @@ mod tests {
             velocity: Vec2 { q: 0, r: 1 },
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         assert!(!not_orbiting_stack.orbiting(&celestial));
@@ -910,7 +910,7 @@ mod tests {
             velocity: Vec2 { q: 2, r: 0 }, // velocity norm = 2
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         assert!(!wrong_velocity_stack.orbiting(&celestial));
@@ -949,7 +949,7 @@ mod tests {
             velocity: Vec2::zero(),
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         assert!(landed_stack.landed(&celestial));
@@ -961,7 +961,7 @@ mod tests {
             velocity: Vec2::zero(),
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         assert!(!not_landed_stack.landed(&celestial));
@@ -973,7 +973,7 @@ mod tests {
             velocity: Vec2 { q: 1, r: 0 },
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         assert!(!moving_stack.landed(&celestial));
@@ -1002,7 +1002,7 @@ mod tests {
             velocity: Vec2::zero(),
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         // Empty stack should have zero mass
@@ -1039,7 +1039,7 @@ mod tests {
             velocity: Vec2 { q: 1, r: 0 },
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         let stack2 = Stack {
@@ -1047,7 +1047,7 @@ mod tests {
             velocity: Vec2 { q: 0, r: 1 },
             owner: PlayerId::from(2u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         // Should find approach at t=0 since they start at same position
@@ -1061,7 +1061,7 @@ mod tests {
             velocity: Vec2 { q: 0, r: 0 },   // Stationary
             owner: PlayerId::from(3u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         assert!(stack1.closest_approach(&far_stack).is_none());
@@ -1072,7 +1072,7 @@ mod tests {
             velocity: Vec2 { q: 1, r: 0 }, // Same velocity as stack1
             owner: PlayerId::from(4u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         // They maintain distance so might not come within warhead range
@@ -1088,7 +1088,7 @@ mod tests {
             velocity: Vec2 { q: 1, r: 0 },
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         let stack2 = Stack {
@@ -1096,7 +1096,7 @@ mod tests {
             velocity: Vec2 { q: 0, r: 1 },
             owner: PlayerId::from(2u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         // At t=0, they should be in range (same position)
@@ -1113,7 +1113,7 @@ mod tests {
             velocity: Vec2 { q: 0, r: 0 }, // Stationary
             owner: PlayerId::from(3u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         // stack1 at t=0.1 will be close to origin - should be in range
@@ -1131,7 +1131,7 @@ mod tests {
             velocity: Vec2::zero(),
             owner: PlayerId::from(1u8),
             name: String::new(),
-            modules: HashMap::new(),
+            modules: BTreeMap::new(),
         };
 
         // Add some modules including armor

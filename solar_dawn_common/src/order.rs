@@ -19,6 +19,8 @@
 
 //! Orders that may be given to stacks
 
+#[cfg(feature = "server")]
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 #[cfg(feature = "client")]
 use std::fmt::Display;
@@ -573,9 +575,7 @@ impl Order {
             for (name, this_name_orders) in names {
                 if this_name_orders.len() > 1
                     || game_state.stacks.iter().any(|(id, stack)| {
-                        stack.owner == player
-                            && stack.name == name
-                            && !renamed_stacks.contains(id)
+                        stack.owner == player && stack.name == name && !renamed_stacks.contains(id)
                     })
                 {
                     for order in this_name_orders {
@@ -1781,7 +1781,7 @@ impl Order {
     #[cfg(feature = "server")]
     fn apply(
         &self,
-        stacks: &mut HashMap<StackId, Stack>,
+        stacks: &mut BTreeMap<StackId, Stack>,
         player: PlayerId,
         new_stack_ids: &mut HashMap<(PlayerId, u32), StackId>,
         game_state: &GameState,
@@ -2503,7 +2503,7 @@ impl ValidatedOrders<'_> {
         stack_id_generator: &mut impl Iterator<Item = StackId>,
         module_id_generator: &mut impl Iterator<Item = ModuleId>,
         rng: &mut impl Rng,
-    ) -> HashMap<StackId, Stack> {
+    ) -> BTreeMap<StackId, Stack> {
         let mut stacks = self.game_state.stacks.clone();
         let mut new_stack_ids = HashMap::new();
         for (&player, orders) in self.orders.iter() {

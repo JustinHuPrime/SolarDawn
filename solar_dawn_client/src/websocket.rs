@@ -193,12 +193,15 @@ impl WebsocketClientBuilder {
                     }
                 }
             })),
-            _keep_alive: Rc::new(Interval::new({
-                let raw_ws = raw_ws.clone();
-                move || {
-                    let _ = raw_ws.send_with_str(KEEP_ALIVE_PING);
-                }
-            }, 10_000)),
+            _keep_alive: Rc::new(Interval::new(
+                {
+                    let raw_ws = raw_ws.clone();
+                    move || {
+                        let _ = raw_ws.send_with_str(KEEP_ALIVE_PING);
+                    }
+                },
+                10_000,
+            )),
             event_queue: event_queue.clone(),
         }))
     }

@@ -69,7 +69,7 @@ pub struct GameState {
     /// Which celestial is Earth (starting planet and allows habitat builds in orbit)
     pub earth: CelestialId,
     /// Game pieces
-    pub stacks: HashMap<StackId, Stack>,
+    pub stacks: BTreeMap<StackId, Stack>,
     /// Unique game id
     ///
     /// A UUID (v4) stored in simple format (without hyphens) when the game is created
@@ -105,7 +105,7 @@ pub struct GameStateDelta {
     /// The next turn count it should be in
     pub turn: u32,
     /// The new stacks
-    pub stacks: HashMap<StackId, Stack>,
+    pub stacks: BTreeMap<StackId, Stack>,
     /// All previous orders
     pub orders: HashMap<PlayerId, Vec<Order>>,
     /// The results of the previous orders
@@ -133,7 +133,7 @@ impl GameState {
                         let (celestials, earth) =
                             Celestial::solar_system_balanced_positions(celestial_id_generator, rng);
                         let earth_ref = celestials.get(&earth).expect("earth id should be valid");
-                        let mut stacks = HashMap::new();
+                        let mut stacks = BTreeMap::new();
                         for ((owner, _), (position, velocity)) in
                             players.iter().zip(earth_ref.orbit_parameters(true))
                         {
@@ -177,7 +177,7 @@ impl GameState {
                             players: Arc::new(players),
                             celestials: Arc::new(celestials.into()),
                             earth,
-                            stacks: HashMap::new(),
+                            stacks: BTreeMap::new(),
                             game_id: Uuid::nil().simple().to_string(),
                         }
                     }
@@ -1054,12 +1054,12 @@ mod tests {
             players: Arc::new(BTreeMap::new()),
             celestials: Arc::new(HashMap::new().into()),
             earth: CelestialId::from(0u32),
-            stacks: HashMap::new(),
+            stacks: BTreeMap::new(),
             game_id: Uuid::nil().simple().to_string(),
         };
 
         // Create a delta to apply
-        let mut new_stacks = HashMap::new();
+        let mut new_stacks = BTreeMap::new();
         new_stacks.insert(
             StackId::from(1u32),
             Stack {
@@ -1067,7 +1067,7 @@ mod tests {
                 velocity: Vec2::zero(),
                 owner: PlayerId::from(1u8),
                 name: "Test Stack".to_owned(),
-                modules: HashMap::new(),
+                modules: BTreeMap::new(),
             },
         );
 
@@ -1113,9 +1113,9 @@ mod tests {
         );
 
         // Create a landed stack (same position, zero velocity) with at least one module
-        let mut stacks = HashMap::new();
+        let mut stacks = BTreeMap::new();
         let stack_id = StackId::from(1u32);
-        let mut modules = HashMap::new();
+        let mut modules = BTreeMap::new();
         modules.insert(
             ModuleId::from(1u32),
             stack::Module::new_habitat(PlayerId::from(1u8)),
@@ -1182,9 +1182,9 @@ mod tests {
         );
 
         // Create a moving stack that will collide with the planet
-        let mut stacks = HashMap::new();
+        let mut stacks = BTreeMap::new();
         let stack_id = StackId::from(1u32);
-        let mut modules = HashMap::new();
+        let mut modules = BTreeMap::new();
         modules.insert(
             ModuleId::from(1u32),
             stack::Module::new_habitat(PlayerId::from(1u8)),
