@@ -182,7 +182,7 @@ pub fn Outliner(
         button {
             r#type: "button",
             class: "btn btn-lg btn-primary",
-            disabled: *submitting_orders.read() || !order_errors.read().is_empty(),
+            disabled: *submitting_orders.read() || order_errors.read().iter().any(|error| error.is_some()),
             onclick: move |_| {
                 submitting_orders.set(true);
                 websocket
