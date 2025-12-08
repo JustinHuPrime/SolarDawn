@@ -22,7 +22,7 @@ use std::{collections::HashSet, ptr};
 use dioxus::prelude::*;
 use serde_cbor::to_vec;
 use solar_dawn_common::{
-    GameState, Phase, PlayerId,
+    GameState, Phase, PlayerId, Vec2,
     celestial::{CelestialId, Resources},
     order::{ModuleTransferTarget, Order, OrderError, ResourceTransferTarget},
     stack::{Health, Module, ModuleDetails, ModuleId, StackId},
@@ -31,8 +31,8 @@ use strum::{EnumString, IntoStaticStr};
 
 use crate::{
     scenes::game::{
-        ClientGameSettings, ClientViewSettings, DisplayHostility, OutlinerState, SidebarState,
-        SidebarStateStoreExt, SidebarStateStoreTransposed, map::HEX_SCALE,
+        ClickBroker, ClientGameSettings, ClientViewSettings, DisplayHostility, OutlinerState,
+        SidebarState, SidebarStateStoreExt, SidebarStateStoreTransposed, map::HEX_SCALE,
     },
     websocket::{Message, WebsocketClient},
 };
@@ -51,6 +51,7 @@ pub fn Sidebar(
     client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
     websocket: WebsocketClient,
+    click_broker: Signal<ClickBroker>,
 ) -> Element {
     match state.transpose() {
         SidebarStateStoreTransposed::Outliner(outliner_state) => {
@@ -91,6 +92,7 @@ pub fn Sidebar(
                     client_view_settings,
                     order_errors,
                     change_state,
+                    click_broker,
                 }
             }
         }
@@ -551,6 +553,7 @@ pub fn StackDetails(
     order_errors: ReadSignal<Vec<Option<OrderError>>>,
     client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
+    click_broker: Signal<ClickBroker>,
 ) -> Element {
     let mut draft_order = use_signal(|| DraftOrder::None);
 
@@ -955,37 +958,119 @@ pub fn StackDetails(
                     }
                 }
                 DraftOrder::Repair => {
-                    rsx! {}
+                    rsx! {
+                        Repair {
+                            id,
+                            me,
+                            game_state,
+                            orders,
+                            draft_order,
+                        }
+                    }
                 }
                 DraftOrder::Refine => {
-                    rsx! {}
+                    rsx! {
+                        Refine {
+                            id,
+                            game_state,
+                            orders,
+                            draft_order,
+                        }
+                    }
                 }
                 DraftOrder::Build => {
-                    rsx! {}
+                    rsx! {
+                        Build {
+                            id,
+                            game_state,
+                            orders,
+                            draft_order,
+                        }
+                    }
                 }
                 DraftOrder::Salvage => {
-                    rsx! {}
+                    rsx! {
+                        Salvage {
+                            id,
+                            game_state,
+                            orders,
+                            draft_order,
+                        }
+                    }
                 }
                 DraftOrder::Shoot => {
-                    rsx! {}
+                    rsx! {
+                        Shoot {
+                            id,
+                            game_state,
+                            orders,
+                            draft_order,
+                        }
+                    }
                 }
                 DraftOrder::Arm => {
-                    rsx! {}
+                    rsx! {
+                        Arm {
+                            id,
+                            game_state,
+                            orders,
+                            draft_order,
+                        }
+                    }
                 }
                 DraftOrder::Disarm => {
-                    rsx! {}
+                    rsx! {
+                        Disarm {
+                            id,
+                            game_state,
+                            orders,
+                            draft_order,
+                        }
+                    }
                 }
                 DraftOrder::Burn => {
-                    rsx! {}
+                    rsx! {
+                        Burn {
+                            id,
+                            game_state,
+                            orders,
+                            draft_order,
+                            click_broker,
+                        }
+                    }
                 }
                 DraftOrder::OrbitAdjust => {
-                    rsx! {}
+                    rsx! {
+                        OrbitAdjust {
+                            id,
+                            game_state,
+                            orders,
+                            draft_order,
+                            click_broker,
+                        }
+                    }
                 }
                 DraftOrder::Land => {
-                    rsx! {}
+                    rsx! {
+                        Land {
+                            id,
+                            game_state,
+                            orders,
+                            draft_order,
+                            click_broker,
+                        }
+                    }
                 }
                 DraftOrder::TakeOff => {
-                    rsx! {}
+                    rsx! {
+                        TakeOff {
+                            id,
+                            game_state,
+                            orders,
+                            draft_order,
+                            click_broker,
+                        }
+                    }
                 }
             }
             hr {}
@@ -1386,13 +1471,13 @@ fn ResourceTransferFromModule(
                                 class: "form-range",
                                 min: 0,
                                 max: *max_ore,
+                                value: "{*ore.read()}",
                                 oninput: move |e| {
                                     ore.set(e.value().parse::<u8>().unwrap());
                                 },
                             }
-                            output {
-                                "{*ore.read() as f32 / 10.0:.1}t"
-                            }
+                            output { "{*ore.read() as f32 / 10.0:.1}t" }
+                            br {}
                             label { r#for: "materials", class: "form-label", "Materials" }
                             input {
                                 r#type: "range",
@@ -1400,17 +1485,19 @@ fn ResourceTransferFromModule(
                                 class: "form-range",
                                 min: 0,
                                 max: *max_materials,
+                                value: "{*materials.read()}",
                                 oninput: move |e| {
                                     materials.set(e.value().parse::<u8>().unwrap());
                                 },
                             }
-                            output {
-                                "{*materials.read() as f32 / 10.0:.1}t"
-                            }
+                            output { "{*materials.read() as f32 / 10.0:.1}t" }
+                            br {}
                         }
                     }
-                    Module { details: ModuleDetails::Tank { water: max_water, fuel: max_fuel }, .. } => {
-
+                    Module {
+                        details: ModuleDetails::Tank { water: max_water, fuel: max_fuel },
+                        ..
+                    } => {
                         rsx! {
                             label { r#for: "water", class: "form-label", "Water" }
                             input {
@@ -1419,13 +1506,13 @@ fn ResourceTransferFromModule(
                                 class: "form-range",
                                 min: 0,
                                 max: *max_water,
+                                value: "{*water.read()}",
                                 oninput: move |e| {
                                     water.set(e.value().parse::<u8>().unwrap());
                                 },
                             }
-                            output {
-                                "{*water.read() as f32 / 10.0:.1}t"
-                            }
+                            output { "{*water.read() as f32 / 10.0:.1}t" }
+                            br {}
                             label { r#for: "fuel", class: "form-label", "Fuel" }
                             input {
                                 r#type: "range",
@@ -1433,13 +1520,13 @@ fn ResourceTransferFromModule(
                                 class: "form-range",
                                 min: 0,
                                 max: *max_fuel,
+                                value: "{*fuel.read()}",
                                 oninput: move |e| {
                                     fuel.set(e.value().parse::<u8>().unwrap());
                                 },
                             }
-                            output {
-                                "{*fuel.read() as f32 / 10.0:.1}t"
-                            }
+                            output { "{*fuel.read() as f32 / 10.0:.1}t" }
+                            br {}
                         }
                     }
                     _ => {
@@ -1530,8 +1617,10 @@ fn ResourceTransferToModule(
                         },
                         ..
                     } => {
-                        let max_ore = ModuleDetails::CARGO_HOLD_CAPACITY as u8 - current_ore - current_materials;
-                        let max_materials = ModuleDetails::CARGO_HOLD_CAPACITY as u8 - current_ore - current_materials;
+                        let max_ore = ModuleDetails::CARGO_HOLD_CAPACITY as u8 - current_ore
+                            - current_materials;
+                        let max_materials = ModuleDetails::CARGO_HOLD_CAPACITY as u8
+                            - current_ore - current_materials;
                         rsx! {
                             label { r#for: "ore", class: "form-label", "Ore" }
                             input {
@@ -1540,13 +1629,13 @@ fn ResourceTransferToModule(
                                 class: "form-range",
                                 min: 0,
                                 max: max_ore - *materials.read(),
+                                value: "{*ore.read()}",
                                 oninput: move |e| {
                                     ore.set(e.value().parse::<u8>().unwrap());
                                 },
                             }
-                            output {
-                                "{*ore.read() as f32 / 10.0:.1}t (free space: {(max_ore - *ore.read()) as f32 / 10.0:.1}t)"
-                            }
+                            output { "{*ore.read() as f32 / 10.0:.1}t (free space: {(max_ore - *ore.read()) as f32 / 10.0:.1}t)" }
+                            br {}
                             label { r#for: "materials", class: "form-label", "Materials" }
                             input {
                                 r#type: "range",
@@ -1554,6 +1643,7 @@ fn ResourceTransferToModule(
                                 class: "form-range",
                                 min: 0,
                                 max: max_materials - *ore.read(),
+                                value: "{*materials.read()}",
                                 oninput: move |e| {
                                     materials.set(e.value().parse::<u8>().unwrap());
                                 },
@@ -1561,6 +1651,7 @@ fn ResourceTransferToModule(
                             output {
                                 "{*materials.read() as f32 / 10.0:.1}t (free space: {(max_materials - *ore.read() - *materials.read()) as f32 / 10.0:.1}t)"
                             }
+                            br {}
                         }
                     }
                     Module {
@@ -1570,8 +1661,10 @@ fn ResourceTransferToModule(
                         },
                         ..
                     } => {
-                        let max_water = ModuleDetails::TANK_CAPACITY as u8 - current_water - current_fuel;
-                        let max_fuel = ModuleDetails::TANK_CAPACITY as u8 - current_water - current_fuel;
+                        let max_water = ModuleDetails::TANK_CAPACITY as u8 - current_water
+                            - current_fuel;
+                        let max_fuel = ModuleDetails::TANK_CAPACITY as u8 - current_water
+                            - current_fuel;
                         rsx! {
                             label { r#for: "water", class: "form-label", "Water" }
                             input {
@@ -1580,13 +1673,13 @@ fn ResourceTransferToModule(
                                 class: "form-range",
                                 min: 0,
                                 max: max_water - *fuel.read(),
+                                value: "{*water.read()}",
                                 oninput: move |e| {
                                     water.set(e.value().parse::<u8>().unwrap());
                                 },
                             }
-                            output {
-                                "{*water.read() as f32 / 10.0:.1}t (free space: {(max_water - *water.read()) as f32 / 10.0:.1}t)"
-                            }
+                            output { "{*water.read() as f32 / 10.0:.1}t (free space: {(max_water - *water.read()) as f32 / 10.0:.1}t)" }
+                            br {}
                             label { r#for: "fuel", class: "form-label", "Fuel" }
                             input {
                                 r#type: "range",
@@ -1594,6 +1687,7 @@ fn ResourceTransferToModule(
                                 class: "form-range",
                                 min: 0,
                                 max: max_fuel - *water.read(),
+                                value: "{*fuel.read()}",
                                 oninput: move |e| {
                                     fuel.set(e.value().parse::<u8>().unwrap());
                                 },
@@ -1601,6 +1695,7 @@ fn ResourceTransferToModule(
                             output {
                                 "{*fuel.read() as f32 / 10.0:.1}t (free space: {(max_fuel - *water.read() - *fuel.read()) as f32 / 10.0:.1}t)"
                             }
+                            br {}
                         }
                     }
                     _ => {
@@ -1683,13 +1778,13 @@ fn ResourceTransferToStack(
             class: "form-range",
             min: 0,
             max: ModuleDetails::CARGO_HOLD_CAPACITY,
+            value: "{*ore.read()}",
             oninput: move |e| {
                 ore.set(e.value().parse::<u8>().unwrap());
             },
         }
-        output {
-            "{*ore.read() as f32 / 10.0:.1}t"
-        }
+        output { "{*ore.read() as f32 / 10.0:.1}t" }
+        br {}
         label { r#for: "materials", class: "form-label", "Materials" }
         input {
             r#type: "range",
@@ -1697,13 +1792,13 @@ fn ResourceTransferToStack(
             class: "form-range",
             min: 0,
             max: ModuleDetails::CARGO_HOLD_CAPACITY,
+            value: "{*materials.read()}",
             oninput: move |e| {
                 materials.set(e.value().parse::<u8>().unwrap());
             },
         }
-        output {
-            "{*materials.read() as f32 / 10.0:.1}t"
-        }
+        output { "{*materials.read() as f32 / 10.0:.1}t" }
+        br {}
         label { r#for: "water", class: "form-label", "Water" }
         input {
             r#type: "range",
@@ -1711,13 +1806,13 @@ fn ResourceTransferToStack(
             class: "form-range",
             min: 0,
             max: ModuleDetails::TANK_CAPACITY,
+            value: "{*water.read()}",
             oninput: move |e| {
                 water.set(e.value().parse::<u8>().unwrap());
             },
         }
-        output {
-            "{*water.read() as f32 / 10.0:.1}t"
-        }
+        output { "{*water.read() as f32 / 10.0:.1}t" }
+        br {}
         label { r#for: "fuel", class: "form-label", "Fuel" }
         input {
             r#type: "range",
@@ -1725,13 +1820,13 @@ fn ResourceTransferToStack(
             class: "form-range",
             min: 0,
             max: ModuleDetails::TANK_CAPACITY,
+            value: "{*fuel.read()}",
             oninput: move |e| {
                 fuel.set(e.value().parse::<u8>().unwrap());
             },
         }
-        output {
-            "{*fuel.read() as f32 / 10.0:.1}t"
-        }
+        output { "{*fuel.read() as f32 / 10.0:.1}t" }
+        br {}
         button {
             class: "btn btn-primary",
             r#type: "button",
@@ -1759,7 +1854,6 @@ fn ResourceTransferToStack(
     }
 }
 
-
 #[component]
 fn ResourceTransferJettison(
     id: StackId,
@@ -1779,13 +1873,13 @@ fn ResourceTransferJettison(
             class: "form-range",
             min: 0,
             max: ModuleDetails::CARGO_HOLD_CAPACITY,
+            value: "{*ore.read()}",
             oninput: move |e| {
                 ore.set(e.value().parse::<u8>().unwrap());
             },
         }
-        output {
-            "{*ore.read() as f32 / 10.0:.1}t"
-        }
+        output { "{*ore.read() as f32 / 10.0:.1}t" }
+        br {}
         label { r#for: "materials", class: "form-label", "Materials" }
         input {
             r#type: "range",
@@ -1793,13 +1887,13 @@ fn ResourceTransferJettison(
             class: "form-range",
             min: 0,
             max: ModuleDetails::CARGO_HOLD_CAPACITY,
+            value: "{*materials.read()}",
             oninput: move |e| {
                 materials.set(e.value().parse::<u8>().unwrap());
             },
         }
-        output {
-            "{*materials.read() as f32 / 10.0:.1}t"
-        }
+        output { "{*materials.read() as f32 / 10.0:.1}t" }
+        br {}
         label { r#for: "water", class: "form-label", "Water" }
         input {
             r#type: "range",
@@ -1807,13 +1901,13 @@ fn ResourceTransferJettison(
             class: "form-range",
             min: 0,
             max: ModuleDetails::TANK_CAPACITY,
+            value: "{*water.read()}",
             oninput: move |e| {
                 water.set(e.value().parse::<u8>().unwrap());
             },
         }
-        output {
-            "{*water.read() as f32 / 10.0:.1}t"
-        }
+        output { "{*water.read() as f32 / 10.0:.1}t" }
+        br {}
         label { r#for: "fuel", class: "form-label", "Fuel" }
         input {
             r#type: "range",
@@ -1821,13 +1915,13 @@ fn ResourceTransferJettison(
             class: "form-range",
             min: 0,
             max: ModuleDetails::TANK_CAPACITY,
+            value: "{*fuel.read()}",
             oninput: move |e| {
                 fuel.set(e.value().parse::<u8>().unwrap());
             },
         }
-        output {
-            "{*fuel.read() as f32 / 10.0:.1}t"
-        }
+        output { "{*fuel.read() as f32 / 10.0:.1}t" }
+        br {}
         button {
             class: "btn btn-primary",
             r#type: "button",
@@ -1853,7 +1947,7 @@ fn ResourceTransferJettison(
 }
 
 #[component]
-fn IsruMine (
+fn IsruMine(
     id: StackId,
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
@@ -1863,7 +1957,7 @@ fn IsruMine (
     let mut water = use_signal(|| 0_u32);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
-    
+
     let total_capacity = stack
         .modules
         .values()
@@ -1878,19 +1972,25 @@ fn IsruMine (
         })
         .count() as u32
         * ModuleDetails::MINER_PRODUCTION_RATE;
-    
+
     let celestial = game_state
         .celestials
         .get_by_position(stack.position)
         .map(|(_, celestial)| celestial);
-    
+
     let can_mine_ore = celestial.is_some_and(|celestial| {
-        matches!(celestial.resources, Resources::MiningBoth | Resources::MiningOre)
+        matches!(
+            celestial.resources,
+            Resources::MiningBoth | Resources::MiningOre
+        )
     });
     let can_mine_water = celestial.is_some_and(|celestial| {
-        matches!(celestial.resources, Resources::MiningBoth | Resources::MiningWater)
+        matches!(
+            celestial.resources,
+            Resources::MiningBoth | Resources::MiningWater
+        )
     });
-    
+
     rsx! {
         if can_mine_ore {
             label { r#for: "ore", class: "form-label", "Ore" }
@@ -1900,13 +2000,13 @@ fn IsruMine (
                 class: "form-range",
                 min: 0,
                 max: total_capacity - *water.read(),
+                value: "{*ore.read()}",
                 oninput: move |e| {
                     ore.set(e.value().parse::<u32>().unwrap());
                 },
             }
-            output {
-                "{*ore.read() as f32 / 10.0:.1}t"
-            }
+            output { "{*ore.read() as f32 / 10.0:.1}t" }
+            br {}
         }
         if can_mine_water {
             label { r#for: "water", class: "form-label", "Water" }
@@ -1916,13 +2016,13 @@ fn IsruMine (
                 class: "form-range",
                 min: 0,
                 max: total_capacity - *ore.read(),
+                value: "{*water.read()}",
                 oninput: move |e| {
                     water.set(e.value().parse::<u32>().unwrap());
                 },
             }
-            output {
-                "{*water.read() as f32 / 10.0:.1}t"
-            }
+            output { "{*water.read() as f32 / 10.0:.1}t" }
+            br {}
         }
         button {
             class: "btn btn-primary",
@@ -1945,7 +2045,7 @@ fn IsruMine (
 }
 
 #[component]
-fn IsruSkim (
+fn IsruSkim(
     id: StackId,
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
@@ -1954,7 +2054,7 @@ fn IsruSkim (
     let mut fuel = use_signal(|| 0_u32);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
-    
+
     let total_capacity = stack
         .modules
         .values()
@@ -1969,7 +2069,7 @@ fn IsruSkim (
         })
         .count() as u32
         * ModuleDetails::FUEL_SKIMMER_PRODUCTION_RATE;
-    
+
     rsx! {
         label { r#for: "fuel", class: "form-label", "Fuel" }
         input {
@@ -1978,13 +2078,13 @@ fn IsruSkim (
             class: "form-range",
             min: 0,
             max: total_capacity,
+            value: "{*fuel.read()}",
             oninput: move |e| {
                 fuel.set(e.value().parse::<u32>().unwrap());
             },
         }
-        output {
-            "{*fuel.read() as f32 / 10.0:.1}t"
-        }
+        output { "{*fuel.read() as f32 / 10.0:.1}t" }
+        br {}
         button {
             class: "btn btn-primary",
             r#type: "button",
@@ -2001,6 +2101,864 @@ fn IsruSkim (
             },
             disabled: *fuel.read() == 0,
             "Submit"
+        }
+    }
+}
+
+#[component]
+fn Repair(
+    id: StackId,
+    me: PlayerId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+) -> Element {
+    let mut selected_stack = use_signal(|| Option::<StackId>::None);
+    let mut selected_module = use_signal(|| Option::<ModuleId>::None);
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+    rsx! {
+        select {
+            class: "form-select",
+            oninput: move |e| {
+                let value = e.value();
+                if value == "none" {
+                    selected_stack.set(None);
+                } else {
+                    selected_stack.set(Some(value.parse::<StackId>().unwrap()));
+                }
+                selected_module.set(None);
+            },
+            option { value: "none", "Select target stack..." }
+            for (target_id , target_stack) in game_state
+                .stacks
+                .iter()
+                .filter(|(target_id, target)| {
+                    (**target_id == id || target.rendezvoused_with(stack)) && target.owner == me
+                })
+            {
+                option { value: "{target_id}", "{target_stack.name}" }
+            }
+        }
+        if let Some(target_id) = *selected_stack.read() {
+            {
+                let target_stack = &game_state.stacks[&target_id];
+                rsx! {
+                    select {
+                        class: "form-select",
+                        oninput: move |e| {
+                            let value = e.value();
+                            if value == "none" {
+                                selected_module.set(None);
+                            } else {
+                                selected_module.set(Some(value.parse::<ModuleId>().unwrap()));
+                            }
+                        },
+                        option { value: "none", "Select module..." }
+                        for (module_id , module) in target_stack
+                            .modules
+                            .iter()
+                            .filter(|(_, module)| { matches!(module.health, Health::Damaged) })
+                        {
+                            option { value: "{module_id}", "{module}" }
+                        }
+                    }
+                }
+            }
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                if let Some(selected_stack) = &*selected_stack.read()
+                    && let Some(selected_module) = &*selected_module.read()
+                {
+                    orders
+                        .write()
+                        .push(Order::Repair {
+                            stack: id,
+                            target_stack: *selected_stack,
+                            target_module: *selected_module,
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
+            },
+            disabled: selected_stack.read().is_none() || selected_module.read().is_none(),
+            "Submit"
+        }
+    }
+}
+
+#[component]
+fn Refine(
+    id: StackId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+) -> Element {
+    let mut materials = use_signal(|| 0_u8);
+    let mut fuel = use_signal(|| 0_u8);
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+
+    let total_capacity = stack
+        .modules
+        .values()
+        .filter(|module| {
+            matches!(
+                module,
+                Module {
+                    health: Health::Intact,
+                    details: ModuleDetails::Refinery,
+                }
+            )
+        })
+        .count() as u8
+        * ModuleDetails::REFINERY_CAPACITY as u8;
+
+    rsx! {
+        label { r#for: "materials", class: "form-label", "Materials" }
+        input {
+            r#type: "range",
+            id: "materials",
+            class: "form-range",
+            min: 0,
+            max: total_capacity - *fuel.read(),
+            value: "{*materials.read()}",
+            oninput: move |e| {
+                materials.set(e.value().parse::<u8>().unwrap());
+            },
+        }
+        output { "{*materials.read() as f32 / 10.0:.1}t" }
+        br {}
+        label { r#for: "fuel", class: "form-label", "Fuel" }
+        input {
+            r#type: "range",
+            id: "fuel",
+            class: "form-range",
+            min: 0,
+            max: total_capacity - *materials.read(),
+            value: "{*fuel.read()}",
+            oninput: move |e| {
+                fuel.set(e.value().parse::<u8>().unwrap());
+            },
+        }
+        output { "{*fuel.read() as f32 / 10.0:.1}t" }
+        br {}
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                orders
+                    .write()
+                    .push(Order::Refine {
+                        stack: id,
+                        materials: *materials.read(),
+                        fuel: *fuel.read(),
+                    });
+                draft_order.set(DraftOrder::None);
+            },
+            disabled: *materials.read() == 0 && *fuel.read() == 0,
+            "Submit"
+        }
+    }
+}
+
+#[component]
+fn Build(
+    id: StackId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+) -> Element {
+    let mut selected_type = use_signal(|| Option::<solar_dawn_common::order::ModuleType>::None);
+    rsx! {
+        select {
+            class: "form-select",
+            oninput: move |e| {
+                let value = e.value();
+                if value == "none" {
+                    selected_type.set(None);
+                } else {
+                    selected_type
+                        .set(
+                            Some(
+                                match value.as_str() {
+                                    "miner" => solar_dawn_common::order::ModuleType::Miner,
+                                    "fuel_skimmer" => {
+                                        solar_dawn_common::order::ModuleType::FuelSkimmer
+                                    }
+                                    "cargo_hold" => {
+                                        solar_dawn_common::order::ModuleType::CargoHold
+                                    }
+                                    "tank" => solar_dawn_common::order::ModuleType::Tank,
+                                    "engine" => solar_dawn_common::order::ModuleType::Engine,
+                                    "warhead" => solar_dawn_common::order::ModuleType::Warhead,
+                                    "gun" => solar_dawn_common::order::ModuleType::Gun,
+                                    "habitat" => solar_dawn_common::order::ModuleType::Habitat,
+                                    "refinery" => solar_dawn_common::order::ModuleType::Refinery,
+                                    "factory" => solar_dawn_common::order::ModuleType::Factory,
+                                    "armour_plate" => {
+                                        solar_dawn_common::order::ModuleType::ArmourPlate
+                                    }
+                                    _ => return,
+                                },
+                            ),
+                        );
+                }
+            },
+            option { value: "none", "Select module type..." }
+            option { value: "miner", "Miner" }
+            option { value: "fuel_skimmer", "Fuel Skimmer" }
+            option { value: "cargo_hold", "Cargo Hold" }
+            option { value: "tank", "Tank" }
+            option { value: "engine", "Engine" }
+            option { value: "warhead", "Warhead" }
+            option { value: "gun", "Gun" }
+            option { value: "habitat", "Habitat" }
+            option { value: "refinery", "Refinery" }
+            option { value: "factory", "Factory" }
+            option { value: "armour_plate", "Armour Plate" }
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                if let Some(selected_type) = &*selected_type.read() {
+                    orders
+                        .write()
+                        .push(Order::Build {
+                            stack: id,
+                            module: *selected_type,
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
+            },
+            disabled: selected_type.read().is_none(),
+            "Submit"
+        }
+    }
+}
+
+#[component]
+fn Salvage(
+    id: StackId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+) -> Element {
+    let mut selected_module = use_signal(|| Option::<ModuleId>::None);
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+    rsx! {
+        select {
+            class: "form-select",
+            oninput: move |e| {
+                let value = e.value();
+                if value == "none" {
+                    selected_module.set(None);
+                } else {
+                    selected_module.set(Some(value.parse::<ModuleId>().unwrap()));
+                }
+            },
+            option { value: "none", "Select module..." }
+            for (module_id , module) in stack.modules.iter() {
+                option { value: "{module_id}", "{module}" }
+            }
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                if let Some(selected_module) = &*selected_module.read() {
+                    orders
+                        .write()
+                        .push(Order::Salvage {
+                            stack: id,
+                            salvaged: *selected_module,
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
+            },
+            disabled: selected_module.read().is_none(),
+            "Submit"
+        }
+    }
+}
+
+#[component]
+fn Shoot(
+    id: StackId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+) -> Element {
+    let mut selected_target = use_signal(|| Option::<StackId>::None);
+    let mut shots = use_signal(|| 1_u32);
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+
+    let max_shots = stack
+        .modules
+        .values()
+        .filter(|module| {
+            matches!(
+                module,
+                Module {
+                    health: Health::Intact,
+                    details: ModuleDetails::Gun,
+                }
+            )
+        })
+        .count() as u32;
+
+    let mut targets = game_state
+        .stacks
+        .iter()
+        .filter(|(target_id, _)| **target_id != id)
+        .map(|(target_id, target)| {
+            let distance = (target.position - stack.position).norm();
+            (target_id, target, distance)
+        })
+        .collect::<Vec<_>>();
+    targets.sort_by(|(_, target_a, dist_a), (_, target_b, dist_b)| {
+        dist_a
+            .partial_cmp(dist_b)
+            .unwrap()
+            .then(target_a.name.cmp(&target_b.name))
+    });
+
+    rsx! {
+        select {
+            class: "form-select",
+            oninput: move |e| {
+                let value = e.value();
+                if value == "none" {
+                    selected_target.set(None);
+                } else {
+                    selected_target.set(Some(value.parse::<StackId>().unwrap()));
+                }
+            },
+            option { value: "none", "Select target..." }
+            for (target_id , target , distance) in targets {
+                option { value: "{target_id}",
+                    "{game_state.players[&target.owner]} - {target.name} ({distance:.1} hex)"
+                }
+            }
+        }
+        label { r#for: "shots", class: "form-label", "Shots" }
+        input {
+            r#type: "range",
+            id: "shots",
+            class: "form-range",
+            min: 1,
+            max: max_shots,
+            value: "{*shots.read()}",
+            oninput: move |e| {
+                shots.set(e.value().parse::<u32>().unwrap());
+            },
+        }
+        output { "{*shots.read()}" }
+        br {}
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                if let Some(selected_target) = &*selected_target.read() {
+                    orders
+                        .write()
+                        .push(Order::Shoot {
+                            stack: id,
+                            target: *selected_target,
+                            shots: *shots.read(),
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
+            },
+            disabled: selected_target.read().is_none(),
+            "Submit"
+        }
+    }
+}
+
+#[component]
+fn Arm(
+    id: StackId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+) -> Element {
+    let mut selected_warhead = use_signal(|| Option::<ModuleId>::None);
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+    rsx! {
+        select {
+            class: "form-select",
+            oninput: move |e| {
+                let value = e.value();
+                if value == "none" {
+                    selected_warhead.set(None);
+                } else {
+                    selected_warhead.set(Some(value.parse::<ModuleId>().unwrap()));
+                }
+            },
+            option { value: "none", "Select warhead..." }
+            for (module_id , module) in stack
+                .modules
+                .iter()
+                .filter(|(_, module)| {
+                    matches!(
+                        module,
+                        Module {
+                            health: Health::Intact,
+                            details: ModuleDetails::Warhead { armed: false },
+                        }
+                    )
+                })
+            {
+                option { value: "{module_id}", "{module}" }
+            }
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                if let Some(selected_warhead) = &*selected_warhead.read() {
+                    orders
+                        .write()
+                        .push(Order::Arm {
+                            stack: id,
+                            warhead: *selected_warhead,
+                            armed: true,
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
+            },
+            disabled: selected_warhead.read().is_none(),
+            "Submit"
+        }
+    }
+}
+
+#[component]
+fn Disarm(
+    id: StackId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+) -> Element {
+    let mut selected_warhead = use_signal(|| Option::<ModuleId>::None);
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+    rsx! {
+        select {
+            class: "form-select",
+            oninput: move |e| {
+                let value = e.value();
+                if value == "none" {
+                    selected_warhead.set(None);
+                } else {
+                    selected_warhead.set(Some(value.parse::<ModuleId>().unwrap()));
+                }
+            },
+            option { value: "none", "Select warhead..." }
+            for (module_id , module) in stack
+                .modules
+                .iter()
+                .filter(|(_, module)| {
+                    matches!(
+                        module,
+                        Module {
+                            health: Health::Intact,
+                            details: ModuleDetails::Warhead { armed: true },
+                        }
+                    )
+                })
+            {
+                option { value: "{module_id}", "{module}" }
+            }
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                if let Some(selected_warhead) = &*selected_warhead.read() {
+                    orders
+                        .write()
+                        .push(Order::Arm {
+                            stack: id,
+                            warhead: *selected_warhead,
+                            armed: false,
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
+            },
+            disabled: selected_warhead.read().is_none(),
+            "Submit"
+        }
+    }
+}
+
+#[component]
+fn Burn(
+    id: StackId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+    click_broker: Signal<ClickBroker>,
+) -> Element {
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+
+    // Get all tanks with fuel
+    let tanks_with_fuel = stack
+        .modules
+        .iter()
+        .filter_map(|(module_id, module)| {
+            if let Module {
+                health: Health::Intact,
+                details: ModuleDetails::Tank { fuel, .. },
+            } = module
+            {
+                if *fuel > 0 {
+                    Some((*module_id, *fuel))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let mut selected_position = use_signal(|| Option::<Vec2<i32>>::None);
+
+    rsx! {
+        div { class: "alert alert-info",
+            "Click 'Select Target' then click on the map to select the target position for the burn."
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                click_broker
+                    .write()
+                    .register(
+                        Box::new(move |position| {
+                            selected_position.set(Some(position));
+                        }),
+                    );
+            },
+            "Select Target Position"
+        }
+        if let Some(target) = *selected_position.read() {
+            p {
+                "Target position: {target:?}"
+                br {}
+                "Delta-v required: {(target - (stack.position + stack.velocity)):?}"
+            }
+        }
+        p {
+            "Available fuel tanks:"
+            br {}
+            for (module_id , fuel_amount) in tanks_with_fuel {
+                "{module_id}: {fuel_amount as f32 / 10.0:.1}t"
+                br {}
+            }
+        }
+        div { class: "alert alert-warning",
+            "TODO: Add fuel allocation sliders to specify which tanks to draw fuel from."
+        }
+        button {
+            class: "btn btn-secondary",
+            r#type: "button",
+            onclick: move |_| {
+                draft_order.set(DraftOrder::None);
+            },
+            "Cancel"
+        }
+    }
+}
+
+#[component]
+fn OrbitAdjust(
+    id: StackId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+    click_broker: Signal<ClickBroker>,
+) -> Element {
+    let mut clockwise = use_signal(|| true);
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+
+    // Get all tanks with fuel
+    let tanks_with_fuel = stack
+        .modules
+        .iter()
+        .filter_map(|(module_id, module)| {
+            if let Module {
+                health: Health::Intact,
+                details: ModuleDetails::Tank { fuel, .. },
+            } = module
+            {
+                if *fuel > 0 {
+                    Some((*module_id, *fuel))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // Find the orbited celestial
+    let orbited = game_state
+        .celestials
+        .with_gravity()
+        .find(|celestial| stack.orbiting(celestial));
+
+    let mut selected_position = use_signal(|| Option::<Vec2<i32>>::None);
+
+    rsx! {
+        div { class: "alert alert-info",
+            "Click 'Select Target' then click on the map to select the target orbital position around "
+            if let Some(celestial) = orbited {
+                "{celestial.name}"
+            } else {
+                "the current planet"
+            }
+            "."
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                click_broker
+                    .write()
+                    .register(
+                        Box::new(move |position| {
+                            selected_position.set(Some(position));
+                        }),
+                    );
+            },
+            "Select Target Position"
+        }
+        if let Some(target) = *selected_position.read() {
+            p { "Target position: {target:?}" }
+        }
+        div { class: "form-check form-switch",
+            input {
+                class: "form-check-input",
+                r#type: "checkbox",
+                id: "clockwise-toggle",
+                checked: *clockwise.read(),
+                oninput: move |e| {
+                    clockwise.set(e.checked());
+                },
+            }
+            label { class: "form-check-label", r#for: "clockwise-toggle",
+                if *clockwise.read() {
+                    "Clockwise"
+                } else {
+                    "Counterclockwise"
+                }
+            }
+        }
+        p {
+            "Available fuel tanks:"
+            br {}
+            for (module_id , fuel_amount) in tanks_with_fuel {
+                "{module_id}: {fuel_amount as f32 / 10.0:.1}t"
+                br {}
+            }
+        }
+        button {
+            class: "btn btn-secondary",
+            r#type: "button",
+            onclick: move |_| {
+                draft_order.set(DraftOrder::None);
+            },
+            "Cancel"
+        }
+    }
+}
+
+#[component]
+fn Land(
+    id: StackId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+    click_broker: Signal<ClickBroker>,
+) -> Element {
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+
+    // Get all tanks with fuel
+    let tanks_with_fuel = stack
+        .modules
+        .iter()
+        .filter_map(|(module_id, module)| {
+            if let Module {
+                health: Health::Intact,
+                details: ModuleDetails::Tank { fuel, .. },
+            } = module
+            {
+                if *fuel > 0 {
+                    Some((*module_id, *fuel))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // Find the orbited celestial
+    let orbited = game_state
+        .celestials
+        .with_gravity()
+        .find(|celestial| stack.orbiting(celestial));
+
+    rsx! {
+        div { class: "alert alert-info",
+            "Landing on "
+            if let Some(celestial) = orbited {
+                "{celestial.name}"
+            } else {
+                "the current planet"
+            }
+            ". Requires thrust ≥ surface gravity + 2 m/s² (1 hex/turn²). No map interaction required."
+        }
+        p {
+            "Available fuel tanks:"
+            br {}
+            for (module_id , fuel_amount) in tanks_with_fuel {
+                "{module_id}: {fuel_amount as f32 / 10.0:.1}t"
+                br {}
+            }
+        }
+        div { class: "alert alert-warning",
+            "TODO: Land order requires fuel allocation sliders to specify which tanks to draw from."
+        }
+        button {
+            class: "btn btn-secondary",
+            r#type: "button",
+            onclick: move |_| {
+                draft_order.set(DraftOrder::None);
+            },
+            "Cancel"
+        }
+    }
+}
+
+#[component]
+fn TakeOff(
+    id: StackId,
+    game_state: ReadSignal<GameState>,
+    orders: WriteSignal<Vec<Order>>,
+    draft_order: WriteSignal<DraftOrder>,
+    click_broker: Signal<ClickBroker>,
+) -> Element {
+    let mut clockwise = use_signal(|| true);
+    let game_state = &*game_state.read();
+    let stack = &game_state.stacks[&id];
+
+    // Get all tanks with fuel
+    let tanks_with_fuel = stack
+        .modules
+        .iter()
+        .filter_map(|(module_id, module)| {
+            if let Module {
+                health: Health::Intact,
+                details: ModuleDetails::Tank { fuel, .. },
+            } = module
+            {
+                if *fuel > 0 {
+                    Some((*module_id, *fuel))
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    // Find the landed celestial
+    let landed = game_state
+        .celestials
+        .get_by_position(stack.position)
+        .map(|(_, celestial)| celestial);
+
+    let mut selected_position = use_signal(|| Option::<Vec2<i32>>::None);
+
+    rsx! {
+        div { class: "alert alert-info",
+            "Click 'Select Target' then click on the map to select target orbital position around "
+            if let Some(celestial) = landed {
+                "{celestial.name}"
+            } else {
+                "the current planet"
+            }
+            "."
+        }
+        button {
+            class: "btn btn-primary",
+            r#type: "button",
+            onclick: move |_| {
+                click_broker
+                    .write()
+                    .register(
+                        Box::new(move |position| {
+                            selected_position.set(Some(position));
+                        }),
+                    );
+            },
+            "Select Target Position"
+        }
+        if let Some(target) = *selected_position.read() {
+            p { "Target position: {target:?}" }
+        }
+        div { class: "alert alert-info",
+            "Requires thrust ≥ surface gravity + 2 m/s² (1 hex/turn²)."
+        }
+        div { class: "form-check form-switch",
+            input {
+                class: "form-check-input",
+                r#type: "checkbox",
+                id: "clockwise-toggle",
+                checked: *clockwise.read(),
+                oninput: move |e| {
+                    clockwise.set(e.checked());
+                },
+            }
+            label { class: "form-check-label", r#for: "clockwise-toggle",
+                if *clockwise.read() {
+                    "Clockwise orbit"
+                } else {
+                    "Counterclockwise orbit"
+                }
+            }
+        }
+        p {
+            "Available fuel tanks:"
+            br {}
+            for (module_id , fuel_amount) in tanks_with_fuel {
+                "{module_id}: {fuel_amount as f32 / 10.0:.1}t"
+                br {}
+            }
+        }
+        button {
+            class: "btn btn-secondary",
+            r#type: "button",
+            onclick: move |_| {
+                draft_order.set(DraftOrder::None);
+            },
+            "Cancel"
         }
     }
 }

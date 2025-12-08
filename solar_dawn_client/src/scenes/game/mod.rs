@@ -118,7 +118,6 @@ impl ClickBroker {
         }
     }
 
-    #[expect(dead_code)]
     fn register(&mut self, action: Box<dyn FnOnce(Vec2<i32>)>) {
         self.listeners.push(action);
     }
@@ -328,6 +327,7 @@ pub fn InGame(
                             sidebar_state.set(new_state);
                         },
                         websocket,
+                        click_broker,
                     }
                 }
             }
