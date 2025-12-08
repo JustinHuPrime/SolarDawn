@@ -633,9 +633,9 @@ fn draw_order(ctx: &CanvasRenderingContext2d, order: &Order, game_state: &GameSt
             let orbited = game_state
                 .celestials
                 .with_gravity()
-                .find(|&celestial| stack.orbiting(celestial))
+                .find(|(_, celestial)| stack.orbiting(celestial))
                 .unwrap();
-            let orbit_params = orbited.orbit_parameters(*clockwise);
+            let orbit_params = orbited.1.orbit_parameters(*clockwise);
             let (_, target_velocity) = orbit_params
                 .into_iter()
                 .find(|(pos, _)| pos == target_position)

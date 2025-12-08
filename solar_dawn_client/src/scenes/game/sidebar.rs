@@ -17,7 +17,10 @@
 //
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
-use std::{collections::HashSet, ptr};
+use std::{
+    collections::{HashMap, HashSet},
+    ptr,
+};
 
 use dioxus::prelude::*;
 use serde_cbor::to_vec;
@@ -290,10 +293,10 @@ pub fn OutlinerOrders(
         p {
             for (index , order) in orders.read().iter().enumerate() {
                 Fragment { key: "{index}:{order:?}",
-                    "{order.display_attributed(game_state)}"
+                    "{order.display_attributed(game_state)} "
                     if let Some(Some(error)) = order_errors.get(index) {
-                        " "
                         span { class: "text-danger", "{error.display(game_state)}" }
+                        " "
                     }
                     button {
                         r#type: "button",
@@ -594,9 +597,9 @@ pub fn StackDetails(
             br {}
             "Current mass: {stack.mass():.1}t"
             br {}
-            "Empty mass: {stack.dry_mass()}"
+            "Empty mass: {stack.dry_mass()}t"
             br {}
-            "Fully loaded mass: {stack.full_mass()}"
+            "Fully loaded mass: {stack.full_mass()}t"
             br {}
             {
                 let (intact, damaged, destroyed) = stack.damage_status();
@@ -606,9 +609,9 @@ pub fn StackDetails(
                 rsx! { "{intact} intact {intact_word}, {damaged} damaged {damaged_word}, {destroyed} destroyed {destroyed_word}" }
             }
             br {}
-            "Current ΔV: {stack.current_dv():.1}"
+            "Current ΔV: {stack.current_dv():.1} hex/turn"
             br {}
-            "Fully fuelled ΔV: {stack.max_dv():.1}"
+            "Fully fuelled ΔV: {stack.max_dv():.1} hex/turn"
             br {}
             "Acceleration: {stack.acceleration() / 2.0:.1} hex/turn² ({stack.acceleration():.1} m/s²)"
         }
@@ -717,7 +720,7 @@ pub fn StackDetails(
                         if game_state_ref
                             .celestials
                             .with_gravity()
-                            .any(|celestial| {
+                            .any(|(_, celestial)| {
                                 stack.orbiting(celestial)
                                     && matches!(celestial.resources, Resources::Skimming)
                             })
@@ -830,14 +833,16 @@ pub fn StackDetails(
                         if game_state_ref
                             .celestials
                             .with_gravity()
-                            .any(|celestial| { stack.orbiting(celestial) })
+                            .any(|(_, celestial)| {
+                                stack.orbiting(celestial) && stack.acceleration() >= 2.0
+                            })
                         {
                             option { value: <&'static str>::from(DraftOrder::OrbitAdjust), "Adjust orbit" }
                         }
                         if game_state_ref
                             .celestials
                             .with_gravity()
-                            .any(|celestial| {
+                            .any(|(_, celestial)| {
                                 stack.orbiting(celestial) && stack.acceleration() >= 2.0
                                     && stack.acceleration() >= celestial.surface_gravity
                             })
@@ -847,7 +852,10 @@ pub fn StackDetails(
                         if game_state_ref
                             .celestials
                             .get_by_position(stack.position)
-                            .is_some_and(|(_, celestial)| stack.landed_with_gravity(celestial))
+                            .is_some_and(|(_, celestial)| {
+                                stack.landed_with_gravity(celestial) && stack.acceleration() >= 2.0
+                                    && stack.acceleration() >= celestial.surface_gravity
+                            })
                         {
                             option { value: <&'static str>::from(DraftOrder::TakeOff), "Take off" }
                         }
@@ -2607,36 +2615,26 @@ fn Burn(
     draft_order: WriteSignal<DraftOrder>,
     click_broker: Signal<ClickBroker>,
 ) -> Element {
+    let mut selected_position = use_signal(|| Option::<Vec2<i32>>::None);
+    let mut fuel_from = use_signal(HashMap::<ModuleId, u8>::new);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
+    let stack_mass = stack.mass();
+    let stack_position = stack.position;
+    let stack_velocity = stack.velocity;
 
-    // Get all tanks with fuel
-    let tanks_with_fuel = stack
-        .modules
-        .iter()
-        .filter_map(|(module_id, module)| {
-            if let Module {
-                health: Health::Intact,
-                details: ModuleDetails::Tank { fuel, .. },
-            } = module
-            {
-                if *fuel > 0 {
-                    Some((*module_id, *fuel))
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<Vec<_>>();
-
-    let mut selected_position = use_signal(|| Option::<Vec2<i32>>::None);
+    let required_fuel = use_memo(move || {
+        if let Some(selected_position) = &*selected_position.read() {
+            let delta_v = (*selected_position - (stack_position + stack_velocity)).norm() as u32;
+            let delta_p = stack_mass * delta_v as f32;
+            Some((delta_p / ModuleDetails::ENGINE_SPECIFIC_IMPULSE as f32).ceil() as u32)
+        } else {
+            None
+        }
+    });
+    let selected_fuel = use_memo(move || fuel_from.read().values().map(|&v| v as u32).sum::<u32>());
 
     rsx! {
-        div { class: "alert alert-info",
-            "Click 'Select Target' then click on the map to select the target position for the burn."
-        }
         button {
             class: "btn btn-primary",
             r#type: "button",
@@ -2649,33 +2647,72 @@ fn Burn(
                         }),
                     );
             },
-            "Select Target Position"
+            "Select ΔV"
         }
+        br {}
         if let Some(target) = *selected_position.read() {
-            p {
-                "Target position: {target:?}"
-                br {}
-                "Delta-v required: {(target - (stack.position + stack.velocity)):?}"
-            }
-        }
-        p {
-            "Available fuel tanks:"
+            output { "ΔV required: {(target - (stack_position + stack_velocity)).norm()} hex/turn" }
             br {}
-            for (module_id , fuel_amount) in tanks_with_fuel {
-                "{module_id}: {fuel_amount as f32 / 10.0:.1}t"
-                br {}
-            }
         }
-        div { class: "alert alert-warning",
-            "TODO: Add fuel allocation sliders to specify which tanks to draw fuel from."
+        if let Some(required) = &*required_fuel.read() {
+            output { "Fuel required: {*required as f32 / 10.0:.1}t" }
+            br {}
+            output { "Fuel selected: {*selected_fuel.read() as f32 / 10.0:.1}t" }
+            br {}
+        }
+        label { class: "form-label", "Fuel Usage" }
+        for (module_id , fuel_available) in stack
+            .modules
+            .iter()
+            .filter_map(|(module_id, module)| {
+                if let Module {
+                    health: Health::Intact,
+                    details: ModuleDetails::Tank { fuel, .. },
+                } = module {
+                    if *fuel > 0 { Some((*module_id, *fuel)) } else { None }
+                } else {
+                    None
+                }
+            })
+        {
+            input {
+                key: "{module_id:?}",
+                r#type: "range",
+                class: "form-range",
+                min: 0,
+                max: fuel_available,
+                value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
+                oninput: move |e| {
+                    fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
+                },
+            }
         }
         button {
-            class: "btn btn-secondary",
+            class: "btn btn-primary",
             r#type: "button",
             onclick: move |_| {
-                draft_order.set(DraftOrder::None);
+                if let Some(target) = *selected_position.read() {
+                    orders
+                        .write()
+                        .push(Order::Burn {
+                            stack: id,
+                            delta_v: target - (stack_position + stack_velocity),
+                            fuel_from: fuel_from
+                                .read()
+                                .iter()
+                                .filter_map(|(module_id, amount)| {
+                                    if *amount > 0 { Some((*module_id, *amount)) } else { None }
+                                })
+                                .collect::<Vec<_>>(),
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
             },
-            "Cancel"
+            disabled: selected_position.read().is_none()
+                || required_fuel
+                    .read()
+                    .is_some_and(|required| required != *selected_fuel.read()),
+            "Submit"
         }
     }
 }
@@ -2688,49 +2725,28 @@ fn OrbitAdjust(
     draft_order: WriteSignal<DraftOrder>,
     click_broker: Signal<ClickBroker>,
 ) -> Element {
+    let mut selected_position = use_signal(|| Option::<Vec2<i32>>::None);
+    let mut fuel_from = use_signal(HashMap::<ModuleId, u8>::new);
     let mut clockwise = use_signal(|| true);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
-
-    // Get all tanks with fuel
-    let tanks_with_fuel = stack
-        .modules
-        .iter()
-        .filter_map(|(module_id, module)| {
-            if let Module {
-                health: Health::Intact,
-                details: ModuleDetails::Tank { fuel, .. },
-            } = module
-            {
-                if *fuel > 0 {
-                    Some((*module_id, *fuel))
-                } else {
-                    None
-                }
+    let orbiting = game_state
+        .celestials
+        .with_gravity()
+        .find_map(|(id, celestial)| {
+            if stack.orbiting(celestial) {
+                Some(id)
             } else {
                 None
             }
         })
-        .collect::<Vec<_>>();
+        .unwrap();
 
-    // Find the orbited celestial
-    let orbited = game_state
-        .celestials
-        .with_gravity()
-        .find(|celestial| stack.orbiting(celestial));
-
-    let mut selected_position = use_signal(|| Option::<Vec2<i32>>::None);
+    let required_fuel =
+        (stack.mass() / ModuleDetails::ENGINE_SPECIFIC_IMPULSE as f32).ceil() as u32;
+    let selected_fuel = use_memo(move || fuel_from.read().values().map(|&v| v as u32).sum::<u32>());
 
     rsx! {
-        div { class: "alert alert-info",
-            "Click 'Select Target' then click on the map to select the target orbital position around "
-            if let Some(celestial) = orbited {
-                "{celestial.name}"
-            } else {
-                "the current planet"
-            }
-            "."
-        }
         button {
             class: "btn btn-primary",
             r#type: "button",
@@ -2743,44 +2759,76 @@ fn OrbitAdjust(
                         }),
                     );
             },
-            "Select Target Position"
+            "Select Position"
         }
-        if let Some(target) = *selected_position.read() {
-            p { "Target position: {target:?}" }
+        br {}
+        label { r#for: "clockwise", class: "form-check-label", "Clockwise" }
+        input {
+            r#type: "checkbox",
+            id: "clockwise",
+            class: "form-check-input",
+            checked: *clockwise.read(),
+            oninput: move |e| {
+                clockwise.set(e.checked());
+            },
         }
-        div { class: "form-check form-switch",
-            input {
-                class: "form-check-input",
-                r#type: "checkbox",
-                id: "clockwise-toggle",
-                checked: *clockwise.read(),
-                oninput: move |e| {
-                    clockwise.set(e.checked());
-                },
-            }
-            label { class: "form-check-label", r#for: "clockwise-toggle",
-                if *clockwise.read() {
-                    "Clockwise"
+        br {}
+        output { "Fuel required: {required_fuel as f32 / 10.0:.1}t" }
+        br {}
+        output { "Fuel selected: {*selected_fuel.read() as f32 / 10.0:.1}t" }
+        br {}
+        label { class: "form-label", "Fuel Usage" }
+        for (module_id , fuel_available) in stack
+            .modules
+            .iter()
+            .filter_map(|(module_id, module)| {
+                if let Module {
+                    health: Health::Intact,
+                    details: ModuleDetails::Tank { fuel, .. },
+                } = module {
+                    if *fuel > 0 { Some((*module_id, *fuel)) } else { None }
                 } else {
-                    "Counterclockwise"
+                    None
                 }
-            }
-        }
-        p {
-            "Available fuel tanks:"
-            br {}
-            for (module_id , fuel_amount) in tanks_with_fuel {
-                "{module_id}: {fuel_amount as f32 / 10.0:.1}t"
-                br {}
+            })
+        {
+            input {
+                key: "{module_id:?}",
+                r#type: "range",
+                class: "form-range",
+                min: 0,
+                max: fuel_available,
+                value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
+                oninput: move |e| {
+                    fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
+                },
             }
         }
         button {
-            class: "btn btn-secondary",
+            class: "btn btn-primary",
             r#type: "button",
             onclick: move |_| {
-                draft_order.set(DraftOrder::None);
+                if let Some(target_position) = *selected_position.read() {
+                    orders
+                        .write()
+                        .push(Order::OrbitAdjust {
+                            stack: id,
+                            around: orbiting,
+                            target_position,
+                            clockwise: *clockwise.read(),
+                            fuel_from: fuel_from
+                                .read()
+                                .iter()
+                                .filter_map(|(module_id, amount)| {
+                                    if *amount > 0 { Some((*module_id, *amount)) } else { None }
+                                })
+                                .collect::<Vec<_>>(),
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
             },
-            "Cancel"
+            disabled: selected_position.read().is_none() || required_fuel != *selected_fuel.read(),
+            "Submit"
         }
     }
 }
@@ -2793,64 +2841,78 @@ fn Land(
     draft_order: WriteSignal<DraftOrder>,
     click_broker: Signal<ClickBroker>,
 ) -> Element {
+    let mut fuel_from = use_signal(HashMap::<ModuleId, u8>::new);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
-
-    // Get all tanks with fuel
-    let tanks_with_fuel = stack
-        .modules
-        .iter()
-        .filter_map(|(module_id, module)| {
-            if let Module {
-                health: Health::Intact,
-                details: ModuleDetails::Tank { fuel, .. },
-            } = module
-            {
-                if *fuel > 0 {
-                    Some((*module_id, *fuel))
-                } else {
-                    None
-                }
+    let orbiting = game_state
+        .celestials
+        .with_gravity()
+        .find_map(|(id, celestial)| {
+            if stack.orbiting(celestial) {
+                Some(id)
             } else {
                 None
             }
         })
-        .collect::<Vec<_>>();
+        .unwrap();
 
-    // Find the orbited celestial
-    let orbited = game_state
-        .celestials
-        .with_gravity()
-        .find(|celestial| stack.orbiting(celestial));
+    let required_fuel =
+        (stack.mass() / ModuleDetails::ENGINE_SPECIFIC_IMPULSE as f32).ceil() as u32;
+    let selected_fuel = use_memo(move || fuel_from.read().values().map(|&v| v as u32).sum::<u32>());
 
     rsx! {
-        div { class: "alert alert-info",
-            "Landing on "
-            if let Some(celestial) = orbited {
-                "{celestial.name}"
-            } else {
-                "the current planet"
+        output { "Fuel required: {required_fuel as f32 / 10.0:.1}t" }
+        br {}
+        output { "Fuel selected: {*selected_fuel.read() as f32 / 10.0:.1}t" }
+        br {}
+        label { class: "form-label", "Fuel Usage" }
+        for (module_id , fuel_available) in stack
+            .modules
+            .iter()
+            .filter_map(|(module_id, module)| {
+                if let Module {
+                    health: Health::Intact,
+                    details: ModuleDetails::Tank { fuel, .. },
+                } = module {
+                    if *fuel > 0 { Some((*module_id, *fuel)) } else { None }
+                } else {
+                    None
+                }
+            })
+        {
+            input {
+                key: "{module_id:?}",
+                r#type: "range",
+                class: "form-range",
+                min: 0,
+                max: fuel_available,
+                value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
+                oninput: move |e| {
+                    fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
+                },
             }
-            ". Requires thrust ≥ surface gravity + 2 m/s² (1 hex/turn²). No map interaction required."
-        }
-        p {
-            "Available fuel tanks:"
-            br {}
-            for (module_id , fuel_amount) in tanks_with_fuel {
-                "{module_id}: {fuel_amount as f32 / 10.0:.1}t"
-                br {}
-            }
-        }
-        div { class: "alert alert-warning",
-            "TODO: Land order requires fuel allocation sliders to specify which tanks to draw from."
         }
         button {
-            class: "btn btn-secondary",
+            class: "btn btn-primary",
             r#type: "button",
             onclick: move |_| {
+                orders
+                    .write()
+                    .push(Order::Land {
+                        stack: id,
+                        on: orbiting,
+                        fuel_from: fuel_from
+                            .read()
+                            .iter()
+                            .filter_map(|(module_id, amount)| {
+                                if *amount > 0 { Some((*module_id, *amount)) } else { None }
+                            })
+                            .collect::<Vec<_>>(),
+                    });
                 draft_order.set(DraftOrder::None);
             },
-            "Cancel"
+            disabled: required_fuel != *selected_fuel.read(),
+            "Submit"
         }
     }
 }
@@ -2863,49 +2925,28 @@ fn TakeOff(
     draft_order: WriteSignal<DraftOrder>,
     click_broker: Signal<ClickBroker>,
 ) -> Element {
+    let mut selected_position = use_signal(|| Option::<Vec2<i32>>::None);
+    let mut fuel_from = use_signal(HashMap::<ModuleId, u8>::new);
     let mut clockwise = use_signal(|| true);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
-
-    // Get all tanks with fuel
-    let tanks_with_fuel = stack
-        .modules
-        .iter()
-        .filter_map(|(module_id, module)| {
-            if let Module {
-                health: Health::Intact,
-                details: ModuleDetails::Tank { fuel, .. },
-            } = module
-            {
-                if *fuel > 0 {
-                    Some((*module_id, *fuel))
-                } else {
-                    None
-                }
+    let landed_on = game_state
+        .celestials
+        .with_gravity()
+        .find_map(|(id, celestial)| {
+            if stack.landed_with_gravity(celestial) {
+                Some(id)
             } else {
                 None
             }
         })
-        .collect::<Vec<_>>();
+        .unwrap();
 
-    // Find the landed celestial
-    let landed = game_state
-        .celestials
-        .get_by_position(stack.position)
-        .map(|(_, celestial)| celestial);
-
-    let mut selected_position = use_signal(|| Option::<Vec2<i32>>::None);
+    let required_fuel =
+        (stack.mass() / ModuleDetails::ENGINE_SPECIFIC_IMPULSE as f32).ceil() as u32;
+    let selected_fuel = use_memo(move || fuel_from.read().values().map(|&v| v as u32).sum::<u32>());
 
     rsx! {
-        div { class: "alert alert-info",
-            "Click 'Select Target' then click on the map to select target orbital position around "
-            if let Some(celestial) = landed {
-                "{celestial.name}"
-            } else {
-                "the current planet"
-            }
-            "."
-        }
         button {
             class: "btn btn-primary",
             r#type: "button",
@@ -2918,47 +2959,76 @@ fn TakeOff(
                         }),
                     );
             },
-            "Select Target Position"
+            "Select Destination"
         }
-        if let Some(target) = *selected_position.read() {
-            p { "Target position: {target:?}" }
+        br {}
+        label { r#for: "clockwise", class: "form-check-label", "Clockwise" }
+        input {
+            r#type: "checkbox",
+            id: "clockwise",
+            class: "form-check-input",
+            checked: *clockwise.read(),
+            oninput: move |e| {
+                clockwise.set(e.checked());
+            },
         }
-        div { class: "alert alert-info",
-            "Requires thrust ≥ surface gravity + 2 m/s² (1 hex/turn²)."
-        }
-        div { class: "form-check form-switch",
-            input {
-                class: "form-check-input",
-                r#type: "checkbox",
-                id: "clockwise-toggle",
-                checked: *clockwise.read(),
-                oninput: move |e| {
-                    clockwise.set(e.checked());
-                },
-            }
-            label { class: "form-check-label", r#for: "clockwise-toggle",
-                if *clockwise.read() {
-                    "Clockwise orbit"
+        br {}
+        output { "Fuel required: {required_fuel as f32 / 10.0:.1}t" }
+        br {}
+        output { "Fuel selected: {*selected_fuel.read() as f32 / 10.0:.1}t" }
+        br {}
+        label { class: "form-label", "Fuel Usage" }
+        for (module_id , fuel_available) in stack
+            .modules
+            .iter()
+            .filter_map(|(module_id, module)| {
+                if let Module {
+                    health: Health::Intact,
+                    details: ModuleDetails::Tank { fuel, .. },
+                } = module {
+                    if *fuel > 0 { Some((*module_id, *fuel)) } else { None }
                 } else {
-                    "Counterclockwise orbit"
+                    None
                 }
-            }
-        }
-        p {
-            "Available fuel tanks:"
-            br {}
-            for (module_id , fuel_amount) in tanks_with_fuel {
-                "{module_id}: {fuel_amount as f32 / 10.0:.1}t"
-                br {}
+            })
+        {
+            input {
+                key: "{module_id:?}",
+                r#type: "range",
+                class: "form-range",
+                min: 0,
+                max: fuel_available,
+                value: "{fuel_from.read().get(&module_id).copied().unwrap_or(0)}",
+                oninput: move |e| {
+                    fuel_from.write().insert(module_id, e.value().parse::<u8>().unwrap());
+                },
             }
         }
         button {
-            class: "btn btn-secondary",
+            class: "btn btn-primary",
             r#type: "button",
             onclick: move |_| {
-                draft_order.set(DraftOrder::None);
+                if let Some(destination) = *selected_position.read() {
+                    orders
+                        .write()
+                        .push(Order::TakeOff {
+                            stack: id,
+                            from: landed_on,
+                            destination,
+                            clockwise: *clockwise.read(),
+                            fuel_from: fuel_from
+                                .read()
+                                .iter()
+                                .filter_map(|(module_id, amount)| {
+                                    if *amount > 0 { Some((*module_id, *amount)) } else { None }
+                                })
+                                .collect::<Vec<_>>(),
+                        });
+                    draft_order.set(DraftOrder::None);
+                }
             },
-            "Cancel"
+            disabled: selected_position.read().is_none() || required_fuel != *selected_fuel.read(),
+            "Submit"
         }
     }
 }

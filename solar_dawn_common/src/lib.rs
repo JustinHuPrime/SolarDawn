@@ -213,7 +213,7 @@ impl GameState {
                     // note that the movement_collides method ignores landed stacks
                     self.celestials
                         .with_gravity()
-                        .filter_map(|celestial| {
+                        .filter_map(|(_, celestial)| {
                             celestial.stack_movement_collides(
                                 stack.position.cartesian(),
                                 (stack.position + stack.velocity).cartesian(),
@@ -272,7 +272,7 @@ impl GameState {
                         for stack in stacks.iter().filter_map(|(stack, stack_ref)| {
                             if !std::ptr::eq(missile_ref, stack_ref)
                                 && missile_ref.in_range(intercept, stack_ref)
-                                && !self.celestials.with_gravity().any(|celestial| {
+                                && !self.celestials.with_gravity().any(|(_, celestial)| {
                                     celestial.blocks_weapons_effect(
                                         missile_ref.position.cartesian()
                                             + (missile_ref.velocity.cartesian() * intercept),
@@ -351,7 +351,7 @@ impl GameState {
                 let gravity = self
                     .celestials
                     .with_gravity()
-                    .map(|celestial| celestial.gravity_to(stack.position, stack.velocity))
+                    .map(|(_, celestial)| celestial.gravity_to(stack.position, stack.velocity))
                     .sum();
                 stack.position += stack.velocity;
                 stack.velocity += gravity;

@@ -555,9 +555,11 @@ impl Order {
             PlayerId,
             HashMap<String, Vec<&mut Result<&Order, OrderError>>>,
         > = HashMap::new();
+        let mut renamed_stacks = vec![];
         for (&player, orders) in orders.iter_mut() {
             for order in orders.iter_mut() {
-                if let Ok(Order::NameStack { name, .. }) = order {
+                if let Ok(Order::NameStack { name, stack }) = order {
+                    renamed_stacks.push(*stack);
                     naming_orders_by_player_and_name
                         .entry(player)
                         .or_default()
@@ -568,23 +570,15 @@ impl Order {
             }
         }
         for (player, names) in naming_orders_by_player_and_name {
-            for (name, orders) in names {
-                if orders.len() > 1
+            for (name, this_name_orders) in names {
+                if this_name_orders.len() > 1
                     || game_state.stacks.iter().any(|(id, stack)| {
                         stack.owner == player
                             && stack.name == name
-                            && !orders.iter().any(|order| {
-                                let Ok(Order::NameStack {
-                                    stack: order_id, ..
-                                }) = order
-                                else {
-                                    unreachable!()
-                                };
-                                id == order_id
-                            })
+                            && !renamed_stacks.contains(id)
                     })
                 {
-                    for order in orders {
+                    for order in this_name_orders {
                         *order = Err(OrderError::DuplicateStackName);
                     }
                 }
@@ -1517,7 +1511,7 @@ impl Order {
                     return Err(OrderError::NoResourceAccess);
                 }
                 if *fuel > 0
-                    && !game_state.celestials.with_gravity().any(|celestial| {
+                    && !game_state.celestials.with_gravity().any(|(_, celestial)| {
                         stack_ref.orbiting(celestial)
                             && matches!(celestial.resources, Resources::Skimming)
                     })
@@ -1644,7 +1638,7 @@ impl Order {
                 if *stack == *target {
                     return Err(OrderError::InvalidTarget);
                 }
-                if game_state.celestials.with_gravity().any(|celestial| {
+                if game_state.celestials.with_gravity().any(|(_, celestial)| {
                     celestial.blocks_weapons_effect(
                         stack_ref.position.cartesian(),
                         target_ref.position.cartesian(),
@@ -1697,7 +1691,7 @@ impl Order {
                 if game_state
                     .celestials
                     .with_gravity()
-                    .any(|celestial| stack_ref.landed_with_gravity(celestial))
+                    .any(|(_, celestial)| stack_ref.landed_with_gravity(celestial))
                 {
                     return Err(OrderError::BurnWhileLanded);
                 }

@@ -108,8 +108,8 @@ impl CelestialMap {
         &self.all
     }
     /// View this as only celestials with gravity
-    pub fn with_gravity(&self) -> impl Iterator<Item = &Celestial> {
-        self.with_gravity.iter().map(|id| &self.all[id])
+    pub fn with_gravity(&self) -> impl Iterator<Item = (CelestialId, &Celestial)> {
+        self.with_gravity.iter().map(|id| (*id, &self.all[id]))
     }
     /// Lookup a specific one by position
     pub fn get_by_position(&self, position: Vec2<i32>) -> Option<(CelestialId, &Celestial)> {
