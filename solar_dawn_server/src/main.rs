@@ -60,7 +60,7 @@ use rand_distr::Alphanumeric;
 use rand_pcg::Pcg64;
 use serde::Serialize;
 use serde_cbor::{from_slice, to_vec};
-use solar_dawn_common::{GameState, GameStateInitializer, Phase, PlayerId, order::Order};
+use solar_dawn_common::{GameState, GameStateInitializer, KEEP_ALIVE_PING, Phase, PlayerId, order::Order};
 use tokio::sync::Mutex;
 use tower_http::services::ServeDir;
 use tracing::{Level, info, trace, warn};
@@ -701,6 +701,9 @@ async fn next_actual_message(
         match recv.next().await {
             Some(Ok(Message::Ping(_))) | Some(Ok(Message::Pong(_))) => {
                 // ignore pings and pongs
+            }
+            Some(Ok(Message::Text(bytes))) if bytes == KEEP_ALIVE_PING => {
+                // ignore ping text messages
             }
             message => return message,
         }

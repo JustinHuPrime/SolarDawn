@@ -783,6 +783,9 @@ impl MulAssign<f32> for CartesianVec2 {
     }
 }
 
+/// Message sent down connection for keep-alive pings
+pub const KEEP_ALIVE_PING: &str = "PING";
+
 #[cfg(all(test, feature = "server", feature = "client"))]
 mod tests {
     use super::*;

@@ -18,7 +18,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 
 use wasm_bindgen::prelude::*;
-use web_sys::Event;
+use web_sys::{Event, window};
 
 pub struct EventListener {
     target: web_sys::EventTarget,
@@ -47,5 +47,35 @@ impl Drop for EventListener {
         self.target
             .remove_event_listener_with_callback(self.name, self.callback.as_ref().unchecked_ref())
             .unwrap();
+    }
+}
+
+pub struct Interval {
+    _callback: Closure<dyn FnMut()>,
+    handle: i32,
+}
+impl Interval {
+    pub fn new<F>(callback: F, timeout: i32) -> Self
+    where
+        F: FnMut() + 'static,
+    {
+        let callback = Closure::wrap(Box::new(callback) as Box<dyn FnMut()>);
+        let handle = window()
+            .unwrap()
+            .set_interval_with_callback_and_timeout_and_arguments_0(
+                callback.as_ref().unchecked_ref(),
+                timeout,
+            )
+            .unwrap();
+
+        Self {
+            _callback: callback,
+            handle,
+        }
+    }
+}
+impl Drop for Interval {
+    fn drop(&mut self) {
+        window().unwrap().clear_interval_with_handle(self.handle);
     }
 }

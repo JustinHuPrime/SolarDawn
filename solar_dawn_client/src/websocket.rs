@@ -27,6 +27,7 @@ use std::{
 
 use dioxus::prelude::*;
 use futures::Stream;
+use solar_dawn_common::KEEP_ALIVE_PING;
 use thiserror::Error;
 use wasm_bindgen::JsCast;
 use web_sys::{
@@ -34,7 +35,7 @@ use web_sys::{
     js_sys::{ArrayBuffer, JsString, Uint8Array},
 };
 
-use crate::event_listener::EventListener;
+use crate::event_listener::{EventListener, Interval};
 
 pub enum Message {
     Text(String),
@@ -63,6 +64,7 @@ pub struct WebsocketClient {
     _on_message: Rc<EventListener>,
     _on_error: Rc<EventListener>,
     _on_close: Rc<EventListener>,
+    _keep_alive: Rc<Interval>,
     event_queue: Rc<RefCell<VecDeque<Result<Message, WebsocketError>>>>,
 }
 
@@ -191,6 +193,12 @@ impl WebsocketClientBuilder {
                     }
                 }
             })),
+            _keep_alive: Rc::new(Interval::new({
+                let raw_ws = raw_ws.clone();
+                move || {
+                    let _ = raw_ws.send_with_str(KEEP_ALIVE_PING);
+                }
+            }, 10_000)),
             event_queue: event_queue.clone(),
         }))
     }
