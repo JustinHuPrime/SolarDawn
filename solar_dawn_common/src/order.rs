@@ -2183,11 +2183,11 @@ impl Order {
                 let stack = &game_state.stacks[stack];
                 match to {
                     ModuleTransferTarget::Existing(stack_id) => format!(
-                        "Transfer a {} to {}",
+                        "Transfer {} to {}",
                         stack.modules[module], game_state.stacks[stack_id].name
                     ),
                     ModuleTransferTarget::New(n) => {
-                        format!("Transfer a {} to new stack #{}", stack.modules[module], n)
+                        format!("Transfer {} to new stack #{}", stack.modules[module], n)
                     }
                 }
             }
@@ -2331,12 +2331,12 @@ impl Order {
                 let stack = &game_state.stacks[stack];
                 match to {
                     ModuleTransferTarget::Existing(stack_id) => format!(
-                        "{stack_name}: Transfer a {} to {}",
+                        "{stack_name}: Transfer {} to {}",
                         stack.modules[module], game_state.stacks[stack_id].name
                     ),
                     ModuleTransferTarget::New(n) => {
                         format!(
-                            "{stack_name}: Transfer a {} to new stack #{}",
+                            "{stack_name}: Transfer {} to new stack #{}",
                             stack.modules[module], n
                         )
                     }
