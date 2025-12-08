@@ -592,12 +592,12 @@ pub enum ModuleDetails {
 
 impl ModuleDetails {
     /// How many resources are produced per turn, in 0.1 tonnes
-    pub const MINER_PRODUCTION_RATE: u32 = 10;
+    pub const MINER_PRODUCTION_RATE: u32 = 100;
     /// Mass of a miner, in tonnes
     pub const MINER_MASS: u32 = 10;
 
     /// How much fuel is produced per turn, in 0.1 tonnes
-    pub const FUEL_SKIMMER_PRODUCTION_RATE: u32 = 10;
+    pub const FUEL_SKIMMER_PRODUCTION_RATE: u32 = 100;
     /// Mass of a fuel skimmer, in tonnes
     pub const FUEL_SKIMMER_MASS: u32 = 10;
 
@@ -634,7 +634,7 @@ impl ModuleDetails {
     pub const HABITAT_MASS: u32 = 10;
 
     /// How much output can a refinery produce, in 0.1 tonnes
-    pub const REFINERY_CAPACITY: u32 = 25;
+    pub const REFINERY_CAPACITY: u32 = 50;
     /// Conversion ratio of ore to materials
     pub const REFINERY_ORE_PER_MATERIAL: i32 = 2;
     /// Conversion ratio of water to fuel
