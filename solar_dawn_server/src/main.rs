@@ -60,9 +60,14 @@ use rand_distr::Alphanumeric;
 use rand_pcg::Pcg64;
 use serde::Serialize;
 use serde_cbor::{from_slice, to_vec};
-use solar_dawn_common::{GameState, GameStateInitializer, KEEP_ALIVE_PING, Phase, PlayerId, order::Order};
+use solar_dawn_common::{
+    GameState, GameStateInitializer, KEEP_ALIVE_PING, Phase, PlayerId, order::Order,
+};
 use tokio::sync::Mutex;
-use tower_http::services::ServeDir;
+use tower_http::{
+    services::ServeDir,
+    trace::{DefaultMakeSpan, TraceLayer},
+};
 use tracing::{Level, info, trace, warn};
 
 use crate::model::{GameServerState, IdGenerator};
@@ -402,7 +407,11 @@ async fn main() -> ExitCode {
     let app = Router::new()
         .fallback_service(ServeDir::new("./public").append_index_html_on_directories(true))
         .route("/ws", any(ws_handler))
-        .with_state(server_state);
+        .with_state(server_state)
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::default().include_headers(true)),
+        );
 
     let addr = SocketAddr::from(([0, 0, 0, 0], args.port));
     let server = if args.tls {
