@@ -277,7 +277,139 @@
             your stacks around.
           </p>
           <h2>Orders</h2>
-          <p></p>
+          <p>The following orders are available:</p>
+          <table class="table">
+            <thead>
+              <tr>
+                <th scope="col">Order</th>
+                <th scope="col">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Rename stack</td>
+                <td>
+                  Any phase - rename a stack; your stacks cannot share the same
+                  name, nor can they have a blank name
+                </td>
+              </tr>
+              <tr>
+                <td>Transfer a module</td>
+                <td>
+                  Logistics phase - transfer a module from one of your stacks to
+                  either a new stack or an existing, rendezvoused, stack you own
+                </td>
+              </tr>
+              <tr>
+                <td>Board</td>
+                <td>
+                  Logistics phase - capture a rendezvoused enemy stack by
+                  forcefully transferring all of its modules into this stack;
+                  prevents both this and the targeted stack from doing anything
+                  else; requires your stack has a functioning habitat and the
+                  target stack doesn't
+                </td>
+              </tr>
+              <tr>
+                <td>Mine or Skim</td>
+                <td>
+                  Logistics phase - mine resources from the celestial body you
+                  are landed on, or skim resources from the gas giant you are
+                  orbiting
+                </td>
+              </tr>
+              <tr>
+                <td>Transfer Resources</td>
+                <td>
+                  Logistics phase - transfer resources from any module to the
+                  floating pool, from the floating pool to any module, from the
+                  floating pool to a rendezvoused stack, or jettison resources
+                  from the floating pool
+                </td>
+              </tr>
+              <tr>
+                <td>Repair</td>
+                <td>
+                  Logistics phase - repair a damaged module for ⅒ of its mass in
+                  materials; requires a habitat or a factory to perform this
+                  order
+                </td>
+              </tr>
+              <tr>
+                <td>Refine</td>
+                <td>
+                  Logistics phase - refine resources (ore into materials, water
+                  into fuel); requires a refinery
+                </td>
+              </tr>
+              <tr>
+                <td>Build</td>
+                <td>
+                  Logistics phase - build a module using materials; requires a
+                  factory
+                </td>
+              </tr>
+              <tr>
+                <td>Salvage</td>
+                <td>
+                  Logistics phase - break down a module for ½ of its mass in
+                  materials; requires a factory
+                </td>
+              </tr>
+              <tr>
+                <td>Shoot</td>
+                <td>
+                  Combat phase - shoot at another stack; requires one gun per
+                  shot
+                </td>
+              </tr>
+              <tr>
+                <td>Arm or Disarm</td>
+                <td>
+                  Combat phase - arm or disarm a warhead; note that you cannot
+                  arm warheads on a stack with a habitat
+                </td>
+              </tr>
+              <tr>
+                <td>Burn</td>
+                <td>
+                  Movement phase - burn your engines to change your velocity;
+                  requires fuel from tanks to be consumed
+                </td>
+              </tr>
+              <tr>
+                <td>Adjust Orbit</td>
+                <td>
+                  Movement phase - for one hex/turn of Δv, change your orbit
+                  phase angle and direction
+                </td>
+              </tr>
+              <tr>
+                <td>Land</td>
+                <td>
+                  Movement phase - for one hex/turn of Δv, land on the celestial
+                  body you currently orbit; note that low-gravity celestial
+                  objects can be landed on by rendezvousing
+                </td>
+              </tr>
+              <tr>
+                <td>Take off</td>
+                <td>
+                  Movement phase - for one hex/turn of Δv, take off from a
+                  planet into an orbit of your choice
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <p>
+            During the logistics phase, each stack has a floating pool of
+            resources which are used for other logistics operations. This pool
+            gets resources from storage modules and from orders producing
+            resources, and is drained by orders consuming resources and
+            transferring into storage modules. At the end of the phase, this
+            pool must be empty, with all resources stored in modules or
+            otherwise disposed of.
+          </p>
           <h2>Strategy</h2>
           <p>
             Your goal in the default scenario is to control the majority of the
@@ -287,7 +419,7 @@
           </p>
           <h3>Ship Design</h3>
           <p>
-            The with how powerful engines are, the rocket equation is not
+            With how powerful engines are, the rocket equation is not
             tyrannical, but it is still mildly unpleasant. A ship that doesn't
             drop any tanks has a theoretical maximum Δv of 60 hex/turn. This can
             be extended further by staging, but this would lead to exponentially
