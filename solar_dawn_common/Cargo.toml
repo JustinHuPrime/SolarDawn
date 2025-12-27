@@ -11,7 +11,6 @@ license = "AGPL-3.0-or-later"
 [dependencies]
 rand = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive", "rc"] }
-tower-http = { version = "0.6.8", features = ["fs", "trace"] }
 uuid = { version = "1.18", features = ["v4"], optional = true }
 
 [features]
