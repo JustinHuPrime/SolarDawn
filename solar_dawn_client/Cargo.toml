@@ -9,7 +9,6 @@ repository = "https://github.com/JustinHuPrime/SolarDawn"
 license = "AGPL-3.0-or-later"
 
 [dependencies]
-anyhow = "1.0.100"
 base64 = "0.22.1"
 dioxus = { version = "0.7.2", features = ["web"] }
 futures = "0.3.31"
