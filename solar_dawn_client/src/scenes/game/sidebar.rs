@@ -44,21 +44,13 @@ use crate::{
 fn get_transferred_modules(orders: &[Order], stack_id: StackId) -> HashSet<ModuleId> {
     orders
         .iter()
-        .filter_map(|order| {
-            if let Order::ModuleTransfer {
+        .filter_map(|order| match order {
+            Order::ModuleTransfer {
                 stack: transfer_stack,
                 module,
                 ..
-            } = order
-            {
-                if *transfer_stack == stack_id {
-                    Some(*module)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
+            } if *transfer_stack == stack_id => Some(*module),
+            _ => None,
         })
         .collect()
 }
