@@ -149,6 +149,7 @@ pub fn InGame(
 
     let mut orders = use_signal(Vec::<Order>::new);
     let mut auto_orders = use_signal(Vec::<(Order, bool)>::new);
+    let mut submitted_orders = use_signal(Vec::<Order>::new);
     let mut submitting_orders = use_signal(|| false);
 
     // Game settings (unit hostility display, etc)
@@ -269,6 +270,12 @@ pub fn InGame(
                         return;
                     };
                     trace!(delta = ?delta);
+                    
+                    // If delta contains orders for this player, store them as submitted
+                    if let Some(player_orders) = delta.orders.get(&me) {
+                        submitted_orders.set(player_orders.clone());
+                    }
+                    
                     orders.clear();
                     auto_orders.clear();
                     submitting_orders.set(false);
@@ -318,6 +325,7 @@ pub fn InGame(
                         game_state,
                         orders,
                         auto_orders,
+                        submitted_orders,
                         candidate_orders,
                         order_errors,
                         submitting_orders,
