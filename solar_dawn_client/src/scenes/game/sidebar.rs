@@ -2328,6 +2328,12 @@ fn Build(
             option { value: "factory", "Factory" }
             option { value: "armour_plate", "Armour Plate" }
         }
+        if let Some(module_type) = &*selected_type.read() {
+            p {
+                class: "mt-2 mb-2",
+                "Materials required: {module_type.cost()} (0.1t units)"
+            }
+        }
         button {
             class: "btn btn-primary",
             r#type: "button",
