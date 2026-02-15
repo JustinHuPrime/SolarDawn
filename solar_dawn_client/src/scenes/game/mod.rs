@@ -271,10 +271,22 @@ pub fn InGame(
                     };
                     trace!(delta = ?delta);
                     
-                    // If delta contains orders for this player, store them as submitted
+                    // If delta contains orders for this player AND the phase/turn hasn't changed,
+                    // it means we're reconnecting and being sent our current orders
+                    let current_game_state = game_state.read();
                     if let Some(player_orders) = delta.orders.get(&me) {
-                        submitted_orders.set(player_orders.clone());
+                        if delta.phase == current_game_state.phase && delta.turn == current_game_state.turn {
+                            // Reconnection: these are our pending orders for the current phase
+                            submitted_orders.set(player_orders.clone());
+                        } else {
+                            // Phase advance: these are old orders, clear submitted orders
+                            submitted_orders.set(Vec::new());
+                        }
+                    } else {
+                        // No orders in delta, clear submitted orders
+                        submitted_orders.set(Vec::new());
                     }
+                    drop(current_game_state);
                     
                     orders.clear();
                     auto_orders.clear();

@@ -47,7 +47,7 @@ pub fn Sidebar(
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
-    submitted_orders: ReadSignal<Vec<Order>>,
+    submitted_orders: WriteSignal<Vec<Order>>,
     candidate_orders: ReadSignal<Vec<Order>>,
     order_errors: ReadSignal<Vec<Option<OrderError>>>,
     submitting_orders: Signal<bool>,
@@ -122,7 +122,7 @@ pub fn Outliner(
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
-    submitted_orders: ReadSignal<Vec<Order>>,
+    submitted_orders: WriteSignal<Vec<Order>>,
     candidate_orders: ReadSignal<Vec<Order>>,
     order_errors: ReadSignal<Vec<Option<OrderError>>>,
     submitting_orders: Signal<bool>,
@@ -192,6 +192,7 @@ pub fn Outliner(
             disabled: *submitting_orders.read() || order_errors.read().iter().any(|error| error.is_some()),
             onclick: move |_| {
                 submitting_orders.set(true);
+                submitted_orders.set(candidate_orders.read().clone());
                 websocket
                     .send(
                         Message::Binary(
@@ -287,7 +288,7 @@ pub fn OutlinerOrders(
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
-    submitted_orders: ReadSignal<Vec<Order>>,
+    submitted_orders: WriteSignal<Vec<Order>>,
     order_errors: ReadSignal<Vec<Option<OrderError>>>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
