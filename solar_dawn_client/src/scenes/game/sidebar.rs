@@ -40,7 +40,7 @@ use crate::{
     websocket::{Message, WebsocketClient},
 };
 
-/// Helper function to collect modules that are already being transferred from a stack
+/// Helper function to collect modules that are already being transferred from the specified stack
 fn get_transferred_modules(orders: &[Order], stack_id: StackId) -> HashSet<ModuleId> {
     orders
         .iter()
