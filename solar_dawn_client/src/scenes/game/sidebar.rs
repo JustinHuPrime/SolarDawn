@@ -566,6 +566,10 @@ pub fn StackDetails(
         }
     });
 
+    use_drop(move || {
+        click_broker.write().clear();
+    });
+
     let game_state_ref = &*game_state.read();
     let Some(stack) = game_state_ref.stacks.get(&id) else {
         return rsx! {
