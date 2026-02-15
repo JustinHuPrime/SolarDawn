@@ -1248,6 +1248,26 @@ fn ModuleTransfer(
     let mut selected_target = use_signal(|| Option::<StackId>::None);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
+    let transferred_modules = orders
+        .read()
+        .iter()
+        .filter_map(|order| {
+            if let Order::ModuleTransfer {
+                stack: transfer_stack,
+                module,
+                ..
+            } = order
+            {
+                if *transfer_stack == id {
+                    Some(*module)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<HashSet<_>>();
     rsx! {
         select {
             class: "form-select",
@@ -1260,7 +1280,7 @@ fn ModuleTransfer(
                 }
             },
             option { value: "none", "Select module..." }
-            for (module_id , module) in stack.modules.iter() {
+            for (module_id , module) in stack.modules.iter().filter(|(module_id, _)| !transferred_modules.contains(module_id)) {
                 option { value: "{module_id}", "{module}" }
             }
         }
@@ -1319,6 +1339,26 @@ fn ModuleTransferNew(
     let mut selected_target = use_signal(|| Option::<u32>::None);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
+    let transferred_modules = orders
+        .read()
+        .iter()
+        .filter_map(|order| {
+            if let Order::ModuleTransfer {
+                stack: transfer_stack,
+                module,
+                ..
+            } = order
+            {
+                if *transfer_stack == id {
+                    Some(*module)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<HashSet<_>>();
     let mut possible_new_stack_numbers = orders
         .read()
         .iter()
@@ -1375,7 +1415,7 @@ fn ModuleTransferNew(
                 }
             },
             option { value: "none", "Select module..." }
-            for (module_id , module) in stack.modules.iter() {
+            for (module_id , module) in stack.modules.iter().filter(|(module_id, _)| !transferred_modules.contains(module_id)) {
                 option { value: "{module_id}", "{module}" }
             }
         }
@@ -1431,6 +1471,26 @@ fn ResourceTransferFromModule(
     let mut fuel = use_signal(|| 0_u8);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
+    let transferred_modules = orders
+        .read()
+        .iter()
+        .filter_map(|order| {
+            if let Order::ModuleTransfer {
+                stack: transfer_stack,
+                module,
+                ..
+            } = order
+            {
+                if *transfer_stack == id {
+                    Some(*module)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<HashSet<_>>();
     rsx! {
         select {
             class: "form-select",
@@ -1446,8 +1506,8 @@ fn ResourceTransferFromModule(
             for (module_id , module) in stack
                 .modules
                 .iter()
-                .filter(|(_, module)| {
-                    matches!(
+                .filter(|(module_id, module)| {
+                    !transferred_modules.contains(module_id) && matches!(
                         module,
                         Module {
                             health: Health::Intact,
@@ -1587,6 +1647,26 @@ fn ResourceTransferToModule(
     let mut fuel = use_signal(|| 0_u8);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
+    let transferred_modules = orders
+        .read()
+        .iter()
+        .filter_map(|order| {
+            if let Order::ModuleTransfer {
+                stack: transfer_stack,
+                module,
+                ..
+            } = order
+            {
+                if *transfer_stack == id {
+                    Some(*module)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<HashSet<_>>();
     rsx! {
         select {
             class: "form-select",
@@ -1602,8 +1682,8 @@ fn ResourceTransferToModule(
             for (module_id , module) in stack
                 .modules
                 .iter()
-                .filter(|(_, module)| {
-                    matches!(
+                .filter(|(module_id, module)| {
+                    !transferred_modules.contains(module_id) && matches!(
                         module,
                         Module {
                             health: Health::Intact,
@@ -2358,6 +2438,26 @@ fn Salvage(
     let mut selected_module = use_signal(|| Option::<ModuleId>::None);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
+    let transferred_modules = orders
+        .read()
+        .iter()
+        .filter_map(|order| {
+            if let Order::ModuleTransfer {
+                stack: transfer_stack,
+                module,
+                ..
+            } = order
+            {
+                if *transfer_stack == id {
+                    Some(*module)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect::<HashSet<_>>();
     rsx! {
         select {
             class: "form-select",
@@ -2370,7 +2470,7 @@ fn Salvage(
                 }
             },
             option { value: "none", "Select module..." }
-            for (module_id , module) in stack.modules.iter() {
+            for (module_id , module) in stack.modules.iter().filter(|(module_id, _)| !transferred_modules.contains(module_id)) {
                 option { value: "{module_id}", "{module}" }
             }
         }
