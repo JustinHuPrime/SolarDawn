@@ -280,13 +280,26 @@ fn generate_refine_fuel(
         return None;
     }
 
-    let mut orders = vec![Order::Refine {
+    let mut orders = Vec::new();
+
+    // Calculate water needed for refining
+    let water_needed = fuel_to_produce as u32 * ModuleDetails::REFINERY_WATER_PER_FUEL as u32;
+
+    // Generate ResourceTransfer orders to move water from modules to floating pool
+    orders.extend(transfer_water_to_floating_pool(
+        stack_id,
+        &stack.modules,
+        water_needed,
+    ));
+
+    // Generate the Refine order
+    orders.push(Order::Refine {
         stack: stack_id,
         materials: 0,
         fuel: fuel_to_produce,
-    }];
+    });
 
-    // Generate storage orders
+    // Generate storage orders to move fuel from floating pool to modules
     orders.extend(generate_storage_orders(
         stack_id,
         &stack.modules,
@@ -344,13 +357,26 @@ fn generate_refine_materials(
         return None;
     }
 
-    let mut orders = vec![Order::Refine {
+    let mut orders = Vec::new();
+
+    // Calculate ore needed for refining
+    let ore_needed = materials_to_produce as u32 * ModuleDetails::REFINERY_ORE_PER_MATERIAL as u32;
+
+    // Generate ResourceTransfer orders to move ore from modules to floating pool
+    orders.extend(transfer_ore_to_floating_pool(
+        stack_id,
+        &stack.modules,
+        ore_needed,
+    ));
+
+    // Generate the Refine order
+    orders.push(Order::Refine {
         stack: stack_id,
         materials: materials_to_produce,
         fuel: 0,
-    }];
+    });
 
-    // Generate storage orders
+    // Generate storage orders to move materials from floating pool to modules
     orders.extend(generate_storage_orders(
         stack_id,
         &stack.modules,
@@ -448,7 +474,7 @@ fn calculate_materials_storage_capacity(
 }
 
 /// Generate ResourceTransfer orders to store produced resources
-/// 
+///
 /// Storage priority:
 /// 1. Containers that already hold some of the resource
 /// 2. Empty containers
@@ -474,6 +500,70 @@ fn generate_storage_orders(
     }
     if fuel > 0 {
         orders.extend(store_fuel(stack_id, modules, fuel));
+    }
+
+    orders
+}
+
+/// Transfer ore from modules to floating pool
+fn transfer_ore_to_floating_pool(
+    stack_id: StackId,
+    modules: &std::collections::BTreeMap<ModuleId, Module>,
+    mut amount: u32,
+) -> Vec<Order> {
+    let mut orders = Vec::new();
+
+    for (&module_id, module) in modules {
+        if amount == 0 {
+            break;
+        }
+        if let ModuleDetails::CargoHold { ore, .. } = module.details {
+            let to_transfer = (ore as u32).min(amount).min(255);
+            if to_transfer > 0 {
+                orders.push(Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: Some(module_id),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: to_transfer as u8,
+                    water: 0,
+                    materials: 0,
+                    fuel: 0,
+                });
+                amount -= to_transfer;
+            }
+        }
+    }
+
+    orders
+}
+
+/// Transfer water from modules to floating pool
+fn transfer_water_to_floating_pool(
+    stack_id: StackId,
+    modules: &std::collections::BTreeMap<ModuleId, Module>,
+    mut amount: u32,
+) -> Vec<Order> {
+    let mut orders = Vec::new();
+
+    for (&module_id, module) in modules {
+        if amount == 0 {
+            break;
+        }
+        if let ModuleDetails::Tank { water, .. } = module.details {
+            let to_transfer = (water as u32).min(amount).min(255);
+            if to_transfer > 0 {
+                orders.push(Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: Some(module_id),
+                    to: ResourceTransferTarget::FloatingPool,
+                    ore: 0,
+                    water: to_transfer as u8,
+                    materials: 0,
+                    fuel: 0,
+                });
+                amount -= to_transfer;
+            }
+        }
     }
 
     orders
