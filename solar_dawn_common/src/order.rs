@@ -347,7 +347,7 @@ pub struct ResourcePoolResidual {
 
 impl ResourcePoolResidual {
     /// Check if the residual is empty (all zeros)
-    fn empty(&self) -> bool {
+    pub fn empty(&self) -> bool {
         self.ore == 0 && self.materials == 0 && self.water == 0 && self.fuel == 0
     }
 }
