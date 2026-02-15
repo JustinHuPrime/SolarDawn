@@ -421,12 +421,7 @@ fn calculate_water_storage_capacity(
         .values()
         .filter_map(|m| match m.details {
             ModuleDetails::Tank { water, fuel } => {
-                let used = water as i32 + fuel as i32;
-                if used < ModuleDetails::TANK_CAPACITY {
-                    Some((ModuleDetails::TANK_CAPACITY - used) as u32)
-                } else {
-                    Some(0)
-                }
+                Some(ModuleDetails::TANK_CAPACITY.saturating_sub(water as i32 + fuel as i32) as u32)
             }
             _ => None,
         })
@@ -441,12 +436,7 @@ fn calculate_ore_storage_capacity(
         .values()
         .filter_map(|m| match m.details {
             ModuleDetails::CargoHold { ore, materials } => {
-                let used = ore as i32 + materials as i32;
-                if used < ModuleDetails::CARGO_HOLD_CAPACITY {
-                    Some((ModuleDetails::CARGO_HOLD_CAPACITY - used) as u32)
-                } else {
-                    Some(0)
-                }
+                Some(ModuleDetails::CARGO_HOLD_CAPACITY.saturating_sub(ore as i32 + materials as i32) as u32)
             }
             _ => None,
         })
@@ -461,12 +451,7 @@ fn calculate_fuel_storage_capacity(
         .values()
         .filter_map(|m| match m.details {
             ModuleDetails::Tank { water, fuel } => {
-                let used = water as i32 + fuel as i32;
-                if used < ModuleDetails::TANK_CAPACITY {
-                    Some((ModuleDetails::TANK_CAPACITY - used) as u32)
-                } else {
-                    Some(0)
-                }
+                Some(ModuleDetails::TANK_CAPACITY.saturating_sub(water as i32 + fuel as i32) as u32)
             }
             _ => None,
         })
@@ -481,12 +466,7 @@ fn calculate_materials_storage_capacity(
         .values()
         .filter_map(|m| match m.details {
             ModuleDetails::CargoHold { ore, materials } => {
-                let used = ore as i32 + materials as i32;
-                if used < ModuleDetails::CARGO_HOLD_CAPACITY {
-                    Some((ModuleDetails::CARGO_HOLD_CAPACITY - used) as u32)
-                } else {
-                    Some(0)
-                }
+                Some(ModuleDetails::CARGO_HOLD_CAPACITY.saturating_sub(ore as i32 + materials as i32) as u32)
             }
             _ => None,
         })
@@ -603,12 +583,7 @@ fn store_ore(
         }
         if let ModuleDetails::CargoHold { ore, materials } = module.details {
             if ore > 0 {
-                let used = ore as i32 + materials as i32;
-                let capacity = if used < ModuleDetails::CARGO_HOLD_CAPACITY {
-                    (ModuleDetails::CARGO_HOLD_CAPACITY - used) as u32
-                } else {
-                    0
-                };
+                let capacity = ModuleDetails::CARGO_HOLD_CAPACITY.saturating_sub(ore as i32 + materials as i32) as u32;
                 let to_store = capacity.min(amount).min(255);
                 if to_store > 0 {
                     orders.push(Order::ResourceTransfer {
@@ -658,12 +633,7 @@ fn store_ore(
         }
         if let ModuleDetails::CargoHold { ore, materials } = module.details {
             if ore == 0 && materials > 0 {
-                let used = ore as i32 + materials as i32;
-                let capacity = if used < ModuleDetails::CARGO_HOLD_CAPACITY {
-                    (ModuleDetails::CARGO_HOLD_CAPACITY - used) as u32
-                } else {
-                    0
-                };
+                let capacity = ModuleDetails::CARGO_HOLD_CAPACITY.saturating_sub(ore as i32 + materials as i32) as u32;
                 let to_store = capacity.min(amount).min(255);
                 if to_store > 0 {
                     orders.push(Order::ResourceTransfer {
@@ -698,12 +668,7 @@ fn store_water(
         }
         if let ModuleDetails::Tank { water, fuel } = module.details {
             if water > 0 {
-                let used = water as i32 + fuel as i32;
-                let capacity = if used < ModuleDetails::TANK_CAPACITY {
-                    (ModuleDetails::TANK_CAPACITY - used) as u32
-                } else {
-                    0
-                };
+                let capacity = ModuleDetails::TANK_CAPACITY.saturating_sub(water as i32 + fuel as i32) as u32;
                 let to_store = capacity.min(amount).min(255);
                 if to_store > 0 {
                     orders.push(Order::ResourceTransfer {
@@ -753,12 +718,7 @@ fn store_water(
         }
         if let ModuleDetails::Tank { water, fuel } = module.details {
             if water == 0 && fuel > 0 {
-                let used = water as i32 + fuel as i32;
-                let capacity = if used < ModuleDetails::TANK_CAPACITY {
-                    (ModuleDetails::TANK_CAPACITY - used) as u32
-                } else {
-                    0
-                };
+                let capacity = ModuleDetails::TANK_CAPACITY.saturating_sub(water as i32 + fuel as i32) as u32;
                 let to_store = capacity.min(amount).min(255);
                 if to_store > 0 {
                     orders.push(Order::ResourceTransfer {
@@ -793,12 +753,7 @@ fn store_materials(
         }
         if let ModuleDetails::CargoHold { ore, materials } = module.details {
             if materials > 0 {
-                let used = ore as i32 + materials as i32;
-                let capacity = if used < ModuleDetails::CARGO_HOLD_CAPACITY {
-                    (ModuleDetails::CARGO_HOLD_CAPACITY - used) as u32
-                } else {
-                    0
-                };
+                let capacity = ModuleDetails::CARGO_HOLD_CAPACITY.saturating_sub(ore as i32 + materials as i32) as u32;
                 let to_store = capacity.min(amount).min(255);
                 if to_store > 0 {
                     orders.push(Order::ResourceTransfer {
@@ -848,12 +803,7 @@ fn store_materials(
         }
         if let ModuleDetails::CargoHold { ore, materials } = module.details {
             if materials == 0 && ore > 0 {
-                let used = ore as i32 + materials as i32;
-                let capacity = if used < ModuleDetails::CARGO_HOLD_CAPACITY {
-                    (ModuleDetails::CARGO_HOLD_CAPACITY - used) as u32
-                } else {
-                    0
-                };
+                let capacity = ModuleDetails::CARGO_HOLD_CAPACITY.saturating_sub(ore as i32 + materials as i32) as u32;
                 let to_store = capacity.min(amount).min(255);
                 if to_store > 0 {
                     orders.push(Order::ResourceTransfer {
@@ -888,12 +838,7 @@ fn store_fuel(
         }
         if let ModuleDetails::Tank { water, fuel } = module.details {
             if fuel > 0 {
-                let used = water as i32 + fuel as i32;
-                let capacity = if used < ModuleDetails::TANK_CAPACITY {
-                    (ModuleDetails::TANK_CAPACITY - used) as u32
-                } else {
-                    0
-                };
+                let capacity = ModuleDetails::TANK_CAPACITY.saturating_sub(water as i32 + fuel as i32) as u32;
                 let to_store = capacity.min(amount).min(255);
                 if to_store > 0 {
                     orders.push(Order::ResourceTransfer {
@@ -943,12 +888,7 @@ fn store_fuel(
         }
         if let ModuleDetails::Tank { water, fuel } = module.details {
             if fuel == 0 && water > 0 {
-                let used = water as i32 + fuel as i32;
-                let capacity = if used < ModuleDetails::TANK_CAPACITY {
-                    (ModuleDetails::TANK_CAPACITY - used) as u32
-                } else {
-                    0
-                };
+                let capacity = ModuleDetails::TANK_CAPACITY.saturating_sub(water as i32 + fuel as i32) as u32;
                 let to_store = capacity.min(amount).min(255);
                 if to_store > 0 {
                     orders.push(Order::ResourceTransfer {
