@@ -418,6 +418,8 @@ pub enum OrderError {
     NewStackStateConflict,
     /// Not enough modules to support the wanted order
     NotEnoughModules,
+    /// Mining limit exceeded for a minor body (asteroid/KBO)
+    MinorBodyMiningLimitExceeded,
     /// Residual (either positive or negative) left in the resource pool
     ResourcePoolResidual(StackId),
     /// Too many resources moved into module
@@ -490,6 +492,9 @@ impl OrderError {
             }
             OrderError::NotEnoughModules => {
                 "not enough capacity for all orders of this type".to_owned()
+            }
+            OrderError::MinorBodyMiningLimitExceeded => {
+                "minor body mining limit exceeded - minor bodies can only support one miner's worth of production (10 tonnes/turn) globally".to_owned()
             }
             OrderError::ResourcePoolResidual(stack_id) => format!(
                 "resource pool for {} is not empty at end of turn",
@@ -961,6 +966,51 @@ impl Order {
                     if orders.len() > factory_count {
                         for order in orders {
                             *order = Err(OrderError::NotEnoughModules);
+                        }
+                    }
+                }
+
+                // aggregate check for minor body mining limits
+                // Minor bodies (asteroids, KBOs) can only support one miner's worth of production (100 units = 10 tonnes) globally
+                let mut minor_body_mining: HashMap<CelestialId, u32> = HashMap::new();
+                let mut minor_body_mining_orders: HashMap<
+                    CelestialId,
+                    Vec<&mut Result<&Order, OrderError>>,
+                > = HashMap::new();
+                for (_, orders) in orders.iter_mut() {
+                    for order in orders.iter_mut() {
+                        if let Ok(Order::Isru {
+                            stack,
+                            ore,
+                            water,
+                            ..
+                        }) = order
+                        {
+                            // Only check for mining (ore + water), not skimming (fuel)
+                            let mining_amount = *ore + *water;
+                            if mining_amount > 0 {
+                                let stack_ref = &game_state.stacks[stack];
+                                if let Some((celestial_id, celestial)) =
+                                    game_state.celestials.get_by_position(stack_ref.position)
+                                    && celestial.is_minor
+                                {
+                                    *minor_body_mining.entry(celestial_id).or_default() +=
+                                        mining_amount;
+                                    minor_body_mining_orders
+                                        .entry(celestial_id)
+                                        .or_default()
+                                        .push(order);
+                                }
+                            }
+                        }
+                    }
+                }
+                for (celestial_id, total_mining) in minor_body_mining {
+                    if total_mining > ModuleDetails::MINER_PRODUCTION_RATE
+                        && let Some(orders) = minor_body_mining_orders.get_mut(&celestial_id)
+                    {
+                        for order in orders {
+                            **order = Err(OrderError::MinorBodyMiningLimitExceeded);
                         }
                     }
                 }
@@ -4813,5 +4863,259 @@ mod tests {
         let (_, errors) = Order::validate(&game_state, &orders);
         let error = errors[&player_1][0].unwrap();
         assert!(matches!(error, OrderError::NoHab));
+    }
+
+    #[test]
+    fn test_minor_body_mining_limit() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let player_2 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            BTreeMap::from([
+                (player_1, "player 1".to_owned()),
+                (player_2, "player 2".to_owned()),
+            ]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+            &mut rng(),
+        );
+        game_state.phase = Phase::Logistics;
+
+        // Create a minor body (asteroid) for mining
+        let minor_body = celestial_id_generator.next().unwrap();
+        let mut celestials: HashMap<CelestialId, Celestial> =
+            Arc::into_inner(game_state.celestials).unwrap().into();
+        celestials.insert(
+            minor_body,
+            Celestial {
+                position: Vec2 { q: 5, r: 5 },
+                name: "Asteroid".to_owned(),
+                orbit_gravity: false,
+                surface_gravity: 0.0,
+                resources: Resources::MiningBoth,
+                radius: 0.05,
+                colour: "#888888".to_owned(),
+                is_minor: true, // This is a minor body
+            },
+        );
+        game_state.celestials = Arc::new(celestials.into());
+
+        // Create stack for player 1 on the minor body
+        let stack_1 = stack_id_generator.next().unwrap();
+        let miner_1 = module_id_generator.next().unwrap();
+        let mut stack_1_data = Stack::new(Vec2 { q: 5, r: 5 }, Vec2::zero(), player_1, "Player 1 Stack".to_owned());
+        stack_1_data.modules.insert(miner_1, Module::new_miner());
+        game_state.stacks.insert(stack_1, stack_1_data);
+
+        // Create stack for player 2 on the same minor body
+        let stack_2 = stack_id_generator.next().unwrap();
+        let miner_2 = module_id_generator.next().unwrap();
+        let mut stack_2_data = Stack::new(Vec2 { q: 5, r: 5 }, Vec2::zero(), player_2, "Player 2 Stack".to_owned());
+        stack_2_data.modules.insert(miner_2, Module::new_miner());
+        game_state.stacks.insert(stack_2, stack_2_data);
+
+        // Test 1: Mining exactly the limit (100 units) should succeed
+        let orders = HashMap::from([
+            (
+                player_1,
+                vec![
+                    Order::Isru {
+                        stack: stack_1,
+                        ore: 50,
+                        water: 0,
+                        fuel: 0,
+                    },
+                    Order::ResourceTransfer {
+                        stack: stack_1,
+                        from: None,
+                        to: ResourceTransferTarget::Jettison,
+                        ore: 50,
+                        materials: 0,
+                        water: 0,
+                        fuel: 0,
+                    },
+                ],
+            ),
+            (
+                player_2,
+                vec![
+                    Order::Isru {
+                        stack: stack_2,
+                        ore: 0,
+                        water: 50,
+                        fuel: 0,
+                    },
+                    Order::ResourceTransfer {
+                        stack: stack_2,
+                        from: None,
+                        to: ResourceTransferTarget::Jettison,
+                        ore: 0,
+                        materials: 0,
+                        water: 50,
+                        fuel: 0,
+                    },
+                ],
+            ),
+        ]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(
+            errors[&player_1][0].is_none(),
+            "Mining at the limit should succeed for player 1"
+        );
+        assert!(
+            errors[&player_2][0].is_none(),
+            "Mining at the limit should succeed for player 2"
+        );
+
+        // Test 2: Exceeding the limit (101 units total) should fail
+        let orders = HashMap::from([
+            (
+                player_1,
+                vec![
+                    Order::Isru {
+                        stack: stack_1,
+                        ore: 51,
+                        water: 0,
+                        fuel: 0,
+                    },
+                    Order::ResourceTransfer {
+                        stack: stack_1,
+                        from: None,
+                        to: ResourceTransferTarget::Jettison,
+                        ore: 51,
+                        materials: 0,
+                        water: 0,
+                        fuel: 0,
+                    },
+                ],
+            ),
+            (
+                player_2,
+                vec![
+                    Order::Isru {
+                        stack: stack_2,
+                        ore: 0,
+                        water: 50,
+                        fuel: 0,
+                    },
+                    Order::ResourceTransfer {
+                        stack: stack_2,
+                        from: None,
+                        to: ResourceTransferTarget::Jettison,
+                        ore: 0,
+                        materials: 0,
+                        water: 50,
+                        fuel: 0,
+                    },
+                ],
+            ),
+        ]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(
+            errors[&player_1][0].is_some(),
+            "Mining over the limit should fail"
+        );
+        assert!(
+            matches!(
+                errors[&player_1][0].unwrap(),
+                OrderError::MinorBodyMiningLimitExceeded
+            ),
+            "Should get MinorBodyMiningLimitExceeded error"
+        );
+        assert!(
+            errors[&player_2][0].is_some(),
+            "Both players' orders should fail when limit exceeded"
+        );
+        assert!(
+            matches!(
+                errors[&player_2][0].unwrap(),
+                OrderError::MinorBodyMiningLimitExceeded
+            ),
+            "Should get MinorBodyMiningLimitExceeded error"
+        );
+
+        // Test 3: Non-minor bodies should not have this limit
+        let major_body = celestial_id_generator.next().unwrap();
+        let mut celestials: HashMap<CelestialId, Celestial> =
+            Arc::into_inner(game_state.celestials).unwrap().into();
+        celestials.insert(
+            major_body,
+            Celestial {
+                position: Vec2 { q: 10, r: 10 },
+                name: "Planet".to_owned(),
+                orbit_gravity: true,
+                surface_gravity: 9.8,
+                resources: Resources::MiningBoth,
+                radius: 0.3,
+                colour: "#0000FF".to_owned(),
+                is_minor: false, // This is NOT a minor body
+            },
+        );
+        game_state.celestials = Arc::new(celestials.into());
+
+        // Move stacks to the major body
+        game_state.stacks.get_mut(&stack_1).unwrap().position = Vec2 { q: 10, r: 10 };
+        game_state.stacks.get_mut(&stack_2).unwrap().position = Vec2 { q: 10, r: 10 };
+
+        // Test mining on a non-minor body with more than 100 units total
+        let orders = HashMap::from([
+            (
+                player_1,
+                vec![
+                    Order::Isru {
+                        stack: stack_1,
+                        ore: 100,
+                        water: 0,
+                        fuel: 0,
+                    },
+                    Order::ResourceTransfer {
+                        stack: stack_1,
+                        from: None,
+                        to: ResourceTransferTarget::Jettison,
+                        ore: 100,
+                        materials: 0,
+                        water: 0,
+                        fuel: 0,
+                    },
+                ],
+            ),
+            (
+                player_2,
+                vec![
+                    Order::Isru {
+                        stack: stack_2,
+                        ore: 0,
+                        water: 100,
+                        fuel: 0,
+                    },
+                    Order::ResourceTransfer {
+                        stack: stack_2,
+                        from: None,
+                        to: ResourceTransferTarget::Jettison,
+                        ore: 0,
+                        materials: 0,
+                        water: 100,
+                        fuel: 0,
+                    },
+                ],
+            ),
+        ]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        assert!(
+            errors[&player_1][0].is_none(),
+            "Mining on non-minor body should not be limited"
+        );
+        assert!(
+            errors[&player_2][0].is_none(),
+            "Mining on non-minor body should not be limited"
+        );
     }
 }
