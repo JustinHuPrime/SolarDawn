@@ -1484,7 +1484,7 @@ fn ResourceTransferFromModule(
                                     ore.set(e.value().parse::<u8>().unwrap());
                                 },
                             }
-                            output { "{*ore.read() as f32 / 10.0:.1}t" }
+                            output { "{*ore.read() as f32 / 10.0:.1}t (available: {*max_ore as f32 / 10.0:.1}t)" }
                             br {}
                             label { r#for: "materials", class: "form-label", "Materials" }
                             input {
@@ -1498,7 +1498,7 @@ fn ResourceTransferFromModule(
                                     materials.set(e.value().parse::<u8>().unwrap());
                                 },
                             }
-                            output { "{*materials.read() as f32 / 10.0:.1}t" }
+                            output { "{*materials.read() as f32 / 10.0:.1}t (available: {*max_materials as f32 / 10.0:.1}t)" }
                             br {}
                         }
                     }
@@ -1519,7 +1519,7 @@ fn ResourceTransferFromModule(
                                     water.set(e.value().parse::<u8>().unwrap());
                                 },
                             }
-                            output { "{*water.read() as f32 / 10.0:.1}t" }
+                            output { "{*water.read() as f32 / 10.0:.1}t (available: {*max_water as f32 / 10.0:.1}t)" }
                             br {}
                             label { r#for: "fuel", class: "form-label", "Fuel" }
                             input {
@@ -1533,7 +1533,7 @@ fn ResourceTransferFromModule(
                                     fuel.set(e.value().parse::<u8>().unwrap());
                                 },
                             }
-                            output { "{*fuel.read() as f32 / 10.0:.1}t" }
+                            output { "{*fuel.read() as f32 / 10.0:.1}t (available: {*max_fuel as f32 / 10.0:.1}t)" }
                             br {}
                         }
                     }
