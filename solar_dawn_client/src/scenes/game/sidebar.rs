@@ -228,8 +228,7 @@ pub fn OutlinerOverview(
         }
         div {
             id: "your-stacks-section",
-            class: "collapse",
-            class: if !your_stacks_collapsed() { "show" },
+            class: if !your_stacks_collapsed() { "collapse show" } else { "collapse" },
             p {
                 for (& stack_id , stack) in game_state.stacks.iter().filter(|(_, stack)| stack.owner == me) {
                     {
@@ -265,8 +264,7 @@ pub fn OutlinerOverview(
         }
         div {
             id: "major-bodies-section",
-            class: "collapse",
-            class: if !major_bodies_collapsed() { "show" },
+            class: if !major_bodies_collapsed() { "collapse show" } else { "collapse" },
             p {
                 for & celestial_id in game_state.celestials.majors().iter() {
                     {
@@ -303,8 +301,7 @@ pub fn OutlinerOverview(
         }
         div {
             id: "other-stacks-section",
-            class: "collapse",
-            class: if !other_stacks_collapsed() { "show" },
+            class: if !other_stacks_collapsed() { "collapse show" } else { "collapse" },
             p {
                 for (& stack_id , stack) in game_state.stacks.iter().filter(|(_, stack)| stack.owner != me) {
                     {
@@ -358,8 +355,7 @@ pub fn OutlinerOrders(
         }
         div {
             id: "orders-section",
-            class: "collapse",
-            class: if !orders_collapsed() { "show" },
+            class: if !orders_collapsed() { "collapse show" } else { "collapse" },
             p {
                 for (index , order) in orders.read().iter().enumerate() {
                     Fragment { key: "{index}:{order:?}",
@@ -395,8 +391,7 @@ pub fn OutlinerOrders(
         }
         div {
             id: "auto-orders-section",
-            class: "collapse",
-            class: if !auto_orders_collapsed() { "show" },
+            class: if !auto_orders_collapsed() { "collapse show" } else { "collapse" },
             p {
                 for (index , (order , enabled)) in auto_orders.read().iter().enumerate() {
                     Fragment { key: "{index}:{order:?}",
@@ -456,8 +451,7 @@ pub fn OutlinerSettings(
         }
         div {
             id: "icon-settings-section",
-            class: "collapse",
-            class: if !icon_settings_collapsed() { "show" },
+            class: if !icon_settings_collapsed() { "collapse show" } else { "collapse" },
             table { class: "table",
                 thead {
                     tr {
