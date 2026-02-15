@@ -2331,7 +2331,13 @@ fn Build(
         if let Some(module_type) = &*selected_type.read() {
             p {
                 class: "mt-2 mb-2",
-                "Materials required: {module_type.cost() / 10} tonnes"
+                { 
+                    let cost_tonnes = module_type.cost() / 10;
+                    format!("Materials required: {} {}", 
+                        cost_tonnes,
+                        if cost_tonnes == 1 { "tonne" } else { "tonnes" }
+                    )
+                }
             }
         }
         button {
