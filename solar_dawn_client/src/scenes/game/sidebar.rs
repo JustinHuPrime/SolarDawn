@@ -40,6 +40,29 @@ use crate::{
     websocket::{Message, WebsocketClient},
 };
 
+/// Helper function to collect modules that are already being transferred from a stack
+fn get_transferred_modules(orders: &[Order], stack_id: StackId) -> HashSet<ModuleId> {
+    orders
+        .iter()
+        .filter_map(|order| {
+            if let Order::ModuleTransfer {
+                stack: transfer_stack,
+                module,
+                ..
+            } = order
+            {
+                if *transfer_stack == stack_id {
+                    Some(*module)
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 #[component]
 pub fn Sidebar(
     me: PlayerId,
@@ -1248,26 +1271,7 @@ fn ModuleTransfer(
     let mut selected_target = use_signal(|| Option::<StackId>::None);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
-    let transferred_modules = orders
-        .read()
-        .iter()
-        .filter_map(|order| {
-            if let Order::ModuleTransfer {
-                stack: transfer_stack,
-                module,
-                ..
-            } = order
-            {
-                if *transfer_stack == id {
-                    Some(*module)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<HashSet<_>>();
+    let transferred_modules = get_transferred_modules(&orders.read(), id);
     rsx! {
         select {
             class: "form-select",
@@ -1339,26 +1343,7 @@ fn ModuleTransferNew(
     let mut selected_target = use_signal(|| Option::<u32>::None);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
-    let transferred_modules = orders
-        .read()
-        .iter()
-        .filter_map(|order| {
-            if let Order::ModuleTransfer {
-                stack: transfer_stack,
-                module,
-                ..
-            } = order
-            {
-                if *transfer_stack == id {
-                    Some(*module)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<HashSet<_>>();
+    let transferred_modules = get_transferred_modules(&orders.read(), id);
     let mut possible_new_stack_numbers = orders
         .read()
         .iter()
@@ -1471,26 +1456,7 @@ fn ResourceTransferFromModule(
     let mut fuel = use_signal(|| 0_u8);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
-    let transferred_modules = orders
-        .read()
-        .iter()
-        .filter_map(|order| {
-            if let Order::ModuleTransfer {
-                stack: transfer_stack,
-                module,
-                ..
-            } = order
-            {
-                if *transfer_stack == id {
-                    Some(*module)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<HashSet<_>>();
+    let transferred_modules = get_transferred_modules(&orders.read(), id);
     rsx! {
         select {
             class: "form-select",
@@ -1506,8 +1472,9 @@ fn ResourceTransferFromModule(
             for (module_id , module) in stack
                 .modules
                 .iter()
-                .filter(|(module_id, module)| {
-                    !transferred_modules.contains(module_id) && matches!(
+                .filter(|(module_id, _)| !transferred_modules.contains(module_id))
+                .filter(|(_, module)| {
+                    matches!(
                         module,
                         Module {
                             health: Health::Intact,
@@ -1647,26 +1614,7 @@ fn ResourceTransferToModule(
     let mut fuel = use_signal(|| 0_u8);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
-    let transferred_modules = orders
-        .read()
-        .iter()
-        .filter_map(|order| {
-            if let Order::ModuleTransfer {
-                stack: transfer_stack,
-                module,
-                ..
-            } = order
-            {
-                if *transfer_stack == id {
-                    Some(*module)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<HashSet<_>>();
+    let transferred_modules = get_transferred_modules(&orders.read(), id);
     rsx! {
         select {
             class: "form-select",
@@ -1682,8 +1630,9 @@ fn ResourceTransferToModule(
             for (module_id , module) in stack
                 .modules
                 .iter()
-                .filter(|(module_id, module)| {
-                    !transferred_modules.contains(module_id) && matches!(
+                .filter(|(module_id, _)| !transferred_modules.contains(module_id))
+                .filter(|(_, module)| {
+                    matches!(
                         module,
                         Module {
                             health: Health::Intact,
@@ -2438,26 +2387,7 @@ fn Salvage(
     let mut selected_module = use_signal(|| Option::<ModuleId>::None);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
-    let transferred_modules = orders
-        .read()
-        .iter()
-        .filter_map(|order| {
-            if let Order::ModuleTransfer {
-                stack: transfer_stack,
-                module,
-                ..
-            } = order
-            {
-                if *transfer_stack == id {
-                    Some(*module)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        })
-        .collect::<HashSet<_>>();
+    let transferred_modules = get_transferred_modules(&orders.read(), id);
     rsx! {
         select {
             class: "form-select",
