@@ -494,7 +494,7 @@ impl OrderError {
                 "not enough capacity for all orders of this type".to_owned()
             }
             OrderError::MinorBodyMiningLimitExceeded => {
-                "minor body mining limit exceeded - minor bodies can only support one miner's worth of production (10 tonnes/turn) globally".to_owned()
+                "minor body mining limit exceeded - minor bodies can only support one miner's worth of production (10 tonnes/turn = 100 units) globally".to_owned()
             }
             OrderError::ResourcePoolResidual(stack_id) => format!(
                 "resource pool for {} is not empty at end of turn",
@@ -1006,6 +1006,7 @@ impl Order {
                     }
                 }
                 for (celestial_id, total_mining) in minor_body_mining {
+                    // Check if total mining exceeds the limit (MINER_PRODUCTION_RATE = 100 units = 10 tonnes)
                     if total_mining > ModuleDetails::MINER_PRODUCTION_RATE
                         && let Some(orders) = minor_body_mining_orders.get_mut(&celestial_id)
                     {
