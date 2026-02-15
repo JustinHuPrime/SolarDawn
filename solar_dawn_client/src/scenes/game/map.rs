@@ -182,13 +182,25 @@ pub fn Map(
             .map(|(order, _)| order)
             .chain(orders.iter())
         {
+            // Filter orders based on declutter mode
+            if let Some(declutter_stack) = client_view_settings.declutter_stack
+                && !order.involves_stack(declutter_stack)
+            {
+                continue;
+            }
             draw_order(&ctx, order, game_state);
         }
 
         let client_game_settings = &*client_game_settings.read();
 
         let mut stacks_by_position = HashMap::<Vec2<i32>, Vec<&Stack>>::new();
-        for stack in game_state.stacks.values() {
+        for (&stack_id, stack) in game_state.stacks.iter() {
+            // Filter stacks based on declutter mode
+            if let Some(declutter_stack) = client_view_settings.declutter_stack
+                && stack_id != declutter_stack
+            {
+                continue;
+            }
             if stack.velocity.norm() != 0 {
                 draw_arrow(
                     &ctx,

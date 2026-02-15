@@ -1774,6 +1774,38 @@ impl Order {
         Ok(())
     }
 
+    /// Returns true if this order involves the given stack
+    #[cfg(feature = "client")]
+    pub fn involves_stack(&self, stack_id: StackId) -> bool {
+        match self {
+            Order::NameStack { stack, .. } => *stack == stack_id,
+            Order::ModuleTransfer { stack, to, .. } => {
+                *stack == stack_id
+                    || matches!(to, ModuleTransferTarget::Existing(target) if *target == stack_id)
+            }
+            Order::Board { stack, target } => *stack == stack_id || *target == stack_id,
+            Order::Isru { stack, .. } => *stack == stack_id,
+            Order::ResourceTransfer { stack, to, .. } => {
+                *stack == stack_id
+                    || matches!(to, ResourceTransferTarget::Stack(target) if *target == stack_id)
+            }
+            Order::Repair {
+                stack,
+                target_stack,
+                ..
+            } => *stack == stack_id || *target_stack == stack_id,
+            Order::Refine { stack, .. } => *stack == stack_id,
+            Order::Build { stack, .. } => *stack == stack_id,
+            Order::Salvage { stack, .. } => *stack == stack_id,
+            Order::Shoot { stack, target, .. } => *stack == stack_id || *target == stack_id,
+            Order::Arm { stack, .. } => *stack == stack_id,
+            Order::Burn { stack, .. } => *stack == stack_id,
+            Order::OrbitAdjust { stack, .. } => *stack == stack_id,
+            Order::Land { stack, .. } => *stack == stack_id,
+            Order::TakeOff { stack, .. } => *stack == stack_id,
+        }
+    }
+
     /// apply order to stacks state
     ///
     /// note: internal-only; call only on validated orders

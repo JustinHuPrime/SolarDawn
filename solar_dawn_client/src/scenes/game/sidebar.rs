@@ -459,6 +459,7 @@ pub fn CelestialDetails(
                                 x_offset: -position.x,
                                 y_offset: -position.y,
                                 zoom_level: 0,
+                                declutter_stack: None,
                             })
                     }
                 },
@@ -560,6 +561,14 @@ pub fn StackDetails(
 ) -> Element {
     let mut draft_order = use_signal(|| DraftOrder::None);
 
+    // Clear declutter mode when leaving stack details
+    use_drop(move || {
+        let mut settings = client_view_settings.write();
+        if settings.declutter_stack == Some(id) {
+            settings.declutter_stack = None;
+        }
+    });
+
     let game_state_ref = &*game_state.read();
     let Some(stack) = game_state_ref.stacks.get(&id) else {
         return rsx! {
@@ -582,10 +591,29 @@ pub fn StackDetails(
                                 x_offset: -position.x,
                                 y_offset: -position.y,
                                 zoom_level: 0,
+                                declutter_stack: None,
                             })
                     }
                 },
                 "Go To"
+            }
+            " "
+            button {
+                r#type: "button",
+                class: "btn btn-secondary btn-sm regular-font",
+                onclick: move |_| {
+                    let mut settings = client_view_settings.write();
+                    if settings.declutter_stack == Some(id) {
+                        settings.declutter_stack = None;
+                    } else {
+                        settings.declutter_stack = Some(id);
+                    }
+                },
+                if client_view_settings.read().declutter_stack == Some(id) {
+                    "Show All"
+                } else {
+                    "Declutter"
+                }
             }
         }
         p {
