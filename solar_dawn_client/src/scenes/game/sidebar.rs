@@ -2331,7 +2331,7 @@ fn Build(
         if let Some(module_type) = &*selected_type.read() {
             p {
                 class: "mt-2 mb-2",
-                "Materials required: {module_type.cost()} (0.1t units)"
+                "Materials required: {module_type.cost() / 10} tonnes"
             }
         }
         button {
