@@ -10,7 +10,7 @@ license = "AGPL-3.0-or-later"
 
 [dependencies]
 base64 = "0.22.1"
-dioxus = { version = "0.7.2", features = ["web"] }
+dioxus = { version = "0.7.3", features = ["web"] }
 futures = "0.3.31"
 serde = { workspace = true }
 serde_cbor = { workspace = true }
