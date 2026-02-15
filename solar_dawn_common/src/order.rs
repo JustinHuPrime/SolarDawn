@@ -1007,6 +1007,7 @@ impl Order {
                 }
                 for (celestial_id, total_mining) in minor_body_mining {
                     // Check if total mining exceeds the limit (MINER_PRODUCTION_RATE = 100 units = 10 tonnes)
+                    // Using > (not >=) because we allow exactly 1 miner's worth, but not more than that
                     if total_mining > ModuleDetails::MINER_PRODUCTION_RATE
                         && let Some(orders) = minor_body_mining_orders.get_mut(&celestial_id)
                     {
