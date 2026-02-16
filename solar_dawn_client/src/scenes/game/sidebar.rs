@@ -2765,6 +2765,10 @@ fn OrbitAdjust(
             "Select Position"
         }
         br {}
+        if let Some(position) = *selected_position.read() {
+            output { "Selected hex: ({position.q}, {position.r})" }
+            br {}
+        }
         label { r#for: "clockwise", class: "form-check-label", "Clockwise" }
         input {
             r#type: "checkbox",
@@ -2971,6 +2975,10 @@ fn TakeOff(
             "Select Destination"
         }
         br {}
+        if let Some(position) = *selected_position.read() {
+            output { "Selected hex: ({position.q}, {position.r})" }
+            br {}
+        }
         label { r#for: "clockwise", class: "form-check-label", "Clockwise" }
         input {
             r#type: "checkbox",
