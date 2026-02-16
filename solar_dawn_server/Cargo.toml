@@ -17,7 +17,7 @@ futures-util = "0.3.31"
 num-traits = "0.2.19"
 rand = { workspace = true, features = ["serde"] }
 rand_distr = "0.5.1"
-rand_pcg = { version = "0.9.0", features = ["serde"] }
+rand_pcg = { version = "0.10.1", features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_cbor = { workspace = true }
 solar_dawn_common = { path = "../solar_dawn_common", features = ["server"] }
