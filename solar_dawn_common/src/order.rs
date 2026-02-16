@@ -331,6 +331,27 @@ impl Display for ModuleType {
     }
 }
 
+/// Resource pool residual
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "client", derive(PartialEq, Eq))]
+pub struct ResourcePoolResidual {
+    /// Ore residual (positive = surplus, negative = deficit)
+    pub ore: i32,
+    /// Materials residual (positive = surplus, negative = deficit)
+    pub materials: i32,
+    /// Water residual (positive = surplus, negative = deficit)
+    pub water: i32,
+    /// Fuel residual (positive = surplus, negative = deficit)
+    pub fuel: i32,
+}
+
+impl ResourcePoolResidual {
+    /// Check if the residual is empty (all zeros)
+    pub fn empty(&self) -> bool {
+        self.ore == 0 && self.materials == 0 && self.water == 0 && self.fuel == 0
+    }
+}
+
 /// Why an order could not be applied
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[cfg_attr(feature = "client", derive(PartialEq, Eq))]
@@ -419,7 +440,7 @@ pub enum OrderError {
     /// Not enough modules to support the wanted order
     NotEnoughModules,
     /// Residual (either positive or negative) left in the resource pool
-    ResourcePoolResidual(StackId),
+    ResourcePoolResidual(StackId, ResourcePoolResidual),
     /// Too many resources moved into module
     NotEnoughCapacity(StackId, ModuleId),
     /// Ordered to move multiple ways
@@ -491,10 +512,39 @@ impl OrderError {
             OrderError::NotEnoughModules => {
                 "not enough capacity for all orders of this type".to_owned()
             }
-            OrderError::ResourcePoolResidual(stack_id) => format!(
-                "resource pool for {} is not empty at end of turn",
-                game_state.stacks[stack_id].name
-            ),
+            OrderError::ResourcePoolResidual(stack_id, residual) => {
+                let mut parts = Vec::new();
+                
+                if residual.ore > 0 {
+                    parts.push(format!("surplus of {} t of ore", residual.ore));
+                } else if residual.ore < 0 {
+                    parts.push(format!("deficit of {} t of ore", -residual.ore));
+                }
+                
+                if residual.materials > 0 {
+                    parts.push(format!("surplus of {} t of materials", residual.materials));
+                } else if residual.materials < 0 {
+                    parts.push(format!("deficit of {} t of materials", -residual.materials));
+                }
+                
+                if residual.water > 0 {
+                    parts.push(format!("surplus of {} t of water", residual.water));
+                } else if residual.water < 0 {
+                    parts.push(format!("deficit of {} t of water", -residual.water));
+                }
+                
+                if residual.fuel > 0 {
+                    parts.push(format!("surplus of {} t of fuel", residual.fuel));
+                } else if residual.fuel < 0 {
+                    parts.push(format!("deficit of {} t of fuel", -residual.fuel));
+                }
+                
+                format!(
+                    "resource pool for {} has {}",
+                    game_state.stacks[stack_id].name,
+                    parts.join(", ")
+                )
+            }
             OrderError::NotEnoughCapacity(stack_id, module_id) => format!(
                 "attempted to fill {} on {} beyond capacity",
                 game_state.stacks[stack_id].modules[module_id], game_state.stacks[stack_id].name
@@ -966,21 +1016,8 @@ impl Order {
                 }
 
                 // third, check for resource movement validity
-                #[derive(Default)]
-                struct Resources {
-                    ore: i32,
-                    materials: i32,
-                    water: i32,
-                    fuel: i32,
-                }
-                impl Resources {
-                    fn empty(&self) -> bool {
-                        self.ore == 0 && self.materials == 0 && self.water == 0 && self.fuel == 0
-                    }
-                }
-
-                let mut resource_pools: HashMap<(PlayerId, StackId), Resources> = HashMap::new();
-                let mut storage_deltas: HashMap<(PlayerId, StackId, ModuleId), Resources> =
+                let mut resource_pools: HashMap<(PlayerId, StackId), ResourcePoolResidual> = HashMap::new();
+                let mut storage_deltas: HashMap<(PlayerId, StackId, ModuleId), ResourcePoolResidual> =
                     HashMap::new();
                 let mut orders_by_player: HashMap<PlayerId, Vec<&mut Result<&Order, OrderError>>> =
                     HashMap::new();
@@ -1151,7 +1188,7 @@ impl Order {
                 for ((player, stack), delta) in resource_pools {
                     if !delta.empty() {
                         for order in orders_by_player.get_mut(&player).unwrap().iter_mut() {
-                            **order = Err(OrderError::ResourcePoolResidual(stack))
+                            **order = Err(OrderError::ResourcePoolResidual(stack, delta))
                         }
                         break;
                     }
@@ -3214,6 +3251,83 @@ mod tests {
             errors[&player_1][0].is_none(),
             "Valid fuel skimming should succeed"
         );
+    }
+
+    #[test]
+    fn test_resource_pool_residual_display() {
+        // setup game state
+        let mut player_id_generator = ShortIdGen::<PlayerId>::new();
+        let mut celestial_id_generator = LongIdGen::<CelestialId>::new();
+        let mut stack_id_generator = LongIdGen::<StackId>::new();
+        let mut module_id_generator = LongIdGen::<ModuleId>::new();
+        let player_1 = player_id_generator.next().unwrap();
+        let mut game_state = (GameState::new("test").unwrap())(
+            BTreeMap::from([(player_1, "player 1".to_owned())]),
+            &mut celestial_id_generator,
+            &mut stack_id_generator,
+            &mut module_id_generator,
+            &mut rng(),
+        );
+        game_state.phase = Phase::Logistics;
+
+        // Create a mining world and set up a stack there
+        let mining_world = celestial_id_generator.next().unwrap();
+        let mut celestials: HashMap<CelestialId, Celestial> =
+            Arc::into_inner(game_state.celestials).unwrap().into();
+        celestials.insert(
+            mining_world,
+            Celestial {
+                position: Vec2 { q: 5, r: 5 },
+                name: "Mining World".to_owned(),
+                orbit_gravity: true,
+                surface_gravity: 3.0,
+                resources: Resources::MiningBoth,
+                radius: 0.3,
+                colour: "#000000".to_owned(),
+                is_minor: false,
+            },
+        );
+        game_state.celestials = Arc::new(celestials.into());
+
+        let stack_id = stack_id_generator.next().unwrap();
+        let miner_module = module_id_generator.next().unwrap();
+        let mut stack_data = Stack::new(
+            Vec2 { q: 5, r: 5 },
+            Vec2::zero(),
+            player_1,
+            "Test Stack".to_owned(),
+        );
+        stack_data.modules.insert(miner_module, Module::new_miner());
+        game_state.stacks.insert(stack_id, stack_data);
+
+        // Test surplus residual (ISRU without jettison)
+        let orders = HashMap::from([(
+            player_1,
+            vec![Order::Isru {
+                stack: stack_id,
+                ore: 3,
+                water: 2,
+                fuel: 0,
+            }],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        match &errors[&player_1][0] {
+            Some(OrderError::ResourcePoolResidual(_, residual)) => {
+                assert_eq!(residual.ore, 3, "Should have surplus of 3t ore");
+                assert_eq!(residual.water, 2, "Should have surplus of 2t water");
+                assert_eq!(residual.fuel, 0, "Should have no fuel residual");
+                assert_eq!(residual.materials, 0, "Should have no materials residual");
+                
+                // Test the display message
+                let message = errors[&player_1][0].unwrap().display(&game_state);
+                assert!(message.contains("Test Stack"), "Message should contain stack name");
+                assert!(message.contains("surplus"), "Message should mention surplus");
+                assert!(message.contains("3 t of ore"), "Message should show ore surplus");
+                assert!(message.contains("2 t of water"), "Message should show water surplus");
+            }
+            other => panic!("Expected ResourcePoolResidual error, got {:?}", other),
+        }
     }
 
     #[test]
