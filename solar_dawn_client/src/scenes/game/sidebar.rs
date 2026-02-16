@@ -560,6 +560,16 @@ pub fn StackDetails(
 ) -> Element {
     let mut draft_order = use_signal(|| DraftOrder::None);
 
+    use_effect(move || {
+        if matches!(*draft_order.read(), DraftOrder::None) {
+            click_broker.write().clear();
+        }
+    });
+
+    use_drop(move || {
+        click_broker.write().clear();
+    });
+
     let game_state_ref = &*game_state.read();
     let Some(stack) = game_state_ref.stacks.get(&id) else {
         return rsx! {
