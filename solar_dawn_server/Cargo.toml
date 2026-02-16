@@ -13,7 +13,7 @@ anyhow = "1.0.100"
 axum = { version = "0.8.7", features = ["ws"] }
 axum-server = { version = "0.8.0", features = ["tls-rustls"] }
 clap = { version = "4.5.54", features = ["derive"] }
-futures-util = "0.3.31"
+futures-util = "0.3.32"
 num-traits = "0.2.19"
 rand = { workspace = true, features = ["serde"] }
 rand_distr = "0.5.1"
