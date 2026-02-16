@@ -149,6 +149,7 @@ pub fn InGame(
 
     let mut orders = use_signal(Vec::<Order>::new);
     let mut auto_orders = use_signal(Vec::<(Order, bool)>::new);
+    let mut submitted_orders = use_signal(Vec::<Order>::new);
     let mut submitting_orders = use_signal(|| false);
 
     // Game settings (unit hostility display, etc)
@@ -269,6 +270,22 @@ pub fn InGame(
                         return;
                     };
                     trace!(delta = ?delta);
+                    
+                    // Determine if we should show submitted orders
+                    let current_game_state = game_state.read();
+                    let should_show_submitted = delta.orders.contains_key(&me)
+                        && delta.phase == current_game_state.phase 
+                        && delta.turn == current_game_state.turn;
+                    
+                    if should_show_submitted {
+                        // Reconnection: these are our pending orders for the current phase
+                        submitted_orders.set(delta.orders.get(&me).unwrap().clone());
+                    } else {
+                        // Phase advance or no orders: clear submitted orders
+                        submitted_orders.set(Vec::new());
+                    }
+                    drop(current_game_state);
+                    
                     orders.clear();
                     auto_orders.clear();
                     submitting_orders.set(false);
@@ -318,6 +335,7 @@ pub fn InGame(
                         game_state,
                         orders,
                         auto_orders,
+                        submitted_orders,
                         candidate_orders,
                         order_errors,
                         submitting_orders,
