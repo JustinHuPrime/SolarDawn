@@ -16,7 +16,7 @@ clap = { version = "4.5.54", features = ["derive"] }
 futures-util = "0.3.32"
 num-traits = "0.2.19"
 rand = { workspace = true, features = ["serde"] }
-rand_distr = "0.5.1"
+rand_distr = "0.6.0"
 rand_pcg = { version = "0.9.0", features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_cbor = { workspace = true }
