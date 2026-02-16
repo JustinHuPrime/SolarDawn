@@ -82,6 +82,7 @@ struct ClientViewSettings {
     x_offset: f32,
     y_offset: f32,
     zoom_level: i32,
+    declutter_stack: Option<StackId>,
 }
 impl ClientViewSettings {
     fn zoom(&self) -> f32 {
@@ -94,6 +95,7 @@ impl Default for ClientViewSettings {
             x_offset: 0.0,
             y_offset: 0.0,
             zoom_level: 0,
+            declutter_stack: None,
         }
     }
 }
