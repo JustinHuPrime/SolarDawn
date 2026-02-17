@@ -55,8 +55,8 @@ use futures_util::{
     SinkExt, StreamExt,
     stream::{SplitSink, SplitStream},
 };
-use rand::{Rng, rng};
-use rand_distr::Alphanumeric;
+use rand::{RngExt, rng};
+use rand::distr::Alphanumeric;
 use rand_pcg::Pcg64;
 use serde::Serialize;
 use serde_cbor::{from_slice, to_vec};

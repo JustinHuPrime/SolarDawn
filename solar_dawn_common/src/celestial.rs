@@ -25,10 +25,12 @@ use std::fmt::Display;
 
 #[cfg(feature = "server")]
 use rand::{
-    Rng, RngCore,
+    RngExt,
     distr::{Distribution, weighted::WeightedIndex},
     seq::SliceRandom,
 };
+#[cfg(feature = "server")]
+use rand::rand_core::Rng as RngCore;
 use serde::{Deserialize, Serialize};
 
 use crate::{CartesianVec2, Vec2};

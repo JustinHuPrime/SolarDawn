@@ -26,7 +26,7 @@ use std::collections::BTreeMap;
 use std::{fmt::Display, str::FromStr};
 
 #[cfg(feature = "server")]
-use rand::Rng;
+use rand::{Rng, RngExt};
 use serde::{Deserialize, Serialize};
 
 use crate::{PlayerId, Vec2, celestial::Celestial};
