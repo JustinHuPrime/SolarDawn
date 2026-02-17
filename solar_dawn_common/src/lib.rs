@@ -34,7 +34,9 @@ use std::{
 };
 
 #[cfg(feature = "server")]
-use rand::{Rng, RngCore};
+use rand::Rng;
+#[cfg(feature = "server")]
+use rand::rand_core::Rng as RngCore;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "server")]
 use uuid::Uuid;

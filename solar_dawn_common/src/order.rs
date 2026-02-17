@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use std::fmt::Display;
 
 #[cfg(feature = "server")]
-use rand::Rng;
+use rand::{Rng, RngExt};
 use serde::{Deserialize, Serialize};
 
 use crate::{

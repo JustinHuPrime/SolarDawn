@@ -24,7 +24,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use num_traits::PrimInt;
-use rand::{Rng, SeedableRng, rng};
+use rand::{RngExt, SeedableRng, rng};
 use rand_pcg::Pcg64;
 use serde::{Deserialize, Serialize};
 use serde_cbor::from_slice;
