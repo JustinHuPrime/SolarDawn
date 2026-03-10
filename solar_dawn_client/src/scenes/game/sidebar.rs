@@ -40,6 +40,21 @@ use crate::{
     websocket::{Message, WebsocketClient},
 };
 
+/// Helper function to collect modules that are already being transferred from the specified stack
+fn get_transferred_modules(orders: &[Order], stack_id: StackId) -> HashSet<ModuleId> {
+    orders
+        .iter()
+        .filter_map(|order| match order {
+            Order::ModuleTransfer {
+                stack: transfer_stack,
+                module,
+                ..
+            } if *transfer_stack == stack_id => Some(*module),
+            _ => None,
+        })
+        .collect()
+}
+
 #[component]
 pub fn Sidebar(
     me: PlayerId,
@@ -1248,6 +1263,7 @@ fn ModuleTransfer(
     let mut selected_target = use_signal(|| Option::<StackId>::None);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
+    let transferred_modules = get_transferred_modules(&orders.read(), id);
     rsx! {
         select {
             class: "form-select",
@@ -1260,7 +1276,7 @@ fn ModuleTransfer(
                 }
             },
             option { value: "none", "Select module..." }
-            for (module_id , module) in stack.modules.iter() {
+            for (module_id , module) in stack.modules.iter().filter(|(module_id, _)| !transferred_modules.contains(module_id)) {
                 option { value: "{module_id}", "{module}" }
             }
         }
@@ -1319,6 +1335,7 @@ fn ModuleTransferNew(
     let mut selected_target = use_signal(|| Option::<u32>::None);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
+    let transferred_modules = get_transferred_modules(&orders.read(), id);
     let mut possible_new_stack_numbers = orders
         .read()
         .iter()
@@ -1375,7 +1392,7 @@ fn ModuleTransferNew(
                 }
             },
             option { value: "none", "Select module..." }
-            for (module_id , module) in stack.modules.iter() {
+            for (module_id , module) in stack.modules.iter().filter(|(module_id, _)| !transferred_modules.contains(module_id)) {
                 option { value: "{module_id}", "{module}" }
             }
         }
@@ -1431,6 +1448,7 @@ fn ResourceTransferFromModule(
     let mut fuel = use_signal(|| 0_u8);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
+    let transferred_modules = get_transferred_modules(&orders.read(), id);
     rsx! {
         select {
             class: "form-select",
@@ -1446,6 +1464,7 @@ fn ResourceTransferFromModule(
             for (module_id , module) in stack
                 .modules
                 .iter()
+                .filter(|(module_id, _)| !transferred_modules.contains(module_id))
                 .filter(|(_, module)| {
                     matches!(
                         module,
@@ -1587,6 +1606,7 @@ fn ResourceTransferToModule(
     let mut fuel = use_signal(|| 0_u8);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
+    let transferred_modules = get_transferred_modules(&orders.read(), id);
     rsx! {
         select {
             class: "form-select",
@@ -1602,6 +1622,7 @@ fn ResourceTransferToModule(
             for (module_id , module) in stack
                 .modules
                 .iter()
+                .filter(|(module_id, _)| !transferred_modules.contains(module_id))
                 .filter(|(_, module)| {
                     matches!(
                         module,
@@ -2358,6 +2379,7 @@ fn Salvage(
     let mut selected_module = use_signal(|| Option::<ModuleId>::None);
     let game_state = &*game_state.read();
     let stack = &game_state.stacks[&id];
+    let transferred_modules = get_transferred_modules(&orders.read(), id);
     rsx! {
         select {
             class: "form-select",
@@ -2370,7 +2392,7 @@ fn Salvage(
                 }
             },
             option { value: "none", "Select module..." }
-            for (module_id , module) in stack.modules.iter() {
+            for (module_id , module) in stack.modules.iter().filter(|(module_id, _)| !transferred_modules.contains(module_id)) {
                 option { value: "{module_id}", "{module}" }
             }
         }
