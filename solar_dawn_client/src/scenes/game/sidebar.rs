@@ -47,6 +47,7 @@ pub fn Sidebar(
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
+    submitted_orders: WriteSignal<Vec<Order>>,
     candidate_orders: ReadSignal<Vec<Order>>,
     order_errors: ReadSignal<Vec<Option<OrderError>>>,
     submitting_orders: Signal<bool>,
@@ -65,6 +66,7 @@ pub fn Sidebar(
                     game_state,
                     orders,
                     auto_orders,
+                    submitted_orders,
                     candidate_orders,
                     order_errors,
                     submitting_orders,
@@ -120,6 +122,7 @@ pub fn Outliner(
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
+    submitted_orders: WriteSignal<Vec<Order>>,
     candidate_orders: ReadSignal<Vec<Order>>,
     order_errors: ReadSignal<Vec<Option<OrderError>>>,
     submitting_orders: Signal<bool>,
@@ -171,6 +174,7 @@ pub fn Outliner(
                         game_state,
                         orders,
                         auto_orders,
+                        submitted_orders,
                         order_errors,
                         change_state,
                     }
@@ -188,6 +192,7 @@ pub fn Outliner(
             disabled: *submitting_orders.read() || order_errors.read().iter().any(|error| error.is_some()),
             onclick: move |_| {
                 submitting_orders.set(true);
+                submitted_orders.set(candidate_orders.read().clone());
                 websocket
                     .send(
                         Message::Binary(
@@ -283,12 +288,24 @@ pub fn OutlinerOrders(
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
+    submitted_orders: WriteSignal<Vec<Order>>,
     order_errors: ReadSignal<Vec<Option<OrderError>>>,
     change_state: EventHandler<SidebarState>,
 ) -> Element {
     let game_state = &*game_state.read();
     let order_errors = &*order_errors.read();
     rsx! {
+        if !submitted_orders.read().is_empty() {
+            h2 { "Submitted Orders" }
+            p {
+                for (index, order) in submitted_orders.read().iter().enumerate() {
+                    Fragment { key: "{index}:submitted:{order:?}",
+                        "{order.display_attributed(game_state)}"
+                        br {}
+                    }
+                }
+            }
+        }
         h2 { "Orders" }
         p {
             for (index , order) in orders.read().iter().enumerate() {

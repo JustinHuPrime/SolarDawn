@@ -33,6 +33,7 @@ use solar_dawn_common::{
     celestial::CelestialId,
     order::Order,
     stack::{ModuleId, StackId},
+    Phase,
 };
 
 /// Game state plus server information
@@ -40,7 +41,7 @@ use solar_dawn_common::{
 pub struct GameServerState {
     pub game_state: GameState,
     #[serde(skip)]
-    pub orders: HashMap<PlayerId, Vec<Order>>,
+    pub orders: HashMap<PlayerId, (u32, Phase, Vec<Order>)>,
     pub celestial_id_generator: IdGenerator<CelestialId, u32>,
     pub stack_id_generator: IdGenerator<StackId, u32>,
     pub module_id_generator: IdGenerator<ModuleId, u32>,

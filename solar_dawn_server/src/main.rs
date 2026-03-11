@@ -248,8 +248,15 @@ impl ServerState {
                     "got orders from everyone, ticking from turn {} {:?}",
                     game_state.game_state.turn, game_state.game_state.phase
                 );
+                // Extract just the orders Vec from the stored tuples
+                let orders = game_state
+                    .orders
+                    .iter()
+                    .map(|(&player_id, (_, _, orders))| (player_id, orders.clone()))
+                    .collect::<HashMap<PlayerId, Vec<Order>>>();
+                
                 let delta = game_state.game_state.next(
-                    take(&mut game_state.orders),
+                    orders,
                     &mut game_state.stack_id_generator,
                     &mut game_state.module_id_generator,
                     &mut game_state.rng,
@@ -258,6 +265,9 @@ impl ServerState {
                     to_vec(&delta).expect("game state delta should always be serializable");
                 trace!(delta = ?delta);
                 game_state.game_state = game_state.game_state.apply(delta);
+                
+                // Clear orders after processing
+                game_state.orders.clear();
 
                 let mut lost_connections = Vec::new();
                 info!(
@@ -645,6 +655,34 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
                 return;
             };
 
+            // If player has pending orders, send them as a delta
+            if let Some((turn, phase, orders)) = game_state.orders.get(&player_id)
+                && *turn == game_state.game_state.turn 
+                && *phase == game_state.game_state.phase 
+            {
+                use solar_dawn_common::GameStateDelta;
+                let mut previous_orders: HashMap<PlayerId, Vec<Order>> = HashMap::new();
+                previous_orders.insert(player_id, orders.clone());
+                
+                let delta = GameStateDelta {
+                    phase: game_state.game_state.phase,
+                    turn: game_state.game_state.turn,
+                    stacks: game_state.game_state.stacks.clone(),
+                    orders: previous_orders,
+                    errors: HashMap::new(),
+                };
+                
+                let message = Message::Binary(
+                    to_vec(&delta)
+                        .expect("delta should always be serializable")
+                        .into(),
+                );
+                let Ok(()) = send.send(message).await else {
+                    server_state.lost_connection(player_id);
+                    return;
+                };
+            }
+
             // add player to connections (guaranteed to have a slot)
             connections.insert(player_id, send);
 
@@ -676,15 +714,24 @@ async fn handle_socket(socket: WebSocket, server_state_mutex: Arc<Mutex<ServerSt
         let mut server_state = server_state_mutex.lock().await;
         match &mut *server_state {
             ServerState::Running { game_state, .. } => {
-                if game_state.orders.contains_key(&player_id) {
-                    // protocol error - client sent multiple orders
-                    server_state
-                        .server_disconnect(player_id, protocol_error)
-                        .await;
-                    return;
+                let current_turn = game_state.game_state.turn;
+                let current_phase = game_state.game_state.phase;
+                
+                // Check if player already has orders for current turn/phase
+                if let Some((turn, phase, _)) = game_state.orders.get(&player_id) {
+                    if *turn == current_turn && *phase == current_phase {
+                        // Allow overwrite: player is resubmitting orders for current turn/phase
+                        info!("player {player_id:?} is overwriting their orders for turn {current_turn} {current_phase:?}");
+                    } else {
+                        // Protocol error - orders for wrong turn/phase
+                        server_state
+                            .server_disconnect(player_id, protocol_error)
+                            .await;
+                        return;
+                    }
                 }
-
-                game_state.orders.insert(player_id, parsed);
+                
+                game_state.orders.insert(player_id, (current_turn, current_phase, parsed));
 
                 // maybe broadcast next orders
                 if game_state.orders.len() == game_state.game_state.players.len() {
