@@ -1774,6 +1774,38 @@ impl Order {
         Ok(())
     }
 
+    /// Returns true if this order involves the given stack
+    #[cfg(feature = "client")]
+    pub fn involves_stack(&self, stack_id: StackId) -> bool {
+        match self {
+            Order::NameStack { stack, .. } => *stack == stack_id,
+            Order::ModuleTransfer { stack, to, .. } => {
+                *stack == stack_id
+                    || matches!(to, ModuleTransferTarget::Existing(target) if *target == stack_id)
+            }
+            Order::Board { stack, target } => *stack == stack_id || *target == stack_id,
+            Order::Isru { stack, .. } => *stack == stack_id,
+            Order::ResourceTransfer { stack, to, .. } => {
+                *stack == stack_id
+                    || matches!(to, ResourceTransferTarget::Stack(target) if *target == stack_id)
+            }
+            Order::Repair {
+                stack,
+                target_stack,
+                ..
+            } => *stack == stack_id || *target_stack == stack_id,
+            Order::Refine { stack, .. } => *stack == stack_id,
+            Order::Build { stack, .. } => *stack == stack_id,
+            Order::Salvage { stack, .. } => *stack == stack_id,
+            Order::Shoot { stack, target, .. } => *stack == stack_id || *target == stack_id,
+            Order::Arm { stack, .. } => *stack == stack_id,
+            Order::Burn { stack, .. } => *stack == stack_id,
+            Order::OrbitAdjust { stack, .. } => *stack == stack_id,
+            Order::Land { stack, .. } => *stack == stack_id,
+            Order::TakeOff { stack, .. } => *stack == stack_id,
+        }
+    }
+
     /// apply order to stacks state
     ///
     /// note: internal-only; call only on validated orders
@@ -4813,5 +4845,98 @@ mod tests {
         let (_, errors) = Order::validate(&game_state, &orders);
         let error = errors[&player_1][0].unwrap();
         assert!(matches!(error, OrderError::NoHab));
+    }
+
+    #[cfg(feature = "client")]
+    #[test]
+    fn test_involves_stack() {
+        use crate::stack::StackId;
+
+        let stack1 = StackId::from(1);
+        let stack2 = StackId::from(2);
+        let stack3 = StackId::from(3);
+
+        // Test NameStack
+        let order = Order::NameStack {
+            stack: stack1,
+            name: "Test".to_owned(),
+        };
+        assert!(order.involves_stack(stack1));
+        assert!(!order.involves_stack(stack2));
+
+        // Test ModuleTransfer - source stack
+        let order = Order::ModuleTransfer {
+            stack: stack1,
+            module: crate::stack::ModuleId::from(1),
+            to: ModuleTransferTarget::New(1),
+        };
+        assert!(order.involves_stack(stack1));
+        assert!(!order.involves_stack(stack2));
+
+        // Test ModuleTransfer - target stack
+        let order = Order::ModuleTransfer {
+            stack: stack1,
+            module: crate::stack::ModuleId::from(1),
+            to: ModuleTransferTarget::Existing(stack2),
+        };
+        assert!(order.involves_stack(stack1));
+        assert!(order.involves_stack(stack2));
+        assert!(!order.involves_stack(stack3));
+
+        // Test Board - both stacks
+        let order = Order::Board {
+            stack: stack1,
+            target: stack2,
+        };
+        assert!(order.involves_stack(stack1));
+        assert!(order.involves_stack(stack2));
+        assert!(!order.involves_stack(stack3));
+
+        // Test Shoot - both stacks
+        let order = Order::Shoot {
+            stack: stack1,
+            target: stack2,
+            shots: 1,
+        };
+        assert!(order.involves_stack(stack1));
+        assert!(order.involves_stack(stack2));
+        assert!(!order.involves_stack(stack3));
+
+        // Test ResourceTransfer - stack only
+        let order = Order::ResourceTransfer {
+            stack: stack1,
+            from: None,
+            to: ResourceTransferTarget::FloatingPool,
+            ore: 0,
+            materials: 0,
+            water: 0,
+            fuel: 0,
+        };
+        assert!(order.involves_stack(stack1));
+        assert!(!order.involves_stack(stack2));
+
+        // Test ResourceTransfer - to another stack
+        let order = Order::ResourceTransfer {
+            stack: stack1,
+            from: None,
+            to: ResourceTransferTarget::Stack(stack2),
+            ore: 0,
+            materials: 0,
+            water: 0,
+            fuel: 0,
+        };
+        assert!(order.involves_stack(stack1));
+        assert!(order.involves_stack(stack2));
+        assert!(!order.involves_stack(stack3));
+
+        // Test Repair - both stacks
+        let order = Order::Repair {
+            stack: stack1,
+            target_stack: stack2,
+            target_module: crate::stack::ModuleId::from(1),
+        };
+        assert!(order.involves_stack(stack1));
+        assert!(order.involves_stack(stack2));
+        assert!(!order.involves_stack(stack3));
     }
 }

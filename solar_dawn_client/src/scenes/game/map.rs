@@ -177,18 +177,32 @@ pub fn Map(
         let orders = &*orders.read();
         let auto_orders = &*auto_orders.read();
 
+        // Check declutter mode once before filtering
+        let declutter_stack = client_view_settings.declutter_stack;
         for order in auto_orders
             .iter()
             .map(|(order, _)| order)
             .chain(orders.iter())
         {
+            // Filter orders based on declutter mode
+            if let Some(declutter_id) = declutter_stack
+                && !order.involves_stack(declutter_id)
+            {
+                continue;
+            }
             draw_order(&ctx, order, game_state);
         }
 
         let client_game_settings = &*client_game_settings.read();
 
         let mut stacks_by_position = HashMap::<Vec2<i32>, Vec<&Stack>>::new();
-        for stack in game_state.stacks.values() {
+        for (&stack_id, stack) in game_state.stacks.iter() {
+            // Filter stacks based on declutter mode
+            if let Some(declutter_id) = declutter_stack
+                && stack_id != declutter_id
+            {
+                continue;
+            }
             if stack.velocity.norm() != 0 {
                 draw_arrow(
                     &ctx,
