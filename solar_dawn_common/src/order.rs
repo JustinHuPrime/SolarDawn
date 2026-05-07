@@ -777,7 +777,10 @@ impl Order {
                                     salvaged: module,
                                 },
                             ) => {
-                                disabled_modules.insert((*stack, *module));
+                                // Check if module is already disabled (e.g., being salvaged/transferred elsewhere)
+                                if !disabled_modules.insert((*stack, *module)) {
+                                    *order = Err(OrderError::ModuleTransferConflict);
+                                }
                             }
                             _ => {
                                 // no-op
@@ -3880,6 +3883,52 @@ mod tests {
             errors[&player_1][0].unwrap(),
             OrderError::WrongPhase
         ));
+
+        // Test double-salvaging the same module
+        game_state.phase = Phase::Logistics;
+        let orders = HashMap::from([(
+            player_1,
+            vec![
+                Order::Salvage {
+                    stack: stack_id,
+                    salvaged: salvage_module,
+                },
+                Order::Salvage {
+                    stack: stack_id,
+                    salvaged: salvage_module,
+                },
+                Order::ResourceTransfer {
+                    stack: stack_id,
+                    from: None,
+                    to: ResourceTransferTarget::Jettison,
+                    ore: 0,
+                    materials: 10, // Only one salvage succeeds: gun_mass * 10 / 2 = 2 * 10 / 2 = 10
+                    water: 0,
+                    fuel: 0,
+                },
+            ],
+        )]);
+
+        let (_, errors) = Order::validate(&game_state, &orders);
+        // The first salvage order should succeed, the second should fail
+        assert!(
+            errors[&player_1][0].is_none(),
+            "First salvage order should succeed, got: {:?}",
+            errors[&player_1][0]
+        );
+        assert!(
+            matches!(
+                errors[&player_1][1],
+                Some(OrderError::ModuleTransferConflict)
+            ),
+            "Second salvage order should fail with ModuleTransferConflict, got: {:?}",
+            errors[&player_1][1]
+        );
+        assert!(
+            errors[&player_1][2].is_none(),
+            "Resource transfer should succeed, got: {:?}",
+            errors[&player_1][2]
+        );
     }
 
     #[test]
