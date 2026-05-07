@@ -209,66 +209,115 @@ pub fn OutlinerOverview(
     change_state: EventHandler<SidebarState>,
 ) -> Element {
     let game_state = &*game_state.read();
+    let mut your_stacks_collapsed = use_signal(|| false);
+    let mut major_bodies_collapsed = use_signal(|| false);
+    let mut other_stacks_collapsed = use_signal(|| false);
+    
     rsx! {
-        h2 { "Your Stacks" }
-        p {
-            for (& stack_id , stack) in game_state.stacks.iter().filter(|(_, stack)| stack.owner == me) {
-                {
-                    rsx! {
-                        Fragment { key: "{stack_id:?}",
-                            a {
-                                href: "#",
-                                role: "button",
-                                onclick: move |event| {
-                                    event.prevent_default();
-                                    change_state(SidebarState::StackDetails(stack_id));
-                                },
-                                "{stack.name}"
+        h2 {
+            style: "cursor: pointer;",
+            onclick: move |_| {
+                your_stacks_collapsed.set(!your_stacks_collapsed());
+            },
+            "data-bs-toggle": "collapse",
+            "data-bs-target": "#your-stacks-section",
+            "aria-expanded": if your_stacks_collapsed() { "false" } else { "true" },
+            "aria-controls": "your-stacks-section",
+            if your_stacks_collapsed() { "▶ " } else { "▼ " }
+            "Your Stacks"
+        }
+        div {
+            id: "your-stacks-section",
+            class: if !your_stacks_collapsed() { "collapse show" } else { "collapse" },
+            p {
+                for (& stack_id , stack) in game_state.stacks.iter().filter(|(_, stack)| stack.owner == me) {
+                    {
+                        rsx! {
+                            Fragment { key: "{stack_id:?}",
+                                a {
+                                    href: "#",
+                                    role: "button",
+                                    onclick: move |event| {
+                                        event.prevent_default();
+                                        change_state(SidebarState::StackDetails(stack_id));
+                                    },
+                                    "{stack.name}"
+                                }
+                                br {}
                             }
-                            br {}
                         }
                     }
                 }
             }
         }
-        h2 { "Major Bodies" }
-        p {
-            for & celestial_id in game_state.celestials.majors().iter() {
-                {
-                    let celestial = game_state.celestials.get(celestial_id).unwrap();
-                    rsx! {
-                        Fragment { key: "{celestial_id:?}",
-                            a {
-                                href: "#",
-                                role: "button",
-                                onclick: move |event| {
-                                    event.prevent_default();
-                                    change_state(SidebarState::CelestialDetails(celestial_id));
-                                },
-                                "{celestial.name}"
+        h2 {
+            style: "cursor: pointer;",
+            onclick: move |_| {
+                major_bodies_collapsed.set(!major_bodies_collapsed());
+            },
+            "data-bs-toggle": "collapse",
+            "data-bs-target": "#major-bodies-section",
+            "aria-expanded": if major_bodies_collapsed() { "false" } else { "true" },
+            "aria-controls": "major-bodies-section",
+            if major_bodies_collapsed() { "▶ " } else { "▼ " }
+            "Major Bodies"
+        }
+        div {
+            id: "major-bodies-section",
+            class: if !major_bodies_collapsed() { "collapse show" } else { "collapse" },
+            p {
+                for & celestial_id in game_state.celestials.majors().iter() {
+                    {
+                        let celestial = game_state.celestials.get(celestial_id).unwrap();
+                        rsx! {
+                            Fragment { key: "{celestial_id:?}",
+                                a {
+                                    href: "#",
+                                    role: "button",
+                                    onclick: move |event| {
+                                        event.prevent_default();
+                                        change_state(SidebarState::CelestialDetails(celestial_id));
+                                    },
+                                    "{celestial.name}"
+                                }
+                                br {}
                             }
-                            br {}
                         }
                     }
                 }
             }
         }
-        h2 { "Other Stacks" }
-        p {
-            for (& stack_id , stack) in game_state.stacks.iter().filter(|(_, stack)| stack.owner != me) {
-                {
-                    rsx! {
-                        Fragment { key: "{stack_id:?}",
-                            a {
-                                href: "#",
-                                role: "button",
-                                onclick: move |event| {
-                                    event.prevent_default();
-                                    change_state(SidebarState::StackDetails(stack_id));
-                                },
-                                "{stack.name}"
+        h2 {
+            style: "cursor: pointer;",
+            onclick: move |_| {
+                other_stacks_collapsed.set(!other_stacks_collapsed());
+            },
+            "data-bs-toggle": "collapse",
+            "data-bs-target": "#other-stacks-section",
+            "aria-expanded": if other_stacks_collapsed() { "false" } else { "true" },
+            "aria-controls": "other-stacks-section",
+            if other_stacks_collapsed() { "▶ " } else { "▼ " }
+            "Other Stacks"
+        }
+        div {
+            id: "other-stacks-section",
+            class: if !other_stacks_collapsed() { "collapse show" } else { "collapse" },
+            p {
+                for (& stack_id , stack) in game_state.stacks.iter().filter(|(_, stack)| stack.owner != me) {
+                    {
+                        rsx! {
+                            Fragment { key: "{stack_id:?}",
+                                a {
+                                    href: "#",
+                                    role: "button",
+                                    onclick: move |event| {
+                                        event.prevent_default();
+                                        change_state(SidebarState::StackDetails(stack_id));
+                                    },
+                                    "{stack.name}"
+                                }
+                                br {}
                             }
-                            br {}
                         }
                     }
                 }
@@ -288,55 +337,88 @@ pub fn OutlinerOrders(
 ) -> Element {
     let game_state = &*game_state.read();
     let order_errors = &*order_errors.read();
+    let mut orders_collapsed = use_signal(|| false);
+    let mut auto_orders_collapsed = use_signal(|| false);
+    
     rsx! {
-        h2 { "Orders" }
-        p {
-            for (index , order) in orders.read().iter().enumerate() {
-                Fragment { key: "{index}:{order:?}",
-                    "{order.display_attributed(game_state)} "
-                    if let Some(Some(error)) = order_errors.get(index) {
-                        span { class: "text-danger", "{error.display(game_state)}" }
-                        " "
-                    }
-                    button {
-                        r#type: "button",
-                        class: "btn btn-secondary btn-sm",
-                        onclick: move |_| {
-                            orders.write().remove(index);
-                        },
-                        "Cancel"
-                    }
-                    br {}
-                }
-            }
+        h2 {
+            style: "cursor: pointer;",
+            onclick: move |_| {
+                orders_collapsed.set(!orders_collapsed());
+            },
+            "data-bs-toggle": "collapse",
+            "data-bs-target": "#orders-section",
+            "aria-expanded": if orders_collapsed() { "false" } else { "true" },
+            "aria-controls": "orders-section",
+            if orders_collapsed() { "▶ " } else { "▼ " }
+            "Orders"
         }
-        h2 { "Automatic Orders" }
-        p {
-            for (index , (order , enabled)) in auto_orders.read().iter().enumerate() {
-                Fragment { key: "{index}:{order:?}",
-                    if *enabled {
-                        "{order.display_attributed(game_state)}"
-                        if let Some(Some(error)) = order_errors.get(orders.read().len() + index) {
-                            " "
+        div {
+            id: "orders-section",
+            class: if !orders_collapsed() { "collapse show" } else { "collapse" },
+            p {
+                for (index , order) in orders.read().iter().enumerate() {
+                    Fragment { key: "{index}:{order:?}",
+                        "{order.display_attributed(game_state)} "
+                        if let Some(Some(error)) = order_errors.get(index) {
                             span { class: "text-danger", "{error.display(game_state)}" }
+                            " "
                         }
                         button {
                             r#type: "button",
                             class: "btn btn-secondary btn-sm",
                             onclick: move |_| {
-                                auto_orders.write()[index].1 = false;
+                                orders.write().remove(index);
                             },
                             "Cancel"
                         }
-                    } else {
-                        s { "{order.display_attributed(game_state)}" }
-                        button {
-                            r#type: "button",
-                            class: "btn btn-secondary btn-sm",
-                            onclick: move |_| {
-                                auto_orders.write()[index].1 = true;
-                            },
-                            "Reinstate"
+                        br {}
+                    }
+                }
+            }
+        }
+        h2 {
+            style: "cursor: pointer;",
+            onclick: move |_| {
+                auto_orders_collapsed.set(!auto_orders_collapsed());
+            },
+            "data-bs-toggle": "collapse",
+            "data-bs-target": "#auto-orders-section",
+            "aria-expanded": if auto_orders_collapsed() { "false" } else { "true" },
+            "aria-controls": "auto-orders-section",
+            if auto_orders_collapsed() { "▶ " } else { "▼ " }
+            "Automatic Orders"
+        }
+        div {
+            id: "auto-orders-section",
+            class: if !auto_orders_collapsed() { "collapse show" } else { "collapse" },
+            p {
+                for (index , (order , enabled)) in auto_orders.read().iter().enumerate() {
+                    Fragment { key: "{index}:{order:?}",
+                        if *enabled {
+                            "{order.display_attributed(game_state)}"
+                            if let Some(Some(error)) = order_errors.get(orders.read().len() + index) {
+                                " "
+                                span { class: "text-danger", "{error.display(game_state)}" }
+                            }
+                            button {
+                                r#type: "button",
+                                class: "btn btn-secondary btn-sm",
+                                onclick: move |_| {
+                                    auto_orders.write()[index].1 = false;
+                                },
+                                "Cancel"
+                            }
+                        } else {
+                            s { "{order.display_attributed(game_state)}" }
+                            button {
+                                r#type: "button",
+                                class: "btn btn-secondary btn-sm",
+                                onclick: move |_| {
+                                    auto_orders.write()[index].1 = true;
+                                },
+                                "Reinstate"
+                            }
                         }
                     }
                 }
@@ -352,70 +434,87 @@ pub fn OutlinerSettings(
     client_game_settings: WriteSignal<ClientGameSettings>,
 ) -> Element {
     let game_state = &*game_state.read();
+    let mut icon_settings_collapsed = use_signal(|| false);
+    
     rsx! {
-        h2 { "Icon Settings" }
-        table { class: "table",
-            thead {
-                tr {
-                    th { scope: "col", "Player" }
-                    th { scope: "col", "Hostile" }
-                    th { scope: "col", "Neutral" }
-                    th { scope: "col", "Friendly" }
+        h2 {
+            style: "cursor: pointer;",
+            onclick: move |_| {
+                icon_settings_collapsed.set(!icon_settings_collapsed());
+            },
+            "data-bs-toggle": "collapse",
+            "data-bs-target": "#icon-settings-section",
+            "aria-expanded": if icon_settings_collapsed() { "false" } else { "true" },
+            "aria-controls": "icon-settings-section",
+            if icon_settings_collapsed() { "▶ " } else { "▼ " }
+            "Icon Settings"
+        }
+        div {
+            id: "icon-settings-section",
+            class: if !icon_settings_collapsed() { "collapse show" } else { "collapse" },
+            table { class: "table",
+                thead {
+                    tr {
+                        th { scope: "col", "Player" }
+                        th { scope: "col", "Hostile" }
+                        th { scope: "col", "Neutral" }
+                        th { scope: "col", "Friendly" }
+                    }
                 }
-            }
-            tbody {
-                for (& player , name) in game_state.players.iter().filter(|&(&player, _)| player != me) {
-                    tr { key: "{player:?}",
-                        td { "{name}" }
-                        td {
-                            input {
-                                class: "form-check-input",
-                                r#type: "radio",
-                                name: "hostility-{player:?}",
-                                checked: matches!(
-                                    client_game_settings.read().display_hostility[&player],
-                                    DisplayHostility::Hostile
-                                ),
-                                onchange: move |_| {
-                                    client_game_settings
-                                        .write()
-                                        .display_hostility
-                                        .insert(player, DisplayHostility::Hostile);
-                                },
+                tbody {
+                    for (& player , name) in game_state.players.iter().filter(|&(&player, _)| player != me) {
+                        tr { key: "{player:?}",
+                            td { "{name}" }
+                            td {
+                                input {
+                                    class: "form-check-input",
+                                    r#type: "radio",
+                                    name: "hostility-{player:?}",
+                                    checked: matches!(
+                                        client_game_settings.read().display_hostility[&player],
+                                        DisplayHostility::Hostile
+                                    ),
+                                    onchange: move |_| {
+                                        client_game_settings
+                                            .write()
+                                            .display_hostility
+                                            .insert(player, DisplayHostility::Hostile);
+                                    },
+                                }
                             }
-                        }
-                        td {
-                            input {
-                                class: "form-check-input",
-                                r#type: "radio",
-                                name: "hostility-{player:?}",
-                                checked: matches!(
-                                    client_game_settings.read().display_hostility[&player],
-                                    DisplayHostility::Neutral
-                                ),
-                                onchange: move |_| {
-                                    client_game_settings
-                                        .write()
-                                        .display_hostility
-                                        .insert(player, DisplayHostility::Neutral);
-                                },
+                            td {
+                                input {
+                                    class: "form-check-input",
+                                    r#type: "radio",
+                                    name: "hostility-{player:?}",
+                                    checked: matches!(
+                                        client_game_settings.read().display_hostility[&player],
+                                        DisplayHostility::Neutral
+                                    ),
+                                    onchange: move |_| {
+                                        client_game_settings
+                                            .write()
+                                            .display_hostility
+                                            .insert(player, DisplayHostility::Neutral);
+                                    },
+                                }
                             }
-                        }
-                        td {
-                            input {
-                                class: "form-check-input",
-                                r#type: "radio",
-                                name: "hostility-{player:?}",
-                                checked: matches!(
-                                    client_game_settings.read().display_hostility[&player],
-                                    DisplayHostility::Friendly
-                                ),
-                                onchange: move |_| {
-                                    client_game_settings
-                                        .write()
-                                        .display_hostility
-                                        .insert(player, DisplayHostility::Friendly);
-                                },
+                            td {
+                                input {
+                                    class: "form-check-input",
+                                    r#type: "radio",
+                                    name: "hostility-{player:?}",
+                                    checked: matches!(
+                                        client_game_settings.read().display_hostility[&player],
+                                        DisplayHostility::Friendly
+                                    ),
+                                    onchange: move |_| {
+                                        client_game_settings
+                                            .write()
+                                            .display_hostility
+                                            .insert(player, DisplayHostility::Friendly);
+                                    },
+                                }
                             }
                         }
                     }
