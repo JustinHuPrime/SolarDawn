@@ -121,6 +121,10 @@ impl ClickBroker {
     fn register(&mut self, action: Box<dyn FnOnce(Vec2<i32>)>) {
         self.listeners.push(action);
     }
+
+    fn clear(&mut self) {
+        self.listeners.clear();
+    }
 }
 
 #[derive(Store)]
