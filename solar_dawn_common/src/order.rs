@@ -1808,7 +1808,11 @@ impl Order {
 
         match self {
             Order::NameStack { stack, name } => {
-                stacks.get_mut(stack).unwrap().name = name.clone();
+                stacks.get_mut(stack).unwrap().name = if name.is_empty() {
+                    format!("Stack {}", u32::from(*stack))
+                } else {
+                    name.clone()
+                };
             }
             Order::ModuleTransfer { stack, module, to } => {
                 let stack = stacks.get_mut(stack).unwrap();
@@ -2651,7 +2655,7 @@ mod tests {
         let error = errors[&player_1][0].unwrap();
         assert!(matches!(error, OrderError::BadOwnership(_)));
 
-        // Test 4: Empty name is allowed
+        // Test 4: Empty name gets generic name based on stack id
         let orders = HashMap::from([(
             player_1,
             vec![Order::NameStack {
@@ -2665,7 +2669,7 @@ mod tests {
 
         let new_stacks =
             validated_orders.apply(&mut stack_id_generator, &mut module_id_generator, &mut rng);
-        assert_eq!(new_stacks[&stack_1].name, "");
+        assert_eq!(new_stacks[&stack_1].name, format!("Stack {}", u32::from(stack_1)));
 
         // Test 5: Very long name is allowed
         let long_name = "a".repeat(1000);
