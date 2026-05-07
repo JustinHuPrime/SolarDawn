@@ -34,8 +34,9 @@ use strum::{EnumString, IntoStaticStr};
 
 use crate::{
     scenes::game::{
-        ClickBroker, ClientGameSettings, ClientViewSettings, DisplayHostility, OutlinerState,
-        SidebarState, SidebarStateStoreExt, SidebarStateStoreTransposed, map::HEX_SCALE,
+        AutoIsruSetting, AutoRefineSetting, ClickBroker, ClientGameSettings, ClientViewSettings,
+        DisplayHostility, OutlinerState, SidebarState, SidebarStateStoreExt,
+        SidebarStateStoreTransposed, map::HEX_SCALE,
     },
     websocket::{Message, WebsocketClient},
 };
@@ -92,6 +93,7 @@ pub fn Sidebar(
                     game_state,
                     orders,
                     auto_orders,
+                    client_game_settings,
                     client_view_settings,
                     order_errors,
                     change_state,
@@ -553,6 +555,7 @@ pub fn StackDetails(
     game_state: ReadSignal<GameState>,
     orders: WriteSignal<Vec<Order>>,
     auto_orders: WriteSignal<Vec<(Order, bool)>>,
+    client_game_settings: WriteSignal<ClientGameSettings>,
     order_errors: ReadSignal<Vec<Option<OrderError>>>,
     client_view_settings: WriteSignal<ClientViewSettings>,
     change_state: EventHandler<SidebarState>,
@@ -625,6 +628,57 @@ pub fn StackDetails(
             }
         }
         if stack.owner == me {
+            h2 { "Automatic Orders" }
+            p {
+                "ISRU: "
+                select {
+                    class: "form-select form-select-sm d-inline-block w-auto",
+                    value: {
+                        let setting = client_game_settings.read().auto_isru.get(&id).copied().unwrap_or(AutoIsruSetting::None);
+                        match setting {
+                            AutoIsruSetting::None => "none",
+                            AutoIsruSetting::Water => "water",
+                            AutoIsruSetting::Ore => "ore",
+                        }
+                    },
+                    oninput: move |e| {
+                        let setting = match e.value().as_str() {
+                            "water" => AutoIsruSetting::Water,
+                            "ore" => AutoIsruSetting::Ore,
+                            _ => AutoIsruSetting::None,
+                        };
+                        client_game_settings.write().auto_isru.insert(id, setting);
+                    },
+                    option { value: "none", "None" }
+                    option { value: "water", "Water" }
+                    option { value: "ore", "Ore" }
+                }
+            }
+            p {
+                "Refine: "
+                select {
+                    class: "form-select form-select-sm d-inline-block w-auto",
+                    value: {
+                        let setting = client_game_settings.read().auto_refine.get(&id).copied().unwrap_or(AutoRefineSetting::None);
+                        match setting {
+                            AutoRefineSetting::None => "none",
+                            AutoRefineSetting::Fuel => "fuel",
+                            AutoRefineSetting::Materials => "materials",
+                        }
+                    },
+                    oninput: move |e| {
+                        let setting = match e.value().as_str() {
+                            "fuel" => AutoRefineSetting::Fuel,
+                            "materials" => AutoRefineSetting::Materials,
+                            _ => AutoRefineSetting::None,
+                        };
+                        client_game_settings.write().auto_refine.insert(id, setting);
+                    },
+                    option { value: "none", "None" }
+                    option { value: "fuel", "Fuel" }
+                    option { value: "materials", "Materials" }
+                }
+            }
             h2 { "Orders" }
             select {
                 class: "form-select",

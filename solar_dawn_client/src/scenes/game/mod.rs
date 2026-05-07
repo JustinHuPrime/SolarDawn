@@ -25,7 +25,8 @@ use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 use serde_cbor::{from_slice, to_vec};
 use solar_dawn_common::{
-    GameState, GameStateDelta, PlayerId, Vec2, celestial::CelestialId, order::Order, stack::StackId,
+    GameState, GameStateDelta, PlayerId, Vec2, celestial::CelestialId, order::Order,
+    stack::StackId,
 };
 use web_sys::window;
 
@@ -35,6 +36,7 @@ use crate::{
     websocket::{Message, WebsocketClient},
 };
 
+mod auto_orders;
 mod map;
 mod sidebar;
 
@@ -58,9 +60,25 @@ impl DisplayHostility {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AutoIsruSetting {
+    None,
+    Water,
+    Ore,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AutoRefineSetting {
+    None,
+    Fuel,
+    Materials,
+}
+
 #[derive(Serialize, Deserialize)]
 struct ClientGameSettings {
     display_hostility: HashMap<PlayerId, DisplayHostility>,
+    auto_isru: HashMap<StackId, AutoIsruSetting>,
+    auto_refine: HashMap<StackId, AutoRefineSetting>,
 }
 impl ClientGameSettings {
     fn new<'a>(me: PlayerId, players: impl Iterator<Item = &'a PlayerId>) -> Self {
@@ -74,6 +92,8 @@ impl ClientGameSettings {
                     }
                 })
                 .collect::<HashMap<_, _>>(),
+            auto_isru: HashMap::new(),
+            auto_refine: HashMap::new(),
         }
     }
 }
@@ -184,6 +204,16 @@ pub fn InGame(
                 &BASE64_STANDARD.encode(stringified),
             );
         }
+    });
+
+    // Generate automatic orders based on settings and game state
+    use_effect(move || {
+        let game_state_ref = game_state.read();
+        let settings_ref = client_game_settings.read();
+        let generated = auto_orders::generate_automatic_orders(&game_state_ref, &settings_ref, me);
+        drop(game_state_ref);
+        drop(settings_ref);
+        auto_orders.set(generated);
     });
 
     let mut sidebar_state = use_store(|| SidebarState::Outliner(OutlinerState::Overview));
