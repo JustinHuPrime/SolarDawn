@@ -1261,7 +1261,7 @@ fn ModuleTransfer(
             },
             option { value: "none", "Select module..." }
             for (module_id , module) in stack.modules.iter() {
-                option { value: "{module_id}", "{module}" }
+                option { value: "{module_id}", "#{module_id}: {module}" }
             }
         }
         select {
@@ -1376,7 +1376,7 @@ fn ModuleTransferNew(
             },
             option { value: "none", "Select module..." }
             for (module_id , module) in stack.modules.iter() {
-                option { value: "{module_id}", "{module}" }
+                option { value: "{module_id}", "#{module_id}: {module}" }
             }
         }
         select {
@@ -1456,7 +1456,7 @@ fn ResourceTransferFromModule(
                     )
                 })
             {
-                option { value: "{module_id}", "{module}" }
+                option { value: "{module_id}", "#{module_id}: {module}" }
             }
         }
         match &*selected_module.read() {
@@ -1612,7 +1612,7 @@ fn ResourceTransferToModule(
                     )
                 })
             {
-                option { value: "{module_id}", "{module}" }
+                option { value: "{module_id}", "#{module_id}: {module}" }
             }
         }
         match &*selected_module.read() {
@@ -2168,7 +2168,7 @@ fn Repair(
                             .iter()
                             .filter(|(_, module)| { matches!(module.health, Health::Damaged) })
                         {
-                            option { value: "{module_id}", "{module}" }
+                            option { value: "{module_id}", "#{module_id}: {module}" }
                         }
                     }
                 }
@@ -2371,7 +2371,7 @@ fn Salvage(
             },
             option { value: "none", "Select module..." }
             for (module_id , module) in stack.modules.iter() {
-                option { value: "{module_id}", "{module}" }
+                option { value: "{module_id}", "#{module_id}: {module}" }
             }
         }
         button {
@@ -2524,7 +2524,7 @@ fn Arm(
                     )
                 })
             {
-                option { value: "{module_id}", "{module}" }
+                option { value: "{module_id}", "#{module_id}: {module}" }
             }
         }
         button {
@@ -2583,7 +2583,7 @@ fn Disarm(
                     )
                 })
             {
-                option { value: "{module_id}", "{module}" }
+                option { value: "{module_id}", "#{module_id}: {module}" }
             }
         }
         button {
